@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 # -----------------------------------------------------------------------------
 # Path resolution
 # -----------------------------------------------------------------------------
@@ -21,12 +23,20 @@ readonly SEG_COMMON_DIR
 readonly SEG_SCRIPTS_DIR
 readonly SEG_RUNTIME_DIR
 readonly SEG_ENV_FILE
+# shellcheck disable=SC2034
+# Read by scripts that source this library.
 readonly SEG_ENV_EXAMPLE_FILE
 readonly SEG_COMPOSE_FILE
 readonly SEG_SECRET_DIR
 readonly SEG_SECRET_FILE
+# shellcheck disable=SC2034
+# Read by scripts that source this library.
 readonly SEG_USER_SPECS_DIR
+# shellcheck disable=SC2034
+# Read by scripts that source this library.
 readonly SEG_USER_SPEC_EXAMPLES_DIR
+# shellcheck disable=SC2034
+# Read by scripts that source this library.
 readonly SEG_DEMO_ASSETS_DIR
 
 # -----------------------------------------------------------------------------
@@ -327,7 +337,8 @@ is_non_empty() {
 
 # Validate that a value is an integer.
 is_int() {
-    local value="$(trim "${1-}")"
+    local value
+    value="$(trim "${1-}")"
     [[ "${value}" =~ ^-?[0-9]+$ ]]
 }
 
@@ -349,7 +360,8 @@ is_bool() {
 
 # Validate a TCP/UDP port number in range 1..65535.
 is_port() {
-    local value="$(trim "${1-}")"
+    local value
+    value="$(trim "${1-}")"
 
     if ! is_int "${value}"; then
         return 1
@@ -387,7 +399,8 @@ is_bind_address() {
 
 # Validate conservative Docker resource naming rules.
 is_safe_docker_name() {
-    local value="$(trim "${1-}")"
+    local value
+    value="$(trim "${1-}")"
     [[ "${value}" =~ ^[a-zA-Z0-9][a-zA-Z0-9_.-]*$ ]]
 }
 

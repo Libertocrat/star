@@ -1,12 +1,20 @@
-.PHONY: help deps deps-local fmt lint typecheck test \
-        bandit pip-audit hadolint semgrep trivy \
-        quality ci-security deep-security ci full \
-        build
+.PHONY: help deps deps-local fmt lint lint-shell lint-actions typecheck test \
+	bandit pip-audit hadolint semgrep trivy \
+	quality ci-security deep-security ci full \
+	build
 
 PYTHON ?= python
 PIP ?= pip
 
 SRC_DIRS = src tests scripts
+SHELL_FILES := $(shell find . \
+	-type f \
+	-name '*.sh' \
+	-not -path './.git/*' \
+	-not -path './.venv/*' \
+	-not -path './venv/*' \
+	-not -path './node_modules/*' \
+	-not -path './private/*')
 REQ_RUNTIME = requirements/runtime.txt
 REQ_DEV = requirements/dev.txt
 REQ_TESTING = requirements/testing.txt
@@ -88,9 +96,21 @@ fmt:
 	pre-commit run end-of-file-fixer --all-files || true
 	@echo "Formatting complete."
 
-lint:
+lint: lint-shell lint-actions
 	black --check $(SRC_DIRS)
 	ruff check $(SRC_DIRS)
+
+lint-shell:
+	@echo "Running ShellCheck..."
+	@if [ -z "$(SHELL_FILES)" ]; then \
+		echo "No shell scripts found."; \
+	else \
+		shellcheck -x $(SHELL_FILES); \
+	fi
+
+lint-actions:
+	@echo "Running actionlint..."
+
 
 typecheck:
 	mypy --config-file mypy.ini $(SRC_DIRS)

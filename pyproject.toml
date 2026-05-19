@@ -13,6 +13,7 @@ exclude = '''
   | \.venv
   | venv
   | build
+  | deploy
   | dist
   | node_modules
 )/
@@ -32,6 +33,7 @@ exclude = [
     "venv",
     "__pycache__",
     "node_modules",
+    "deploy",
     "dist",
     "build",
 ]

@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=./common.sh
+# shellcheck source=deploy/seg-runtime/scripts/helpers/common.sh
 source "${SCRIPT_DIR}/common.sh"
 
 FAILURES=0
@@ -235,6 +235,8 @@ else
 fi
 
 step "Compose helper dry-run demonstration"
+# shellcheck disable=SC2034
+# DRY_RUN is consumed by run()/compose() helpers in sourced common.sh.
 DRY_RUN=true
 compose ps
 unset DRY_RUN
