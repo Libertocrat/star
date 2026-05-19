@@ -27,6 +27,12 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.x"
+          cache: true
+
       - name: Cache pip dependencies
         uses: actions/cache@v4
         with:
@@ -46,6 +52,17 @@ jobs:
             -o /usr/local/bin/hadolint
           chmod +x /usr/local/bin/hadolint
           hadolint --version
+
+      - name: Install shell tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+
+          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+          shellcheck --version
+          actionlint -version
 
       - name: Set up virtual environment and dependencies
         run: |
