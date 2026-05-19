@@ -3,6 +3,8 @@
 <p align="center">
   <img src="https://img.shields.io/badge/CI-GitHub_Actions-blue" alt="GitHub Actions">
   <img src="https://img.shields.io/badge/lint-ruff-orange" alt="Ruff">
+  <img src="https://img.shields.io/badge/lint-shellcheck-yellow" alt="ShellCheck">
+  <img src="https://img.shields.io/badge/lint-actionlint-blue" alt="actionlint">
   <img src="https://img.shields.io/badge/format-black-black" alt="Black">
   <img src="https://img.shields.io/badge/typecheck-mypy-blue" alt="MyPy">
   <img src="https://img.shields.io/badge/tests-pytest-green" alt="pytest">
@@ -108,7 +110,9 @@ Important aggregate targets are:
 
 Supporting targets provide the actual commands:
 
-- `lint` runs `black --check` and `ruff check`
+- `lint` runs `lint-shell`, `lint-actions`, `black --check`, and `ruff check`
+- `lint-shell` runs `shellcheck -x` across repository shell scripts
+- `lint-actions` runs `actionlint` for `.github/workflows/`
 - `typecheck` runs `mypy --config-file mypy.ini`
 - `test` runs `pytest -q tests`
 - `bandit` scans `src/`
@@ -148,7 +152,7 @@ Python dependencies are split across the `requirements/` directory.
 
 Workflows install different dependency sets depending on their job:
 
-- `ci.yml` installs `requirements/dev.txt`
+- `ci.yml` installs `requirements/dev.txt` and sets up Go to build `actionlint`
 - `security.yml` installs `requirements/runtime.txt` and `requirements/security.txt`
 - `release.yml` installs `requirements/runtime.txt`, `requirements/testing.txt`, and the editable project for OpenAPI export
 - `release-docs.yml` installs `requirements/runtime.txt`, `requirements/testing.txt`, and the editable project for docs generation
@@ -165,8 +169,11 @@ The `ci` job performs these steps:
 
 - checks out the repository
 - sets up Python 3.12
+- sets up Go 1.25.x
 - caches pip downloads using `hashFiles('requirements/**/*.txt')`
 - installs the Hadolint binary
+- installs `shellcheck`
+- installs `actionlint` with `go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12`
 - creates a `.venv` virtual environment
 - installs `requirements/dev.txt`
 - runs `make ci`
@@ -178,6 +185,8 @@ The `ci` job performs these steps:
 
 That includes:
 
+- ShellCheck checks for shell scripts through `shellcheck -x $(SHELL_FILES)`
+- actionlint checks for GitHub Actions workflows through `actionlint`
 - Black formatting checks through `black --check`
 - Ruff linting through `ruff check`
 - MyPy type checking through `mypy`

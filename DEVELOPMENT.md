@@ -33,6 +33,11 @@ source .venv/bin/activate
 pip install -r requirements/dev.txt
 make deps-local
 
+sudo apt update
+sudo apt install -y shellcheck golang-go
+go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+export PATH="$(go env GOPATH)/bin:$PATH"
+
 pre-commit install
 make ci
 ```
@@ -90,6 +95,7 @@ The current local workflow depends on the following tools.
 | Git | version control |
 | Make | developer task execution |
 | curl | local API checks and helper downloads |
+| Go (>= 1.25) | install `actionlint` from source |
 
 Python 3.12 is the supported development version. It can be installed and managed with `pyenv` before creating the project virtual environment.
 
@@ -99,6 +105,8 @@ Additional CLI tools are required for some workflows:
   - `hadolint` for Dockerfile linting
   - `jq` for parsing Trivy JSON reports
   - `trivy` for filesystem and image scanning
+  - `shellcheck` for shell script linting
+  - `go` and `actionlint` for GitHub Actions workflow linting
 - `Makefile` managed:
   - `semgrep` for deep SAST scans
 
@@ -187,6 +195,51 @@ Verify installation:
 hadolint --version
 ```
 
+#### Installing ShellCheck
+
+`shellcheck` is used to lint shell scripts through `make lint-shell` and is part of the `make ci` local quality gate.
+
+Installation:
+
+```bash
+sudo apt update
+sudo apt install -y shellcheck
+```
+
+Verify installation:
+
+```bash
+shellcheck --version
+```
+
+#### Installing Go and actionlint
+
+`actionlint` is used to validate all workflow files under `.github/workflows/` through `make lint-actions` and is part of `make ci`.
+
+Install Go and `actionlint`:
+
+```bash
+sudo apt update
+sudo apt install -y golang-go
+go version
+
+go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+```
+
+Ensure the Go bin path is available:
+
+```bash
+export PATH="$(go env GOPATH)/bin:$PATH"
+echo 'export PATH="$(go env GOPATH)/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
+```
+
+Verify installation:
+
+```bash
+actionlint -version
+```
+
 #### Install semgrep
 
 Install with a single command by using the dedicated `Makefile` target.
@@ -244,7 +297,7 @@ Make sure the CLI tools outlined in section [2.1 Installing Required CLI Tools](
 Confirm they exist:
 
 ```bash
-command -v hadolint jq semgrep trivy
+command -v hadolint jq semgrep trivy shellcheck actionlint
 ```
 
 ### Python version
@@ -371,6 +424,8 @@ Important targets are:
 | `make deps` | install Python dependencies from `requirements/dev.txt` |
 | `make deps-local` | install local CLI tooling with `pipx` and `semgrep` |
 | `make fmt` | apply formatting fixes |
+| `make lint-shell` | run ShellCheck for shell scripts |
+| `make lint-actions` | validate GitHub Actions workflows with actionlint |
 | `make quality` | run linting, type checking, and tests |
 | `make ci` | run the local CI quality gate |
 | `make build` | build the Docker image locally |
@@ -382,6 +437,7 @@ Current target behavior:
 - `make deps` upgrades `pip` and installs `requirements/dev.txt`
 - `make deps-local` installs `pipx`, installs `semgrep` with `pipx`, and reminds the developer to install Trivy system-wide
 - `make fmt` runs `black`, `ruff check --fix`, `trailing-whitespace`, and `end-of-file-fixer`
+- `make lint` runs `lint-shell`, `lint-actions`, `black --check`, and `ruff check`
 - `make quality` runs `lint`, `typecheck`, and `test`
 - `make ci` runs `quality` and `ci-security`
 - `make build` runs `docker build -t seg:local .`
@@ -441,6 +497,18 @@ Linting:
 
 ```bash
 ruff check --fix src tests scripts
+```
+
+Shell scripts:
+
+```bash
+shellcheck -x $(SHELL_FILES)
+```
+
+GitHub Actions workflows:
+
+```bash
+actionlint
 ```
 
 Typing:
@@ -546,6 +614,8 @@ make ci
 This runs:
 
 - linting
+- shell script linting through ShellCheck
+- workflow linting through actionlint
 - type checking
 - tests
 - baseline security checks through Bandit, pip-audit, and Hadolint
@@ -563,7 +633,7 @@ This adds:
 - Trivy filesystem scan
 - Trivy image scan
 
-Note that `make ci` and `make full` require the relevant local tools to be installed. In particular, `hadolint`, `jq`, `semgrep`, and `trivy` are not all installed by `requirements/dev.txt`.
+Note that `make ci` and `make full` require the relevant local tools to be installed. In particular, `hadolint`, `jq`, `semgrep`, `trivy`, `shellcheck`, and `actionlint` are not installed by `requirements/dev.txt`.
 
 ## 12. Troubleshooting
 
@@ -588,7 +658,17 @@ pip freeze
 ### Verify required local CLI tools
 
 ```bash
-command -v hadolint jq semgrep trivy
+command -v hadolint jq semgrep trivy shellcheck actionlint
+```
+
+### actionlint not found in PATH
+
+If `make lint-actions` fails with `actionlint: command not found`, install it with Go and export `GOPATH/bin`.
+
+```bash
+go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+export PATH="$(go env GOPATH)/bin:$PATH"
+actionlint -version
 ```
 
 ### Semgrep crashes after update

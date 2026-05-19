@@ -293,5 +293,5 @@ run docker run --rm \
   --network "$SEG_SHARED_NETWORK" \
   -p "127.0.0.1:${LOCAL_PORT}:${SEG_PORT}" \
   alpine/socat \
-  TCP-LISTEN:${SEG_PORT},fork,reuseaddr \
-  TCP:${SEG_CONTAINER}:${SEG_PORT}
+  "TCP-LISTEN:${SEG_PORT},fork,reuseaddr" \
+  "TCP:${SEG_CONTAINER}:${SEG_PORT}"
