@@ -81,7 +81,7 @@ run_demo_actions() {
     local tags_joined
     local action_id
     local action_summary
-    local action_tags
+    #local action_tags
     local -a selected_modules=()
     local -a crypto_actions=()
     local -a arg_rows=()
@@ -127,7 +127,7 @@ run_demo_actions() {
         for row in "${crypto_actions[@]}"; do
             action_id="$(printf '%s' "${row}" | base64 -d | jq -r '.id')"
             action_summary="$(printf '%s' "${row}" | base64 -d | jq -r '.summary')"
-            action_tags="$(printf '%s' "${row}" | base64 -d | jq -r '.tags | join(",")')"
+            #action_tags="$(printf '%s' "${row}" | base64 -d | jq -r '.tags | join(",")')"
             printf '  %s\n' "${action_id}"
             if is_non_empty "${action_summary}"; then
                 printf '    %-12s %s\n' "summary" "${action_summary}"
