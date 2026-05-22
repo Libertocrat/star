@@ -51,6 +51,7 @@ fi
 if [[ "${SEG_COLOR_ENABLED}" == "true" ]]; then
     SEG_COLOR_RESET='\033[0m'
     SEG_COLOR_INFO='\033[36m'
+    SEG_COLOR_SPINNER='\033[96m'
     SEG_COLOR_OK='\033[32m'
     SEG_COLOR_WARN='\033[33m'
     SEG_COLOR_ERROR='\033[31m'
@@ -59,6 +60,7 @@ if [[ "${SEG_COLOR_ENABLED}" == "true" ]]; then
 else
     SEG_COLOR_RESET=''
     SEG_COLOR_INFO=''
+    SEG_COLOR_SPINNER=''
     SEG_COLOR_OK=''
     SEG_COLOR_WARN=''
     SEG_COLOR_ERROR=''
@@ -69,6 +71,7 @@ fi
 readonly SEG_COLOR_ENABLED
 readonly SEG_COLOR_RESET
 readonly SEG_COLOR_INFO
+readonly SEG_COLOR_SPINNER
 readonly SEG_COLOR_OK
 readonly SEG_COLOR_WARN
 readonly SEG_COLOR_ERROR
@@ -165,6 +168,53 @@ say_step() {
 
     [[ "${silent_mode}" == "true" ]] && return 0
     step "$@"
+}
+
+# Execute a command while rendering a single-line spinner in interactive terminals.
+# The wrapped command exit code is returned unchanged so callers keep their logic.
+run_with_spinner() {
+    local message="${1:?spinner message is required}"
+    local spinner_chars="|/-\\"
+    local spinner_index=0
+    local spinner_pid
+    local spinner_status=0
+
+    shift
+
+    if [[ $# -eq 0 ]]; then
+        error "run_with_spinner requires a command to execute."
+        return 1
+    fi
+
+    # Skip animation for non-interactive stderr or when explicitly disabled.
+    if [[ ! -t 2 || "${DISABLE_SPINNER:-false}" == "true" ]]; then
+        "$@"
+        return $?
+    fi
+
+    "$@" &
+    spinner_pid=$!
+
+    while kill -0 "${spinner_pid}" 2>/dev/null; do
+        printf '\r%b[%s]%b %s' \
+            "${SEG_COLOR_SPINNER}" \
+            "${spinner_chars:spinner_index:1}" \
+            "${SEG_COLOR_RESET}" \
+            "${message}" >&2
+        spinner_index=$(((spinner_index + 1) % ${#spinner_chars}))
+        sleep 0.1
+    done
+
+    if wait "${spinner_pid}"; then
+        spinner_status=0
+    else
+        spinner_status=$?
+    fi
+
+    # Clear the spinner line so callers can print their own final status cleanly.
+    printf '\r\033[2K' >&2
+
+    return "${spinner_status}"
 }
 
 # -----------------------------------------------------------------------------
@@ -444,6 +494,29 @@ load_env() {
 # Run docker compose against SEG runtime files, honoring DRY_RUN when enabled.
 compose() {
     run docker compose --env-file "$(path_relative_to_pwd "${SEG_ENV_FILE}")" -f "$(path_relative_to_pwd "${SEG_COMPOSE_FILE}")" "$@"
+}
+
+# Run docker compose quietly and only surface stderr when the command fails.
+compose_quiet_if_silent() {
+    local compose_output
+    local compose_status
+
+    if [[ "${SILENT_MODE:-false}" != "true" ]]; then
+        compose "$@"
+        return $?
+    fi
+
+    if compose_output="$({ compose "$@" >/dev/null; } 2>&1)"; then
+        return 0
+    fi
+
+    compose_status=$?
+
+    if [[ -n "${compose_output}" ]]; then
+        printf '%s\n' "${compose_output}" >&2
+    fi
+
+    return "${compose_status}"
 }
 
 # -----------------------------------------------------------------------------

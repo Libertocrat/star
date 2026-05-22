@@ -83,15 +83,6 @@ validate_cli_flags() {
     fi
 }
 
-# Run Docker Compose commands while honoring dry-run and silent mode.
-compose_quiet_if_silent() {
-    if [[ "${SILENT_MODE}" == "true" ]]; then
-        compose "$@" >/dev/null
-    else
-        compose "$@"
-    fi
-}
-
 # Require a runtime env variable to be present and non-empty.
 require_runtime_env_value() {
     local name="${1:?name is required}"

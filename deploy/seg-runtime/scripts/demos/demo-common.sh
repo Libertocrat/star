@@ -58,9 +58,14 @@ demo_step() {
 # Pause between demo steps in interactive mode only.
 demo_pause() {
     [[ "${AUTO_MODE:-false}" == "true" ]] && return 0
-    printf '\n'
-    read -rsn1 -p "Press any key to continue..." || true
-    printf '\n'
+    # Show prompt on a visually separated line during pause.
+    # This blank line is temporary and removed together with the prompt.
+    printf '\n' >&2
+    printf '%b[NEXT]%b Press any key to continue...' \
+        "${SEG_COLOR_PROMPT:-}" "${SEG_COLOR_RESET:-}" >&2
+    read -rsn1 || true
+    # Clear prompt line, then move up and clear the temporary separator line.
+    printf '\r\033[2K\033[1A\r\033[2K' >&2
 }
 
 # Track a SEG-managed file id once, preserving a role label for summaries.

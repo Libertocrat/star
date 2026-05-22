@@ -273,10 +273,10 @@ run_demo_search() {
     printf '  Controlled regex and exact-phrase search via allow-listed actions.\n\n'
 
     search_cases=(
-        "Email address regex|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}"
-        "URL regex|https?://[^[:space:]]+"
-        "Phone number regex|\\+?[0-9][0-9 -]{7,}[0-9]"
-        "Exact text phrase|arbitrary shell"
+        "Email address regex|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}|true"
+        "URL regex|https?://[^[:space:]]+|true"
+        "Phone number regex|\\+?[0-9][0-9 -]{7,}[0-9]|true"
+        "Exact text phrase|arbitrary shell|false"
     )
 
     demo_step "Upload shared demo text file"
@@ -285,7 +285,7 @@ run_demo_search() {
     demo_pause
 
     for search_case in "${search_cases[@]}"; do
-        IFS='|' read -r case_label pattern <<< "${search_case}"
+        IFS='|' read -r case_label pattern regex_enabled <<< "${search_case}"
 
         demo_step "Run base.analyze.search_file_lines"
         printf '\nPattern type:\n'
@@ -293,7 +293,12 @@ run_demo_search() {
         printf 'Pattern:\n'
         printf '  %s\n\n' "${pattern}"
 
-        params="$(jq -cn --arg file_id "${file_id}" --arg pattern "${pattern}" '{input_file: $file_id, pattern: $pattern}')"
+        if [[ "${regex_enabled}" == "true" ]]; then
+            params="$(jq -cn --arg file_id "${file_id}" --arg pattern "${pattern}" '{input_file: $file_id, pattern: $pattern, regex: true}')"
+        else
+            params="$(jq -cn --arg file_id "${file_id}" --arg pattern "${pattern}" '{input_file: $file_id, pattern: $pattern}')"
+        fi
+
         execute_action "base.analyze.search_file_lines" "${params}" || return 1
         print_action_result "base.analyze.search_file_lines"
         demo_pause

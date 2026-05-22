@@ -176,7 +176,7 @@ ensure_runtime_available() {
         info "Auto mode enabled. Starting SEG with ./scripts/seg-up.sh"
     fi
 
-    if ! "${SEG_SCRIPTS_DIR}/seg-up.sh" --silent; then
+    if ! run_with_spinner "Starting SEG runtime" "${SEG_SCRIPTS_DIR}/seg-up.sh" --silent; then
         warn "SEG startup with --silent failed."
 
         if [[ "${AUTO_MODE}" != "true" ]]; then
@@ -308,11 +308,15 @@ run_one_demo_session() {
 
 # Optionally stop SEG runtime at session end, defaulting to keep running.
 prompt_stop_runtime() {
+    if [[ "${AUTO_MODE}" == "true" ]]; then
+        return 0
+    fi
+
     if ! confirm "Stop SEG runtime now?" "N"; then
         return 0
     fi
 
-    if "${SEG_SCRIPTS_DIR}/seg-down.sh" --silent; then
+    if run_with_spinner "Stopping SEG runtime" "${SEG_SCRIPTS_DIR}/seg-down.sh" --silent; then
         success "SEG runtime stopped."
         return 0
     fi
