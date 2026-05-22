@@ -88,6 +88,11 @@ actions:
         description: "Search pattern passed directly to grep"
 
     flags:
+      regex:
+        value: "-E"
+        default: false
+        description: "Interpret pattern as an extended grep regular expression"
+
       ignore_case:
         value: "-i"
         default: false
@@ -105,6 +110,7 @@ actions:
 
     command:
       - binary: grep
+      - flag: regex
       - flag: ignore_case
       - flag: add_line_numbers
       - flag: invert_match

@@ -16,6 +16,7 @@ SILENT_MODE=false
 NETWORK_STATUS="kept"
 TOKEN_RESTORE_STATUS="not checked"
 
+# Print CLI usage and examples for shutdown behavior.
 usage() {
     cat <<'EOF'
 Usage:
@@ -46,6 +47,7 @@ Examples:
 EOF
 }
 
+# Parse CLI flags for shutdown and optional Docker cleanup modes.
 parse_args() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -93,10 +95,12 @@ parse_args() {
     done
 }
 
+# Return success when destructive Docker cleanup flags are enabled.
 has_destructive_cleanup() {
     [[ "${REMOVE_VOLUMES}" == "true" || "${REMOVE_NETWORK}" == "true" ]]
 }
 
+# Validate unsupported flag combinations before executing any shutdown logic.
 validate_cli_flags() {
     if [[ "${DRY_RUN:-false}" == "true" && "${SILENT_MODE}" == "true" ]]; then
         die "--dry-run and --silent cannot be used together."
@@ -110,14 +114,7 @@ validate_cli_flags() {
     fi
 }
 
-compose_quiet_if_silent() {
-    if [[ "${SILENT_MODE}" == "true" ]]; then
-        compose "$@" >/dev/null
-    else
-        compose "$@"
-    fi
-}
-
+# Require a runtime env variable to exist and be non-empty.
 require_runtime_env_value() {
     local name="${1:?name is required}"
     local value="${!name-}"
@@ -127,6 +124,7 @@ require_runtime_env_value() {
     fi
 }
 
+# Validate env values used to target SEG Docker resources safely.
 validate_runtime_env() {
     require_runtime_env_value COMPOSE_PROJECT_NAME
     require_runtime_env_value SEG_DATA_VOLUME
@@ -150,6 +148,7 @@ validate_runtime_env() {
     fi
 }
 
+# Confirm destructive cleanup intent unless force or dry-run mode is active.
 confirm_destructive_cleanup() {
     if ! has_destructive_cleanup; then
         return 0
@@ -178,6 +177,7 @@ confirm_destructive_cleanup() {
     exit 0
 }
 
+# Build and run docker compose down arguments from selected shutdown flags.
 run_compose_down() {
     local -a down_args
     down_args=(down)
@@ -194,6 +194,7 @@ run_compose_down() {
     compose_quiet_if_silent "${down_args[@]}"
 }
 
+# Remove the external SEG Docker network when requested and safe to do so.
 remove_network_if_requested() {
     if [[ "${REMOVE_NETWORK}" != "true" ]]; then
         NETWORK_STATUS="kept"
@@ -227,6 +228,7 @@ remove_network_if_requested() {
     return 0
 }
 
+# Restore token file permissions back to secure host defaults after shutdown.
 restore_token_permissions() {
     local token_path_display
     token_path_display="$(path_relative_to_pwd "${SEG_SECRET_FILE}")"
@@ -257,6 +259,7 @@ restore_token_permissions() {
     return 0
 }
 
+# Print final shutdown summary for runtime, Docker resources, and token state.
 print_final_output() {
     local containers_state="stopped/removed"
     local volumes_state="kept"
@@ -309,6 +312,7 @@ print_final_output() {
     printf '  %-27s %s\n' "User specs directory" "$(path_relative_to_pwd "${SEG_USER_SPECS_DIR}") (kept)"
 }
 
+# Orchestrate shutdown validation, compose down, cleanup, and final summary.
 main() {
     parse_args "$@"
     validate_cli_flags
