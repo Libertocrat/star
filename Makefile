@@ -110,7 +110,7 @@ lint-shell:
 
 lint-actions:
 	@echo "Running actionlint..."
-
+	actionlint
 
 typecheck:
 	mypy --config-file mypy.ini $(SRC_DIRS)

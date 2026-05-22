@@ -23,16 +23,33 @@ repos:
       - id: ruff
         args: ["--fix"]
 
+  - repo: local
+    hooks:
+      - id: shellcheck
+        name: shellcheck (shell scripts)
+        entry: shellcheck -x
+        language: system
+        files: \.sh$
+        exclude: ^(\.venv/|venv/|node_modules/|\.git/)
+
+  - repo: local
+    hooks:
+      - id: actionlint
+        name: actionlint (GitHub workflows)
+        entry: actionlint
+        language: system
+        files: ^\.github/workflows/.*\.ya?ml$
+
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.11.2
     hooks:
       - id: mypy
-        name: mypy (src and tests)
+        name: mypy (src, tests, and scripts)
         args:
           - --config-file
           - mypy.ini
           - --explicit-package-bases
-        files: ^(src|tests)/
+        files: ^(src|tests|scripts)/
         additional_dependencies:
           - fastapi
           - starlette
