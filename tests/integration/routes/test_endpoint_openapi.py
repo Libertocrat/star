@@ -1,6 +1,6 @@
 """Integration tests for the generated OpenAPI contract.
 
-These tests validate the runtime OpenAPI projection exposed by SEG.
+These tests validate the runtime OpenAPI projection exposed by STAR.
 They ensure security exposure, contract overrides, schema registration,
 and error examples are documented as expected.
 """
@@ -10,12 +10,12 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 from openapi_spec_validator import validate
 
-from seg.actions.models.core import ParamType
-from seg.actions.presentation.contracts import (
+from star.actions.models.core import ParamType
+from star.actions.presentation.contracts import (
     _build_required_arg_example_value,
     _format_arg_type_for_docs,
 )
-from seg.app import create_app
+from star.app import create_app
 from tests.integration.routes.actions.test_endpoint_action_execute import (
     _build_outputs_registry,
 )
@@ -32,19 +32,19 @@ def _openapi_document(
 ) -> dict:
     """Fetch the generated OpenAPI document.
 
-    GIVEN a valid minimal SEG runtime environment
+    GIVEN a valid minimal STAR runtime environment
     WHEN the test app is created with docs explicitly enabled
     THEN `/openapi.json` returns a successful OpenAPI payload.
 
     Args:
-        minimal_safe_env: Fixture that provides required SEG environment vars.
+        minimal_safe_env: Fixture that provides required STAR environment vars.
         monkeypatch: Pytest helper used to set test-only environment values.
 
     Returns:
         Parsed OpenAPI JSON document.
     """
 
-    monkeypatch.setenv("SEG_ENABLE_DOCS", "true")
+    monkeypatch.setenv("STAR_ENABLE_DOCS", "true")
     app = create_app()
     if action_registry is not None:
         app.state.action_registry = action_registry
@@ -67,10 +67,10 @@ def test_openapi_is_valid_spec(minimal_safe_env, monkeypatch):
     THEN the payload is a valid OpenAPI schema.
 
     Args:
-        minimal_safe_env: Fixture that provides required SEG environment vars.
+        minimal_safe_env: Fixture that provides required STAR environment vars.
         monkeypatch: Pytest helper used to set test-only environment values.
     """
-    monkeypatch.setenv("SEG_ENABLE_DOCS", "true")
+    monkeypatch.setenv("STAR_ENABLE_DOCS", "true")
     app = create_app()
     with TestClient(app) as client:
         response = client.get("/openapi.json")
@@ -97,7 +97,7 @@ def test_openapi_sets_security_for_private_and_public_routes(
     AND health/metrics are explicitly public.
 
     Args:
-        minimal_safe_env: Fixture that provides required SEG environment vars.
+        minimal_safe_env: Fixture that provides required STAR environment vars.
         monkeypatch: Pytest helper used to set test-only environment values.
     """
     schema = _openapi_document(minimal_safe_env, monkeypatch)
@@ -122,7 +122,7 @@ def test_openapi_actions_list_docs_describe_query_rules(
     including `match` allowed values and semantic default behavior.
 
     Args:
-        minimal_safe_env: Fixture that provides required SEG environment vars.
+        minimal_safe_env: Fixture that provides required STAR environment vars.
         monkeypatch: Pytest helper used to set test-only environment values.
     """
 
@@ -180,14 +180,14 @@ def test_openapi_execute_contract_includes_integrity_and_request_id_headers(
     AND `X-Request-Id` is documented as UUID on responses.
 
     Args:
-        minimal_safe_env: Fixture that provides required SEG environment vars.
+        minimal_safe_env: Fixture that provides required STAR environment vars.
         monkeypatch: Pytest helper used to set test-only environment values.
     """
     schema = _openapi_document(minimal_safe_env, monkeypatch)
 
     post = schema["paths"]["/v1/actions/{action_id}"]["post"]
 
-    integrity = post["x-seg-integrity"]
+    integrity = post["x-star-integrity"]
     assert integrity["content_type_required"] == "application/json"
     assert integrity["enforced_by"] == "RequestIntegrityMiddleware"
     assert isinstance(integrity["body_limit_bytes"], int)
@@ -222,7 +222,7 @@ def test_openapi_execute_examples_include_enriched_markdown_and_params(
     AND params examples include required/default values derived at runtime.
 
     Args:
-        minimal_safe_env: Fixture that provides required SEG environment vars.
+        minimal_safe_env: Fixture that provides required STAR environment vars.
         monkeypatch: Pytest helper used to set test-only environment values.
     """
 
@@ -285,7 +285,7 @@ def test_openapi_execute_examples_omit_stdout_as_file_when_disallowed(
     """
 
     del minimal_safe_env
-    monkeypatch.setenv("SEG_ENABLE_DOCS", "true")
+    monkeypatch.setenv("STAR_ENABLE_DOCS", "true")
 
     app = create_app()
     app.state.action_registry = _build_outputs_registry(
@@ -326,14 +326,14 @@ def test_openapi_execute_response_examples_include_outputs_when_declared(
     without forcing it into examples when `stdout_as_file` is false.
 
     Args:
-        minimal_safe_env: Fixture that provides required SEG environment vars.
+        minimal_safe_env: Fixture that provides required STAR environment vars.
         monkeypatch: Pytest helper used to set test-only environment values.
         settings: Application settings fixture.
         tmp_path: Temporary directory used to build a test DSL registry.
     """
 
     del minimal_safe_env
-    monkeypatch.setenv("SEG_ENABLE_DOCS", "true")
+    monkeypatch.setenv("STAR_ENABLE_DOCS", "true")
 
     app = create_app()
     app.state.action_registry = _build_outputs_registry(
@@ -414,13 +414,13 @@ def test_openapi_includes_global_metadata_from_app_settings(
     AND contact/license/externalDocs are exposed as configured.
 
     Args:
-        minimal_safe_env: Fixture that provides required SEG environment vars.
+        minimal_safe_env: Fixture that provides required STAR environment vars.
         monkeypatch: Pytest helper used to set test-only environment values.
     """
     schema = _openapi_document(minimal_safe_env, monkeypatch)
 
     info = schema["info"]
-    assert info["title"] == "Secure Execution Gateway (SEG)"
+    assert info["title"] == "Secure Templated Actions Runtime (STAR)"
     assert info["version"] == "0.1.0"
     assert "Runtime-aware OpenAPI contract generation" in info["description"]
 
@@ -431,7 +431,7 @@ def test_openapi_includes_global_metadata_from_app_settings(
     assert info["license"]["name"] == "Apache License 2.0"
     assert info["license"]["url"] == "https://www.apache.org/licenses/LICENSE-2.0.html"
 
-    assert schema["externalDocs"]["url"] == "https://github.com/Libertocrat/seg"
+    assert schema["externalDocs"]["url"] == "https://github.com/Libertocrat/star"
 
 
 # ============================================================================
@@ -451,7 +451,7 @@ def test_openapi_applies_public_endpoint_response_overrides(
     AND `/health` advertises canonical envelope example.
 
     Args:
-        minimal_safe_env: Fixture that provides required SEG environment vars.
+        minimal_safe_env: Fixture that provides required STAR environment vars.
         monkeypatch: Pytest helper used to set test-only environment values.
     """
     schema = _openapi_document(minimal_safe_env, monkeypatch)
@@ -489,7 +489,7 @@ def test_openapi_registers_action_models_and_prunes_internal_schemas(
     AND internal FastAPI/Pydantic helper schemas are pruned.
 
     Args:
-        minimal_safe_env: Fixture that provides required SEG environment vars.
+        minimal_safe_env: Fixture that provides required STAR environment vars.
         monkeypatch: Pytest helper used to set test-only environment values.
     """
     schema = _openapi_document(
@@ -532,7 +532,7 @@ def test_openapi_error_contract_replaces_default_422_with_public_error_examples(
     AND centralized public error examples are published.
 
     Args:
-        minimal_safe_env: Fixture that provides required SEG environment vars.
+        minimal_safe_env: Fixture that provides required STAR environment vars.
         monkeypatch: Pytest helper used to set test-only environment values.
     """
     schema = _openapi_document(minimal_safe_env, monkeypatch)
@@ -564,7 +564,7 @@ def test_openapi_documents_files_upload_contract(
     THEN upload operation documents canonical success and handler-level errors.
 
     Args:
-        minimal_safe_env: Fixture that provides required SEG environment vars.
+        minimal_safe_env: Fixture that provides required STAR environment vars.
         monkeypatch: Pytest helper used to set test-only environment values.
     """
 
@@ -596,7 +596,7 @@ def test_openapi_documents_files_metadata_contract(
     THEN metadata operation documents canonical success and handler-level errors.
 
     Args:
-        minimal_safe_env: Fixture that provides required SEG environment vars.
+        minimal_safe_env: Fixture that provides required STAR environment vars.
         monkeypatch: Pytest helper used to set test-only environment values.
     """
 
@@ -628,7 +628,7 @@ def test_openapi_documents_files_content_contract(
     THEN content operation documents binary success response and handler-level errors.
 
     Args:
-        minimal_safe_env: Fixture that provides required SEG environment vars.
+        minimal_safe_env: Fixture that provides required STAR environment vars.
         monkeypatch: Pytest helper used to set test-only environment values.
     """
 
@@ -662,7 +662,7 @@ def test_openapi_documents_files_delete_contract(
     THEN delete operation documents canonical success and handler-level errors.
 
     Args:
-        minimal_safe_env: Fixture that provides required SEG environment vars.
+        minimal_safe_env: Fixture that provides required STAR environment vars.
         monkeypatch: Pytest helper used to set test-only environment values.
     """
 
@@ -694,7 +694,7 @@ def test_openapi_documents_files_list_contract(
     THEN list operation documents canonical success and handler-level errors.
 
     Args:
-        minimal_safe_env: Fixture that provides required SEG environment vars.
+        minimal_safe_env: Fixture that provides required STAR environment vars.
         monkeypatch: Pytest helper used to set test-only environment values.
     """
 

@@ -2,14 +2,14 @@
 """
 Tests for ResponseEnvelope schema.
 
-These tests freeze the public response contract used across SEG.
+These tests freeze the public response contract used across STAR.
 They validate invariants and intended usage, not Pydantic internals.
 """
 
 import pytest
 from pydantic import ValidationError
 
-from seg.core.schemas.envelope import ErrorInfo, ResponseEnvelope
+from star.core.schemas.envelope import ErrorInfo, ResponseEnvelope
 
 # ============================================================================
 # ErrorInfo schema

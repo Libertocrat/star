@@ -1,4 +1,4 @@
-# SEG Runtime/Production dependency set.
+# STAR Runtime/Production dependency set.
 # Python runtime: 3.12
 #
 # Purpose:

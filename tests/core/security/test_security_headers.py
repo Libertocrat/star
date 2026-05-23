@@ -6,7 +6,7 @@ They validate byte-level rules without any ASGI or middleware wiring.
 
 import pytest
 
-from seg.core.security.headers import (
+from star.core.security.headers import (
     _has_illegal_ctrl_bytes,
     find_header_integrity_violation,
 )

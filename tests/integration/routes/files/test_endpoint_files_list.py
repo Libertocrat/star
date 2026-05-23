@@ -15,7 +15,7 @@ from uuid import UUID
 import pytest
 from fastapi.testclient import TestClient
 
-from seg.core.errors import INVALID_REQUEST, UNAUTHORIZED
+from star.core.errors import INVALID_REQUEST, UNAUTHORIZED
 
 # ============================================================================
 # Helpers
@@ -33,7 +33,7 @@ def _upload_file_and_get_data(
     """Upload a file through HTTP API and return the file payload from response.
 
     Args:
-            client: Test client bound to the SEG app.
+            client: Test client bound to the STAR app.
             auth_headers: Authorization headers for private endpoints.
             filename: Multipart filename to send.
             content: Raw file bytes.
@@ -63,7 +63,7 @@ def _meta_path_for(tmp_path: Path, file_id: UUID) -> Path:
             file_id: File UUID.
 
     Returns:
-            Metadata json file path under SEG data root.
+            Metadata json file path under STAR data root.
     """
 
     return tmp_path / "data" / "files" / "meta" / f"file_{file_id}.json"
@@ -77,7 +77,7 @@ def _list_files(
     """Call GET /v1/files with auth headers and query params.
 
     Args:
-            client: Test client bound to the SEG app.
+            client: Test client bound to the STAR app.
             auth_headers: Authorization headers.
             **params: Query parameters forwarded to endpoint.
 
@@ -706,7 +706,7 @@ def test_list_files_response_structure(create_upload_app, auth_headers):
     """
     GIVEN a valid list request
     WHEN GET /v1/files is called
-    THEN response follows SEG list envelope structure
+    THEN response follows STAR list envelope structure
     """
 
     app = create_upload_app()

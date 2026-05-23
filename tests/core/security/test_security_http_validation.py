@@ -6,7 +6,7 @@ content-length parsing, and path character hygiene.
 
 import pytest
 
-from seg.core.security.http_validation import (
+from star.core.security.http_validation import (
     is_supported_json_content_type,
     normalize_content_type,
     parse_content_length_strict,

@@ -1,4 +1,4 @@
-# SEG Security Scanning dependency set.
+# STAR Security Scanning dependency set.
 # Python runtime: 3.12
 #
 # Purpose:

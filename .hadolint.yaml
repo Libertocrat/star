@@ -1,4 +1,4 @@
-# Hadolint configuration for Secure Execution Gateway (SEG)
+# Hadolint configuration for Secure Templated Actions Runtime (STAR)
 
 # Treat warnings as warnings (do not fail on style recommendations)
 failure-threshold: error

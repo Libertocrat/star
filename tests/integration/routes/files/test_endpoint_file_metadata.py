@@ -13,7 +13,7 @@ from uuid import UUID, uuid4
 
 from fastapi.testclient import TestClient
 
-from seg.core.errors import FILE_NOT_FOUND, INVALID_REQUEST, UNAUTHORIZED
+from star.core.errors import FILE_NOT_FOUND, INVALID_REQUEST, UNAUTHORIZED
 
 # ============================================================================
 # Helpers
@@ -25,12 +25,12 @@ def _upload_text_file_and_get_id(
     auth_headers: dict[str, str],
     *,
     filename: str = "sample.txt",
-    content: bytes = b"SEG metadata test\n",
+    content: bytes = b"STAR metadata test\n",
 ) -> UUID:
     """Upload a text file through the HTTP API and return its file UUID.
 
     Args:
-        client: Test client bound to the SEG application.
+        client: Test client bound to the STAR application.
         auth_headers: Authorization headers for protected endpoints.
         filename: Name to send for the multipart file field.
         content: Raw bytes to upload.
@@ -88,10 +88,10 @@ def test_files_metadata_get_returns_metadata_for_existing_file(
     assert file_data["stored_filename"] == f"file_{file_id}.bin"
     assert file_data["mime_type"] == "text/plain"
     assert file_data["extension"] == ".txt"
-    assert file_data["size_bytes"] == len(b"SEG metadata test\n")
+    assert file_data["size_bytes"] == len(b"STAR metadata test\n")
     assert file_data["status"] == "ready"
 
-    expected_hash = hashlib.sha256(b"SEG metadata test\n").hexdigest()
+    expected_hash = hashlib.sha256(b"STAR metadata test\n").hexdigest()
     assert file_data["sha256"] == expected_hash
     assert len(file_data["sha256"]) == 64
 
@@ -111,7 +111,7 @@ def test_files_metadata_get_returns_invalid_request_for_missing_file(
     auth_headers,
 ):
     """
-    GIVEN a random UUID that does not exist in SEG metadata storage
+    GIVEN a random UUID that does not exist in STAR metadata storage
     WHEN GET /v1/files/{id} is called
     THEN it returns FILE_NOT_FOUND in the standard error envelope
     """

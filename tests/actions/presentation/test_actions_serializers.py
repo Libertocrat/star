@@ -1,11 +1,11 @@
-"""Unit tests for SEG action presentation serializers."""
+"""Unit tests for STAR action presentation serializers."""
 
 from __future__ import annotations
 
 import pytest
 from pydantic import BaseModel
 
-from seg.actions.models.core import (
+from star.actions.models.core import (
     ActionSpec,
     ArgDef,
     FlagDef,
@@ -14,13 +14,13 @@ from seg.actions.models.core import (
     OutputType,
     ParamType,
 )
-from seg.actions.models.presentation import (
+from star.actions.models.presentation import (
     ActionPublicSpec,
     ActionSummary,
     ModuleSummary,
 )
-from seg.actions.models.security import BinaryPolicy
-from seg.actions.presentation.serializers import (
+from star.actions.models.security import BinaryPolicy
+from star.actions.presentation.serializers import (
     module_summary_to_dict,
     modules_to_response,
     to_action_public_spec,

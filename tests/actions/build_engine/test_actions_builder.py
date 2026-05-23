@@ -1,4 +1,4 @@
-"""Unit tests for the SEG DSL specs builder.
+"""Unit tests for the STAR DSL specs builder.
 
 These tests freeze builder-layer invariants:
 - validated `ModuleSpec` input compiles into runtime `ActionSpec`
@@ -13,10 +13,10 @@ from uuid import uuid4
 import pytest
 from pydantic import UUID4, ValidationError
 
-from seg.actions.build_engine.builder import build_actions
-from seg.actions.exceptions import ActionSpecsBuildError
-from seg.actions.models import ActionSpec, ParamType
-from seg.core.config import Settings
+from star.actions.build_engine.builder import build_actions
+from star.actions.exceptions import ActionSpecsBuildError
+from star.actions.models import ActionSpec, ParamType
+from star.core.config import Settings
 
 # ============================================================================
 # Fixtures and helpers
@@ -38,8 +38,8 @@ def _test_settings(
 
     return Settings.model_validate(
         {
-            "seg_root_dir": "/tmp/seg-test",  # noqa: S108 -- fixed path for testing purposes
-            "seg_blocked_binaries_extra": blocked_extra,
+            "star_root_dir": "/tmp/star-test",  # noqa: S108 -- fixed path for testing purposes
+            "star_blocked_binaries_extra": blocked_extra,
         }
     )
 

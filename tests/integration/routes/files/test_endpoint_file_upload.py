@@ -1,7 +1,7 @@
 """Integration tests for the /v1/files upload endpoint.
 
 These tests validate the HTTP contract and persistence behavior for file uploads.
-They ensure SEG stores validated files as blob + metadata JSON and rejects invalid
+They ensure STAR stores validated files as blob + metadata JSON and rejects invalid
 uploads with stable response envelopes.
 """
 
@@ -13,14 +13,14 @@ from uuid import UUID
 
 from fastapi.testclient import TestClient
 
-from seg.core.errors import (
+from star.core.errors import (
     FILE_TOO_LARGE,
     INVALID_REQUEST,
     MIME_MAPPING_NOT_DEFINED,
     UNAUTHORIZED,
     UNSUPPORTED_MEDIA_TYPE,
 )
-from seg.core.utils.file_storage import (
+from star.core.utils.file_storage import (
     get_blob_dir,
     get_blob_path,
     get_meta_dir,
@@ -28,7 +28,7 @@ from seg.core.utils.file_storage import (
     get_tmp_dir,
     load_file_metadata,
 )
-from seg.routes.files.schemas import FileMetadata
+from star.routes.files.schemas import FileMetadata
 
 # ============================================================================
 # Startup / initialization
@@ -38,9 +38,9 @@ from seg.routes.files.schemas import FileMetadata
 def test_files_startup_creates_storage_directories(
     create_upload_app,
 ):
-    """Validate startup initialization of SEG-managed storage directories.
+    """Validate startup initialization of STAR-managed storage directories.
 
-    GIVEN an isolated SEG_ROOT_DIR for the test app
+    GIVEN an isolated STAR_ROOT_DIR for the test app
     WHEN the application is created
     THEN files/blobs, files/meta, and files/tmp directories exist.
     """
@@ -75,7 +75,7 @@ def test_files_upload_persists_blob_and_metadata_and_returns_envelope(
     """
 
     app = create_upload_app()
-    payload = b"Hello SEG upload\n"
+    payload = b"Hello STAR upload\n"
     expected_sha = hashlib.sha256(payload).hexdigest()
 
     with TestClient(app) as client:
@@ -432,7 +432,7 @@ def test_files_upload_enforces_max_size_limit(
 ):
     """Validate max upload size enforcement for oversized payloads.
 
-    GIVEN a SEG configuration with very small max body size
+    GIVEN a STAR configuration with very small max body size
     WHEN an oversized multipart upload is sent to /v1/files
     THEN the request is rejected with FILE_TOO_LARGE behavior.
     """

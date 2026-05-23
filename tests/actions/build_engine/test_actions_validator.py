@@ -1,4 +1,4 @@
-"""Unit tests for the SEG DSL semantic validator.
+"""Unit tests for the STAR DSL semantic validator.
 
 These tests freeze validator-layer invariants:
 - semantic validation is strict, deterministic, and fail-fast
@@ -12,9 +12,9 @@ from typing import cast
 
 import pytest
 
-from seg.actions.build_engine.validator import validate_modules
-from seg.actions.exceptions import ActionSpecsParseError
-from seg.actions.schemas.dsl import ArgCmd, BinaryCmd, FlagCmd, OutputCmd
+from star.actions.build_engine.validator import validate_modules
+from star.actions.exceptions import ActionSpecsParseError
+from star.actions.schemas.dsl import ArgCmd, BinaryCmd, FlagCmd, OutputCmd
 
 # ============================================================================
 # validate_modules: happy path
@@ -194,7 +194,7 @@ def test_validate_modules_rejects_blocked_binary(
     """
     module = make_module_spec(make_module_payload(binaries=["bash"]))
 
-    with pytest.raises(ActionSpecsParseError, match="blocked by SEG default policy"):
+    with pytest.raises(ActionSpecsParseError, match="blocked by STAR default policy"):
         validate_modules([module])
 
 

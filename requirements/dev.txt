@@ -1,4 +1,4 @@
-# SEG Developer dependency set.
+# STAR Developer dependency set.
 # Python runtime: 3.12
 #
 # Purpose:

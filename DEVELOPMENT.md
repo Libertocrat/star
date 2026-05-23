@@ -1,4 +1,4 @@
-# SEG Development Guide
+# STAR Development Guide
 
 ## Table of Contents
 
@@ -21,8 +21,8 @@
 Minimal setup for contributors who want to run the project and execute the local CI checks. To run the full DevSecOps pipeline locally, see [2. Development Environment Requirements](#2-development-environment-requirements) and [4. Environment Setup](#4-environment-setup).
 
 ```bash
-git clone https://github.com/Libertocrat/seg.git
-cd seg
+git clone https://github.com/Libertocrat/star.git
+cd star
 
 pyenv install 3.12
 pyenv local 3.12
@@ -44,18 +44,18 @@ make ci
 
 ## 1. Development Overview
 
-This document describes the local development workflow for SEG.
+This document describes the local development workflow for STAR.
 
 It explains how to:
 
 - set up a local development environment
-- run SEG locally
+- run STAR locally
 - develop and validate DSL-defined actions
 - execute quality checks
 - reproduce CI pipelines
 - use helper utilities in `scripts/` and the `Makefile`
 
-SEG development assumes a Linux environment.
+STAR development assumes a Linux environment.
 
 The current development workflow is built around:
 
@@ -68,10 +68,10 @@ The current development workflow is built around:
 
 The `Makefile` provides a consistent interface between local development and the CI pipelines. It also includes local DX commands such as `deps`, `deps-local`, and `fmt`.
 
-Most day-to-day SEG changes fall into one of three loops:
+Most day-to-day STAR changes fall into one of three loops:
 
-- application and middleware work under `src/seg`
-- DSL action work under `src/seg/actions/specs`
+- application and middleware work under `src/star`
+- DSL action work under `src/star/actions/specs`
 - documentation and OpenAPI export work through `scripts/export_openapi.py` and `scripts/build_docs_site.py`
 
 ```mermaid
@@ -90,7 +90,7 @@ The current local workflow depends on the following tools.
 
 | Tool | Purpose |
 | --- | --- |
-| Python 3.12 | SEG runtime and development |
+| Python 3.12 | STAR runtime and development |
 | Docker | container runtime and local stack execution |
 | Git | version control |
 | Make | developer task execution |
@@ -262,7 +262,7 @@ The repository is organized into a small number of top-level directories.
 
 | Directory | Purpose |
 | --- | --- |
-| `src/` | SEG application source code, including the DSL build engine, runtime execution layers, file API, and middleware |
+| `src/` | STAR application source code, including the DSL build engine, runtime execution layers, file API, and middleware |
 | `tests/` | smoke, unit, and integration tests |
 | `scripts/` | developer and release helper utilities |
 | `docs/` | technical documentation |
@@ -278,17 +278,17 @@ Detailed technical references are documented in:
 
 ### Action development workflow
 
-In SEG, new action behavior is defined through YAML specs and then compiled into runtime action definitions at startup.
+In STAR, new action behavior is defined through YAML specs and then compiled into runtime action definitions at startup.
 
 The normal workflow is:
 
-1. Add or update a module spec under `src/seg/actions/specs`.
+1. Add or update a module spec under `src/star/actions/specs`.
 2. Let the loader, validator, and builder compile it into the runtime registry during application startup.
 3. Inspect the public contract through `GET /v1/actions` or `GET /v1/actions/{action_id}`.
 4. Execute it through `POST /v1/actions/{action_id}` with a `params` payload and optional request-level execution options such as `stdout_as_file`.
 5. Use `/v1/files` when the action consumes uploaded files or returns managed file outputs.
 
-This is important when reasoning about SEG locally: an action is a controlled command template with a fixed contract, not an arbitrary shell command accepted from the API.
+This is important when reasoning about STAR locally: an action is a controlled command template with a fixed contract, not an arbitrary shell command accepted from the API.
 
 ## 4. Environment Setup
 
@@ -348,18 +348,18 @@ Typical local startup flow:
 # Copy and set environment variables
 cp .env.example .env
 
-# Set a strong API token in "secrets/seg_api_token.txt", or generate one running:
+# Set a strong API token in "secrets/star_api_token.txt", or generate one running:
 mkdir -p secrets
-openssl rand -hex 32 > ./secrets/seg_api_token.txt
+openssl rand -hex 32 > ./secrets/star_api_token.txt
 
 # Ensure the shared Docker network exists.
-# Replace docker-network if you changed SEG_SHARED_NETWORK in .env.
+# Replace docker-network if you changed STAR_SHARED_NETWORK in .env.
 docker network create docker-network || true
 
 docker compose up -d --build
 ```
 
-`SEG_DATA_VOLUME` controls the named Docker volume used for SEG persistent data.
+`STAR_DATA_VOLUME` controls the named Docker volume used for STAR persistent data.
 Set it explicitly in `.env` if you need to isolate storage between local stacks.
 
 To inspect the running stack:
@@ -369,7 +369,7 @@ docker compose logs -f
 docker compose ps
 ```
 
-With the default Compose settings, SEG is published to localhost on `http://localhost:${SEG_HOST_PORT}` while remaining reachable to internal Docker consumers at `http://seg:${SEG_PORT}`.
+With the default Compose settings, STAR is published to localhost on `http://localhost:${STAR_HOST_PORT}` while remaining reachable to internal Docker consumers at `http://star:${STAR_PORT}`.
 
 Common authenticated API routes during local development include:
 
@@ -382,7 +382,7 @@ Common authenticated API routes during local development include:
 - `DELETE /v1/files/{id}`
 
 > [!NOTE]
-> The compose stack includes an ephemeral `seg-init` service that prepares ownership and permissions on `SEG_ROOT_DIR` before the `seg` service starts.
+> The compose stack includes an ephemeral `star-init` service that prepares ownership and permissions on `STAR_ROOT_DIR` before the `star` service starts.
 
 When validating action behavior locally, prefer these checks:
 
@@ -390,7 +390,7 @@ When validating action behavior locally, prefer these checks:
 - inspect one public contract with `GET /v1/actions/{action_id}`
 - execute one action with `POST /v1/actions/{action_id}` and set `stdout_as_file: true` when validating stdout-to-file materialization
 - upload or retrieve supporting files through `/v1/files`
-- set `SEG_ENABLE_DOCS=true` only when you need to inspect `/openapi.json`, `/docs`, or `/redoc` during local development
+- set `STAR_ENABLE_DOCS=true` only when you need to inspect `/openapi.json`, `/docs`, or `/redoc` during local development
 
 ## 5. Dependency Sets
 
@@ -440,7 +440,7 @@ Current target behavior:
 - `make lint` runs `lint-shell`, `lint-actions`, `black --check`, and `ruff check`
 - `make quality` runs `lint`, `typecheck`, and `test`
 - `make ci` runs `quality` and `ci-security`
-- `make build` runs `docker build -t seg:local .`
+- `make build` runs `docker build -t star:local .`
 - `make deep-security` runs `semgrep`, `trivy-fs`, and `trivy-image`
 - `make full` runs `ci`, `build`, and `deep-security`
 
@@ -457,7 +457,7 @@ deep-security --> full
 
 ## 7. Pre-commit Hooks
 
-SEG uses `pre-commit` to enforce local quality checks before changes move into CI.
+STAR uses `pre-commit` to enforce local quality checks before changes move into CI.
 
 The current hook set includes:
 
@@ -535,15 +535,15 @@ The repository includes developer utilities in `scripts/`.
 
 That directory has its own reference document in [scripts/README.md](scripts/README.md).
 
-### 9.1 SEG Local Port Forwarding
+### 9.1 STAR Local Port Forwarding
 
 Script:
 
-`scripts/seg-forward.sh`
+`scripts/star-forward.sh`
 
 Purpose:
 
-Create a temporary localhost port forward to a running SEG container.
+Create a temporary localhost port forward to a running STAR container.
 
 This helper is optional with the default Compose configuration and is mainly useful when host publishing is disabled or when a temporary alternate local port is needed.
 
@@ -560,14 +560,14 @@ Required variables:
 
 | Variable | Purpose |
 | --- | --- |
-| `SEG_SHARED_NETWORK` | Docker network |
-| `SEG_PORT` | SEG container port |
+| `STAR_SHARED_NETWORK` | Docker network |
+| `STAR_PORT` | STAR container port |
 | `COMPOSE_PROJECT_NAME` | container autodetection prefix |
 
 Example usage:
 
 ```bash
-scripts/seg-forward.sh --env-file .env
+scripts/star-forward.sh --env-file .env
 ```
 
 The script always prints:
@@ -576,7 +576,7 @@ The script always prints:
 http://localhost:<PORT>/health
 ```
 
-When `SEG_ENABLE_DOCS=true`, it also prints:
+When `STAR_ENABLE_DOCS=true`, it also prints:
 
 ```text
 http://localhost:<PORT>/docs
@@ -594,11 +594,11 @@ The local developer utilities are designed to improve DX without changing the pr
 ```mermaid
 flowchart TD
 Developer --> DockerCompose
-DockerCompose --> SEGContainer
+DockerCompose --> STARContainer
 
 Developer --> DevTools
-DevTools --> SegForward
-SegForward --> SEGContainer
+DevTools --> StarForward
+StarForward --> STARContainer
 ```
 
 The local tools operate around the main container stack rather than changing the application runtime model.
@@ -685,7 +685,7 @@ This forces `pipx` to recreate the isolated environment used by the Semgrep CLI.
 ### Inspect helper script usage
 
 ```bash
-scripts/seg-forward.sh --help
+scripts/star-forward.sh --help
 ```
 
 ---

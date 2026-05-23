@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 env:
-  IMAGE_NAME: seg
+  IMAGE_NAME: star
   IMAGE_OWNER: ${{ github.repository_owner }}
 
 permissions:
@@ -84,13 +84,13 @@ jobs:
           context: .
           push: false
           build-args: |
-            SEG_APP_VERSION=${{ env.APP_VERSION }}
+            STAR_APP_VERSION=${{ env.APP_VERSION }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           platforms: linux/amd64
           load: true # load into local daemon for Trivy scan
-          cache-from: type=gha,scope=seg
-          cache-to: type=gha,mode=max,scope=seg
+          cache-from: type=gha,scope=star
+          cache-to: type=gha,mode=max,scope=star
 
       # -------------------------
       # Install & Cache Trivy

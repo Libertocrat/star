@@ -1,40 +1,40 @@
 services:
-  seg-init:
+  star-init:
     image: busybox:1.37.0
     env_file: .env
     command: >
       sh -c "
         set -eu &&
         umask 022 &&
-        mkdir -p '${SEG_ROOT_DIR:?SEG_ROOT_DIR is required}' &&
-        chown -R '${SEG_CONTAINER_UID:-1001}:${SEG_CONTAINER_GID:-1001}' '${SEG_ROOT_DIR}' &&
-        find '${SEG_ROOT_DIR}' -type d -print0 | xargs -0 -r chmod 755 &&
-        find '${SEG_ROOT_DIR}' -type f -print0 | xargs -0 -r chmod 644
+        mkdir -p '${STAR_ROOT_DIR:?STAR_ROOT_DIR is required}' &&
+        chown -R '${STAR_CONTAINER_UID:-1001}:${STAR_CONTAINER_GID:-1001}' '${STAR_ROOT_DIR}' &&
+        find '${STAR_ROOT_DIR}' -type d -print0 | xargs -0 -r chmod 755 &&
+        find '${STAR_ROOT_DIR}' -type f -print0 | xargs -0 -r chmod 644
       "
     volumes:
-      - seg_data:${SEG_ROOT_DIR:?SEG_ROOT_DIR is required}
+      - star_data:${STAR_ROOT_DIR:?STAR_ROOT_DIR is required}
     restart: "no"
 
-  seg:
+  star:
     build:
       context: .
       dockerfile: Dockerfile
       args:
-        SEG_CONTAINER_USER: ${SEG_CONTAINER_USER}
-        SEG_CONTAINER_GROUP: ${SEG_CONTAINER_GROUP}
-        SEG_CONTAINER_UID: ${SEG_CONTAINER_UID}
-        SEG_CONTAINER_GID: ${SEG_CONTAINER_GID}
-        SEG_APP_VERSION: ${SEG_APP_VERSION}
+        STAR_CONTAINER_USER: ${STAR_CONTAINER_USER}
+        STAR_CONTAINER_GROUP: ${STAR_CONTAINER_GROUP}
+        STAR_CONTAINER_UID: ${STAR_CONTAINER_UID}
+        STAR_CONTAINER_GID: ${STAR_CONTAINER_GID}
+        STAR_APP_VERSION: ${STAR_APP_VERSION}
     restart: unless-stopped
     env_file: .env
     secrets:
-      - seg_api_token
+      - star_api_token
     ports:
-      - "${SEG_HOST_BIND_ADDRESS:-127.0.0.1}:${SEG_HOST_PORT:-8080}:${SEG_PORT:-8080}"
+      - "${STAR_HOST_BIND_ADDRESS:-127.0.0.1}:${STAR_HOST_PORT:-8080}:${STAR_PORT:-8080}"
     volumes:
-      - seg_data:${SEG_ROOT_DIR:?SEG_ROOT_DIR is required}
+      - star_data:${STAR_ROOT_DIR:?STAR_ROOT_DIR is required}
     depends_on:
-      seg-init:
+      star-init:
         condition: service_completed_successfully
     networks:
       - default_network
@@ -42,12 +42,12 @@ services:
 networks:
   default_network:
     external: true
-    name: ${SEG_SHARED_NETWORK:?SEG_SHARED_NETWORK is required}
+    name: ${STAR_SHARED_NETWORK:?STAR_SHARED_NETWORK is required}
 
 secrets:
-  seg_api_token:
-    file: ./secrets/seg_api_token.txt
+  star_api_token:
+    file: ./secrets/star_api_token.txt
 
 volumes:
-  seg_data:
-    name: ${SEG_DATA_VOLUME:?SEG_DATA_VOLUME is required}
+  star_data:
+    name: ${STAR_DATA_VOLUME:?STAR_DATA_VOLUME is required}

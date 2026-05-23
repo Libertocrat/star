@@ -1,4 +1,4 @@
-# SEG CI and Release Pipelines
+# STAR CI and Release Pipelines
 
 <p align="center">
   <img src="https://img.shields.io/badge/CI-GitHub_Actions-blue" alt="GitHub Actions">
@@ -29,7 +29,7 @@
 
 ## 1. CI Overview
 
-SEG uses GitHub Actions workflows stored in `.github/workflows/` together with a Makefile-driven execution model.
+STAR uses GitHub Actions workflows stored in `.github/workflows/` together with a Makefile-driven execution model.
 
 The CI system enforces:
 
@@ -137,7 +137,7 @@ Python dependencies are split across the `requirements/` directory.
 
 | File | Purpose |
 | --- | --- |
-| `runtime.txt` | Runtime packages required to run the SEG API service |
+| `runtime.txt` | Runtime packages required to run the STAR API service |
 | `testing.txt` | Test and quality execution packages such as `pytest`, `pytest-asyncio`, and `openapi-spec-validator` |
 | `linting.txt` | Formatting, linting, typing, and pre-commit tools such as Black, Ruff, MyPy, and pre-commit |
 | `security.txt` | Security scanning tools such as Bandit and pip-audit |
@@ -264,7 +264,7 @@ The target fails unless HIGH misconfigurations, CRITICAL misconfigurations, and 
 
 The workflow runs:
 
-- `make trivy-image IMAGE_NAME=seg IMAGE_TAG=${GITHUB_SHA}`
+- `make trivy-image IMAGE_NAME=star IMAGE_TAG=${GITHUB_SHA}`
 
 The Makefile target first builds the image through the `build` dependency, then runs Trivy in image mode with:
 

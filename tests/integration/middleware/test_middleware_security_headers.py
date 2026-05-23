@@ -6,7 +6,7 @@ They ensure that:
 - Baseline security headers are present in HTTP responses.
 - Fingerprinting headers (`Server`, `X-Powered-By`) are removed.
 - Baseline headers are overwritten with authoritative values.
-- Middleware registration respects `SEG_ENABLE_SECURITY_HEADERS`.
+- Middleware registration respects `STAR_ENABLE_SECURITY_HEADERS`.
 
 They do NOT unit-test middleware internals.
 """
@@ -17,8 +17,8 @@ import pytest
 from fastapi.responses import JSONResponse
 from fastapi.testclient import TestClient
 
-from seg.app import create_app
-from seg.core.config import Settings
+from star.app import create_app
+from star.core.config import Settings
 
 # ============================================================================
 # Constants
@@ -151,12 +151,12 @@ def test_security_headers_middleware_is_not_registered_when_toggle_is_false(
     monkeypatch,
 ):
     """
-    GIVEN SEG_ENABLE_SECURITY_HEADERS is set to false
+    GIVEN STAR_ENABLE_SECURITY_HEADERS is set to false
     WHEN the app is created from environment-backed settings
     THEN SecurityHeadersMiddleware is not registered in the middleware stack
     """
 
-    monkeypatch.setenv("SEG_ENABLE_SECURITY_HEADERS", "false")
+    monkeypatch.setenv("STAR_ENABLE_SECURITY_HEADERS", "false")
 
     app = create_app()
     client = TestClient(app)
@@ -183,22 +183,22 @@ def test_security_headers_middleware_is_not_registered_when_toggle_is_false(
 )
 def test_settings_accepts_security_headers_toggle_values(
     api_token,
-    seg_root_dir,
+    star_root_dir,
     flag,
     expected,
 ):
     """
-    GIVEN SEG_ENABLE_SECURITY_HEADERS receives a false-ish value
+    GIVEN STAR_ENABLE_SECURITY_HEADERS receives a false-ish value
     WHEN Settings validates typed fields
-    THEN seg_enable_security_headers is parsed as boolean False
+    THEN star_enable_security_headers is parsed as boolean False
     """
 
     settings = Settings.model_validate(
         {
-            "seg_api_token": api_token,
-            "seg_root_dir": str(seg_root_dir),
-            "seg_enable_security_headers": flag,
+            "star_api_token": api_token,
+            "star_root_dir": str(star_root_dir),
+            "star_enable_security_headers": flag,
         }
     )
 
-    assert settings.seg_enable_security_headers is expected
+    assert settings.star_enable_security_headers is expected

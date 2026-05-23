@@ -18,10 +18,10 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from seg.app import create_app
-from seg.core.config import Settings
-from seg.core.errors import FILE_TOO_LARGE, INVALID_REQUEST
-from seg.middleware.request_integrity import REQUEST_INTEGRITY_REJECTIONS_TOTAL
+from star.app import create_app
+from star.core.config import Settings
+from star.core.errors import FILE_TOO_LARGE, INVALID_REQUEST
+from star.middleware.request_integrity import REQUEST_INTEGRITY_REJECTIONS_TOTAL
 
 # ============================================================================
 # Helpers
@@ -29,7 +29,7 @@ from seg.middleware.request_integrity import REQUEST_INTEGRITY_REJECTIONS_TOTAL
 
 
 def _integrity_metric_value(path: str, method: str, reason: str) -> float:
-    """Return current `seg_request_integrity_rejections_total` for labels.
+    """Return current `star_request_integrity_rejections_total` for labels.
 
     Args:
         path: Normalized request path label.
@@ -42,7 +42,7 @@ def _integrity_metric_value(path: str, method: str, reason: str) -> float:
     total = 0.0
     for metric in REQUEST_INTEGRITY_REJECTIONS_TOTAL.collect():
         for sample in metric.samples:
-            if sample.name != "seg_request_integrity_rejections_total":
+            if sample.name != "star_request_integrity_rejections_total":
                 continue
             labels = sample.labels
             if (
@@ -60,28 +60,28 @@ def _integrity_metric_value(path: str, method: str, reason: str) -> float:
 
 
 @pytest.fixture
-def low_max_bytes_settings(api_token, seg_root_dir) -> Settings:
+def low_max_bytes_settings(api_token, star_root_dir) -> Settings:
     """Return settings with a strict body-size limit for deterministic tests.
 
     Args:
         api_token: Authentication token fixture.
-        seg_root_dir: Root directory fixture.
+        star_root_dir: Root directory fixture.
 
     Returns:
         Settings configured for low body-size limit tests.
     """
     return Settings.model_validate(
         {
-            "seg_api_token": api_token,
-            "seg_root_dir": str(seg_root_dir),
-            "seg_max_file_bytes": 16,
+            "star_api_token": api_token,
+            "star_root_dir": str(star_root_dir),
+            "star_max_file_bytes": 16,
         }
     )
 
 
 @pytest.fixture
 def low_max_bytes_app(low_max_bytes_settings):
-    """Create app configured with a small `seg_max_file_bytes` value.
+    """Create app configured with a small `star_max_file_bytes` value.
 
     Args:
         low_max_bytes_settings: Settings fixture with strict body-size limit.
@@ -116,7 +116,7 @@ def test_execute_rejects_unsupported_content_type(client, auth_headers):
     GIVEN POST /v1/actions/noop requires application/json
     WHEN a request uses an unsupported content type
     THEN middleware rejects with HTTP 400 and INVALID_REQUEST envelope
-    AND the seg_request_integrity_rejections_total metric is incremented
+    AND the star_request_integrity_rejections_total metric is incremented
     """
     reason = "unsupported_content_type"
     before = _integrity_metric_value("/v1/actions/noop", "POST", reason)
@@ -153,7 +153,7 @@ def test_execute_allows_application_json_with_charset(
     GIVEN POST /v1/actions/noop requires JSON base media type
     WHEN Content-Type is application/json with charset parameter
     THEN request passes request-integrity validation
-    AND the seg_request_integrity_rejections_total metric is not incremented
+    AND the star_request_integrity_rejections_total metric is not incremented
     """
     sf = sandbox_file_factory(name="charset_ok.txt", content=b"hello")
 
@@ -187,7 +187,7 @@ def test_duplicate_authorization_header_is_rejected(api_token, client):
     GIVEN duplicate Authorization headers in the same request
     WHEN request enters request-integrity middleware
     THEN middleware rejects with INVALID_REQUEST before auth logic
-    AND the seg_request_integrity_rejections_total metric is incremented
+    AND the star_request_integrity_rejections_total metric is incremented
     """
     reason = "duplicate_authorization"
     before = _integrity_metric_value("/v1/actions/noop", "POST", reason)
@@ -222,7 +222,7 @@ def test_conflicting_content_length_and_transfer_encoding_is_rejected(
     GIVEN both Content-Length and Transfer-Encoding headers are present
     WHEN request enters request-integrity middleware
     THEN middleware rejects to mitigate CL/TE smuggling ambiguity
-    AND the seg_request_integrity_rejections_total metric is incremented
+    AND the star_request_integrity_rejections_total metric is incremented
     """
     reason = "conflicting_cl_te"
     before = _integrity_metric_value("/v1/actions/noop", "POST", reason)
@@ -263,7 +263,7 @@ def test_invalid_content_length_is_rejected(low_max_bytes_client, auth_headers):
     GIVEN Content-Length must be digits-only
     WHEN a request sends an invalid Content-Length
     THEN middleware rejects with INVALID_REQUEST
-    AND the seg_request_integrity_rejections_total metric is incremented
+    AND the star_request_integrity_rejections_total metric is incremented
     """
     reason = "invalid_content_length"
     before = _integrity_metric_value("/v1/actions/noop", "POST", reason)
@@ -292,10 +292,10 @@ def test_invalid_content_length_is_rejected(low_max_bytes_client, auth_headers):
 
 def test_content_length_exceeding_limit_is_rejected(low_max_bytes_client, auth_headers):
     """
-    GIVEN a strict seg_max_file_bytes limit
+    GIVEN a strict star_max_file_bytes limit
     WHEN Content-Length declares a value above the limit
     THEN middleware rejects with FILE_TOO_LARGE
-    AND the seg_request_integrity_rejections_total metric is incremented
+    AND the star_request_integrity_rejections_total metric is incremented
     """
     reason = "content_length_exceeds_limit"
     before = _integrity_metric_value("/v1/actions/noop", "POST", reason)

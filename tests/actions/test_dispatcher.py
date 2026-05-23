@@ -1,5 +1,5 @@
 """
-Unit tests for the SEG runtime dispatcher.
+Unit tests for the STAR runtime dispatcher.
 
 These tests freeze dispatcher invariants for the DSL runtime architecture:
 - action resolution through immutable registry
@@ -12,9 +12,9 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from seg.actions.dispatcher import DispatchedActionResult, dispatch_action
-from seg.actions.exceptions import ActionBinaryBlockedError, ActionNotFoundError
-from seg.actions.models import ActionExecutionResult
+from star.actions.dispatcher import DispatchedActionResult, dispatch_action
+from star.actions.exceptions import ActionBinaryBlockedError, ActionNotFoundError
+from star.actions.models import ActionExecutionResult
 
 # ============================================================================
 # Runtime Dispatch
@@ -90,7 +90,7 @@ async def test_dispatch_action_passes_spec_to_executor(valid_registry, monkeypat
         )
 
     monkeypatch.setattr(
-        "seg.actions.dispatcher.runtime_executor.execute_command",
+        "star.actions.dispatcher.runtime_executor.execute_command",
         _fake_execute,
     )
 
@@ -116,7 +116,7 @@ async def test_dispatch_action_propagates_policy_runtime_errors(
         raise ActionBinaryBlockedError("blocked")
 
     monkeypatch.setattr(
-        "seg.actions.dispatcher.runtime_executor.execute_command",
+        "star.actions.dispatcher.runtime_executor.execute_command",
         _raise_blocked,
     )
 

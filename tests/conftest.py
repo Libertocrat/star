@@ -1,5 +1,5 @@
 """
-Global pytest fixtures for SEG test suite.
+Global pytest fixtures for STAR test suite.
 
 This module defines shared fixtures used across unit, integration, and
 smoke tests. The primary goals are:
@@ -23,7 +23,7 @@ from uuid import UUID
 import pytest
 from fastapi.testclient import TestClient
 
-from seg.core.config import Settings
+from star.core.config import Settings
 
 # ============================================================================
 # Environment and registry isolation
@@ -31,18 +31,18 @@ from seg.core.config import Settings
 
 
 @pytest.fixture(autouse=True)
-def clean_seg_environment(monkeypatch):
+def clean_star_environment(monkeypatch):
     """Ensure test-only isolation from local configuration sources.
 
     This fixture enforces *strict configuration isolation* for all tests by:
 
-    - Removing any `SEG_*` variables from the process environment.
+    - Removing any `STAR_*` variables from the process environment.
     - Disabling `.env` file loading in `Settings`.
     - Clearing the cached Settings instance (`get_settings`) so each test
       observes only the environment prepared by its fixtures.
 
     Rationale:
-        SEG settings are lazily loaded and cached via `get_settings()`.
+        STAR settings are lazily loaded and cached via `get_settings()`.
         Without clearing the cache, changes to environment variables
         performed by fixtures would not take effect consistently.
 
@@ -61,10 +61,10 @@ def clean_seg_environment(monkeypatch):
         None. Runs setup before each test and restores settings afterward.
     """
     # ------------------------------------------------------------------
-    # 1. Remove all SEG_* variables from the environment
+    # 1. Remove all STAR_* variables from the environment
     # ------------------------------------------------------------------
     for key in list(os.environ.keys()):
-        if key.startswith("SEG_"):
+        if key.startswith("STAR_"):
             monkeypatch.delenv(key, raising=False)
 
     # ------------------------------------------------------------------
@@ -72,7 +72,7 @@ def clean_seg_environment(monkeypatch):
     # ------------------------------------------------------------------
     original_env_file = None
     try:
-        from seg.core.config import Settings
+        from star.core.config import Settings
 
         original_env_file = Settings.model_config.get("env_file", None)
         monkeypatch.setitem(Settings.model_config, "env_file", None)
@@ -84,7 +84,7 @@ def clean_seg_environment(monkeypatch):
     # 3. Clear cached settings to ensure fresh resolution per test
     # ------------------------------------------------------------------
     try:
-        from seg.core.config import get_settings
+        from star.core.config import get_settings
 
         get_settings.cache_clear()
     except Exception:  # noqa: S110
@@ -112,7 +112,7 @@ def clean_action_registry():
     Yields:
         None. Runs each test with an empty registry and restores baseline.
     """
-    from seg.actions import registry
+    from star.actions import registry
 
     # Use the public registry API: take a snapshot, replace with an empty
     # registry for the duration of the test, and restore the snapshot after.
@@ -133,7 +133,7 @@ def clean_action_registry():
 def valid_registry(tmp_path, monkeypatch):
     """Build a deterministic DSL runtime registry for tests.
 
-    The fixture writes a minimal but valid SEG DSL module to a temporary
+    The fixture writes a minimal but valid STAR DSL module to a temporary
     specs directory and compiles it through the public registry builder.
 
     Args:
@@ -143,7 +143,7 @@ def valid_registry(tmp_path, monkeypatch):
             ActionRegistry: Immutable registry with `test_runtime.ping` and
                     `test_runtime.repeat` actions.
     """
-    import seg.actions.registry as registry_module
+    import star.actions.registry as registry_module
 
     specs_dir = tmp_path / "specs"
     specs_dir.mkdir(parents=True, exist_ok=True)
@@ -215,7 +215,7 @@ actions:
 
     settings = Settings.model_validate(
         {
-            "seg_root_dir": str(tmp_path),
+            "star_root_dir": str(tmp_path),
         }
     )
 
@@ -240,25 +240,25 @@ def api_token() -> str:
 
 
 @pytest.fixture
-def seg_root_dir(tmp_path):
-    """Create a temporary SEG root directory for persistent storage tests.
+def star_root_dir(tmp_path):
+    """Create a temporary STAR root directory for persistent storage tests.
 
     Args:
         tmp_path: Pytest-provided temporary directory unique to the test.
 
     Returns:
-        Path: Path to the SEG root directory.
+        Path: Path to the STAR root directory.
     """
-    d = tmp_path / "seg-root"
+    d = tmp_path / "star-root"
     d.mkdir()
     return d
 
 
 @pytest.fixture
-def minimal_safe_env(monkeypatch, seg_root_dir, api_token):
+def minimal_safe_env(monkeypatch, star_root_dir, api_token):
     """Provide a minimal, safe environment for Settings-based tests.
 
-    This fixture sets required SEG variables to deterministic
+    This fixture sets required STAR variables to deterministic
     values so tests don't need to repeat the same `monkeypatch.setenv`
     calls. Tests that need to vary one of these values should accept
     `minimal_safe_env` and then call `monkeypatch.setenv(...)` to
@@ -266,18 +266,18 @@ def minimal_safe_env(monkeypatch, seg_root_dir, api_token):
 
     Args:
         monkeypatch: Pytest helper to set environment variables.
-        seg_root_dir: Root directory fixture.
+        star_root_dir: Root directory fixture.
         api_token: Deterministic API token fixture.
 
     Returns:
         Mapping of the environment variables configured for the test.
     """
-    monkeypatch.setenv("SEG_API_TOKEN_DEV", api_token)
-    monkeypatch.setenv("SEG_ROOT_DIR", str(seg_root_dir))
-    (seg_root_dir / "tmp").mkdir(parents=True, exist_ok=True)
+    monkeypatch.setenv("STAR_API_TOKEN_DEV", api_token)
+    monkeypatch.setenv("STAR_ROOT_DIR", str(star_root_dir))
+    (star_root_dir / "tmp").mkdir(parents=True, exist_ok=True)
     return {
-        "SEG_API_TOKEN_DEV": api_token,
-        "SEG_ROOT_DIR": str(seg_root_dir),
+        "STAR_API_TOKEN_DEV": api_token,
+        "STAR_ROOT_DIR": str(star_root_dir),
     }
 
 
@@ -287,7 +287,7 @@ def minimal_safe_env(monkeypatch, seg_root_dir, api_token):
 
 
 @pytest.fixture
-def settings(api_token, seg_root_dir) -> Settings:
+def settings(api_token, star_root_dir) -> Settings:
     """Return a minimal, valid Settings object for tests.
 
     This fixture constructs Settings explicitly via `model_validate`,
@@ -295,14 +295,14 @@ def settings(api_token, seg_root_dir) -> Settings:
 
     Args:
         api_token: API token fixture.
-        seg_root_dir: Root directory fixture.
+        star_root_dir: Root directory fixture.
     Returns:
         Settings: Fully validated Settings instance.
     """
     return Settings.model_validate(
         {
-            "seg_api_token": api_token,
-            "seg_root_dir": str(seg_root_dir),
+            "star_api_token": api_token,
+            "star_root_dir": str(star_root_dir),
         }
     )
 
@@ -322,7 +322,7 @@ def app(settings):
     Returns:
         FastAPI: Configured application instance.
     """
-    from seg.app import create_app
+    from star.app import create_app
 
     return create_app(settings)
 
@@ -351,39 +351,39 @@ def create_upload_app(
     monkeypatch,
     tmp_path,
 ) -> Callable[..., object]:
-    """Return a factory for app instances with isolated SEG data storage.
+    """Return a factory for app instances with isolated STAR data storage.
 
     Args:
-        minimal_safe_env: Fixture that provides required SEG environment vars.
+        minimal_safe_env: Fixture that provides required STAR environment vars.
         monkeypatch: Pytest helper used to set test-only environment values.
         tmp_path: Per-test temporary directory.
 
     Returns:
         Callable that builds a configured FastAPI app. Supports an optional
-        keyword argument `max_file_bytes` to override `SEG_MAX_FILE_BYTES`.
+        keyword argument `max_file_bytes` to override `STAR_MAX_FILE_BYTES`.
     """
 
-    del minimal_safe_env  # fixture ensures baseline SEG env values
+    del minimal_safe_env  # fixture ensures baseline STAR env values
 
     root_dir = tmp_path
-    monkeypatch.setenv("SEG_ROOT_DIR", str(root_dir))
+    monkeypatch.setenv("STAR_ROOT_DIR", str(root_dir))
 
     def _create(*, max_file_bytes: int | None = None):
         """Create an application instance configured for upload-route testing.
 
         Args:
-            max_file_bytes: Optional SEG_MAX_FILE_BYTES override.
+            max_file_bytes: Optional STAR_MAX_FILE_BYTES override.
 
         Returns:
             Configured FastAPI app instance.
         """
 
         if max_file_bytes is not None:
-            monkeypatch.setenv("SEG_MAX_FILE_BYTES", str(max_file_bytes))
+            monkeypatch.setenv("STAR_MAX_FILE_BYTES", str(max_file_bytes))
         else:
-            monkeypatch.delenv("SEG_MAX_FILE_BYTES", raising=False)
+            monkeypatch.delenv("STAR_MAX_FILE_BYTES", raising=False)
 
-        from seg.app import create_app
+        from star.app import create_app
 
         return create_app()
 
@@ -464,7 +464,7 @@ def upload_file_id(client, auth_headers):
 @dataclass(frozen=True)
 class SandboxFile:
     """
-    Value object representing a file created inside the SEG sandbox for tests.
+    Value object representing a file created inside the STAR sandbox for tests.
 
     This object intentionally exposes multiple path representations to avoid
     leaking sandbox layout logic into individual tests.
@@ -477,7 +477,7 @@ class SandboxFile:
 
         rel_path:
             Path relative to the sandbox root.
-            This is the form expected by SEG actions and MUST be used when
+            This is the form expected by STAR actions and MUST be used when
             constructing execute request payloads.
 
         subdir:
@@ -493,12 +493,12 @@ class SandboxFile:
 @pytest.fixture
 def sandbox_file_factory(minimal_safe_env):
     """
-    Factory fixture to create files inside the SEG sandbox for tests.
+    Factory fixture to create files inside the STAR sandbox for tests.
 
     This fixture encapsulates all sandbox layout knowledge and returns a
     SandboxFile value object exposing both absolute and sandbox-relative paths.
 
-    Tests MUST use `SandboxFile.rel_path` when passing paths to SEG actions,
+    Tests MUST use `SandboxFile.rel_path` when passing paths to STAR actions,
     and SHOULD avoid performing manual path manipulation.
 
     Args:
@@ -509,7 +509,7 @@ def sandbox_file_factory(minimal_safe_env):
             Factory function to create files in the sandbox.
     """
 
-    root = Path(minimal_safe_env["SEG_ROOT_DIR"])
+    root = Path(minimal_safe_env["STAR_ROOT_DIR"])
     sandbox = root
 
     def _create(
@@ -599,7 +599,7 @@ def file_factory(sandbox_file_factory):
         if file_type == "text":
             return sandbox_file_factory(
                 name=name,
-                content=b"Hello SEG\n",
+                content=b"Hello STAR\n",
             )
 
         # ------------------------------------------------------------------
@@ -607,7 +607,7 @@ def file_factory(sandbox_file_factory):
         # ------------------------------------------------------------------
         if file_type == "md":
             md_bytes = (
-                b"# SEG Test Document\n\n"
+                b"# STAR Test Document\n\n"
                 b"This is a markdown file.\n\n"
                 b"- item 1\n"
                 b"- item 2\n"
@@ -713,7 +713,7 @@ def file_factory(sandbox_file_factory):
         # SHELL SCRIPT
         # ------------------------------------------------------------------
         if file_type == "shell":
-            shell_bytes = b"#!/bin/bash\n echo SEG\n"
+            shell_bytes = b"#!/bin/bash\n echo STAR\n"
             return sandbox_file_factory(name=name, content=shell_bytes)
 
         # ------------------------------------------------------------------
@@ -723,7 +723,7 @@ def file_factory(sandbox_file_factory):
             py_bytes = (
                 b"#!/usr/bin/env python3\n"
                 b"import sys\n"
-                b"sys.stdout.write('SEG\\n')\n"
+                b"sys.stdout.write('STAR\\n')\n"
             )
             return sandbox_file_factory(name=name, content=py_bytes)
 
@@ -731,7 +731,7 @@ def file_factory(sandbox_file_factory):
         # JAVASCRIPT
         # ------------------------------------------------------------------
         if file_type == "javascript":
-            js_bytes = b"#!/usr/bin/env node\nconsole.log('SEG');\n"
+            js_bytes = b"#!/usr/bin/env node\nconsole.log('STAR');\n"
             return sandbox_file_factory(name=name, content=js_bytes)
 
         raise ValueError(f"Unsupported file type: {file_type}")

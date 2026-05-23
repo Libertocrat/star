@@ -2,8 +2,8 @@
 """
 Tests for filesystem path security helpers.
 
-These tests freeze the security invariants that define SEG's sandbox model.
-They verify that SEG never escapes its sandbox, never follows symlinks,
+These tests freeze the security invariants that define STAR's sandbox model.
+They verify that STAR never escapes its sandbox, never follows symlinks,
 and rejects malformed or dangerous paths.
 """
 
@@ -11,7 +11,7 @@ import os
 
 import pytest
 
-from seg.core.security.paths import (
+from star.core.security.paths import (
     PathSecurityError,
     resolve_in_sandbox,
     safe_open_no_follow,
@@ -90,24 +90,24 @@ def test_sanitize_normalizes_valid_path():
 # ============================================================================
 
 
-def test_resolve_path_inside_sandbox(minimal_safe_env, seg_root_dir):
+def test_resolve_path_inside_sandbox(minimal_safe_env, star_root_dir):
     """
     GIVEN a valid relative path inside the sandbox
     WHEN resolve_in_sandbox is called
     THEN the resolved path is inside the sandbox directory
     """
 
-    (seg_root_dir / "uploads").mkdir(parents=True, exist_ok=True)
-    (seg_root_dir / "uploads" / "file.txt").touch()
+    (star_root_dir / "uploads").mkdir(parents=True, exist_ok=True)
+    (star_root_dir / "uploads" / "file.txt").touch()
 
-    resolved = resolve_in_sandbox(seg_root_dir, "uploads/file.txt")
+    resolved = resolve_in_sandbox(star_root_dir, "uploads/file.txt")
 
     assert resolved.exists()
     assert resolved.is_file()
-    assert str(resolved).startswith(str(seg_root_dir))
+    assert str(resolved).startswith(str(star_root_dir))
 
 
-def test_resolve_rejects_path_outside_sandbox(minimal_safe_env, seg_root_dir):
+def test_resolve_rejects_path_outside_sandbox(minimal_safe_env, star_root_dir):
     """
     GIVEN a path that would escape the sandbox
     WHEN resolve_in_sandbox is called
@@ -115,17 +115,17 @@ def test_resolve_rejects_path_outside_sandbox(minimal_safe_env, seg_root_dir):
     """
 
     with pytest.raises(PathSecurityError):
-        resolve_in_sandbox(seg_root_dir, "../outside.txt")
+        resolve_in_sandbox(star_root_dir, "../outside.txt")
 
 
-def test_resolve_rejects_symlink_component(minimal_safe_env, seg_root_dir, tmp_path):
+def test_resolve_rejects_symlink_component(minimal_safe_env, star_root_dir, tmp_path):
     """
     GIVEN a sandbox directory that contains a symlink as one of its path components
     AND the symlink points outside of the sandbox
     WHEN resolve_in_sandbox is called with a path traversing that symlink
     THEN a PathSecurityError is raised
 
-    This test enforces the invariant that SEG must never follow symlinks
+    This test enforces the invariant that STAR must never follow symlinks
     inside the sandbox, even if the symlink name itself is allowlisted.
     """
 
@@ -138,30 +138,30 @@ def test_resolve_rejects_symlink_component(minimal_safe_env, seg_root_dir, tmp_p
     # ------------------------------------------------------------------
     # Arrange: create a symlink INSIDE the sandbox pointing outside
     # ------------------------------------------------------------------
-    symlink = seg_root_dir / "malicious_link"
+    symlink = star_root_dir / "malicious_link"
     symlink.symlink_to(real_dir)
 
     # ------------------------------------------------------------------
     # Act / Assert: resolving a path through the symlink is rejected
     # ------------------------------------------------------------------
     with pytest.raises(PathSecurityError):
-        resolve_in_sandbox(seg_root_dir, "malicious_link/file.txt")
+        resolve_in_sandbox(star_root_dir, "malicious_link/file.txt")
 
 
-def test_resolve_allows_any_subdir_under_sandbox(minimal_safe_env, seg_root_dir):
+def test_resolve_allows_any_subdir_under_sandbox(minimal_safe_env, star_root_dir):
     """
     GIVEN a path under the configured sandbox root
     WHEN resolving a path whose first component is arbitrary
     THEN the path is allowed as long as it remains under the sandbox
     """
-    (seg_root_dir / "other").mkdir()
-    (seg_root_dir / "other" / "file.txt").touch()
+    (star_root_dir / "other").mkdir()
+    (star_root_dir / "other" / "file.txt").touch()
 
-    resolved = resolve_in_sandbox(seg_root_dir, "other/file.txt")
+    resolved = resolve_in_sandbox(star_root_dir, "other/file.txt")
 
     assert resolved.exists()
     assert resolved.is_file()
-    assert str(resolved).startswith(str(seg_root_dir))
+    assert str(resolved).startswith(str(star_root_dir))
 
 
 def test_resolve_rejects_missing_sandbox_dir(minimal_safe_env, tmp_path):
@@ -231,13 +231,13 @@ def test_safe_open_rejects_non_regular_file(tmp_path):
 # ============================================================================
 
 
-def test_validate_path_open_returns_fd(minimal_safe_env, seg_root_dir):
+def test_validate_path_open_returns_fd(minimal_safe_env, star_root_dir):
     """
     GIVEN a regular file inside the sandbox
     WHEN validate_path is called with open_no_follow=True
     THEN it returns the resolved path and an owned fd
     """
-    file_path = seg_root_dir / "tmp" / "file.txt"
+    file_path = star_root_dir / "tmp" / "file.txt"
     file_path.parent.mkdir(parents=True, exist_ok=True)
     file_path.write_text("hello")
 

@@ -1,4 +1,4 @@
-# SEG Architecture
+# STAR Architecture
 
 ## Table of Contents
 
@@ -16,11 +16,11 @@
 
 ## 1. System Overview
 
-Secure Execution Gateway (SEG) is a FastAPI-based internal microservice that exposes a small authenticated execution surface together with a SEG-managed file service accessible through `/v1/files`.
+Secure Templated Actions Runtime (STAR) is a FastAPI-based internal microservice that exposes a small authenticated execution surface together with a STAR-managed file service accessible through `/v1/files`.
 
-The service is not a generic shell gateway. At startup, SEG discovers YAML-based Action DSL specifications, validates them, compiles them into immutable runtime `ActionSpec` objects, and stores them in an in-memory registry. At request time, clients can only execute those predeclared actions through `/v1/actions/{action_id}`.
+The service is not a generic shell gateway. At startup, STAR discovers YAML-based Action DSL specifications, validates them, compiles them into immutable runtime `ActionSpec` objects, and stores them in an in-memory registry. At request time, clients can only execute those predeclared actions through `/v1/actions/{action_id}`.
 
-An action is therefore best understood as predefined command execution, but with SEG controls around it:
+An action is therefore best understood as predefined command execution, but with STAR controls around it:
 
 - only DSL-declared binaries, args, flags, and outputs are accepted
 - request params are validated against generated Pydantic models
@@ -28,7 +28,7 @@ An action is therefore best understood as predefined command execution, but with
 - binary policy checks are enforced both at build time and at execution time
 - stdout and stderr are sanitized before they are returned, and file outputs may be materialized either from declared command placeholders or from sanitized stdout when `stdout_as_file` is `true` and allowed
 
-SEG also exposes `/v1/files`, which provides the supported external lifecycle for uploaded and generated files. Storage is rooted under `SEG_ROOT_DIR`, and callers interact with UUID-based file identifiers rather than raw filesystem paths.
+STAR also exposes `/v1/files`, which provides the supported external lifecycle for uploaded and generated files. Storage is rooted under `STAR_ROOT_DIR`, and callers interact with UUID-based file identifiers rather than raw filesystem paths.
 
 ```mermaid
 flowchart TD
@@ -50,29 +50,29 @@ end
 
 FileService --> ManagedStorage["Managed Storage"]
 OutputProcessor --> ManagedStorage
-ManagedStorage --> SEGRootDir["SEG_ROOT_DIR"]
+ManagedStorage --> STARRootDir["STAR_ROOT_DIR"]
 ```
 
 ## 2. Repository Structure
 
-The main implementation lives under `src/seg`.
+The main implementation lives under `src/star`.
 
 | Path | Role |
 | --- | --- |
-| `src/seg` | Application package containing the app factory, routes, middleware, shared core helpers, and the DSL-backed action system. |
-| `src/seg/actions/build_engine` | DSL spec discovery, YAML safety checks, semantic validation, and runtime action compilation. |
-| `src/seg/actions/runtime` | Runtime command rendering, subprocess execution, stdout/stderr sanitization, output handling, and file placeholder management. |
-| `src/seg/actions/presentation` | Public action catalog, request/response contract generation, and OpenAPI-facing serializers. |
-| `src/seg/actions/specs` | Built-in YAML action modules that define the shipped action catalog. |
-| `src/seg/middleware` | Authentication, request integrity, request ID, observability, rate limiting, timeout, and optional security headers. |
-| `src/seg/core` | Settings, errors, OpenAPI generation, storage utilities, security helpers, and shared response schemas. |
-| `src/seg/routes` | Thin HTTP handlers for `/v1/actions`, `/v1/files`, `/health`, and `/metrics`. |
+| `src/star` | Application package containing the app factory, routes, middleware, shared core helpers, and the DSL-backed action system. |
+| `src/star/actions/build_engine` | DSL spec discovery, YAML safety checks, semantic validation, and runtime action compilation. |
+| `src/star/actions/runtime` | Runtime command rendering, subprocess execution, stdout/stderr sanitization, output handling, and file placeholder management. |
+| `src/star/actions/presentation` | Public action catalog, request/response contract generation, and OpenAPI-facing serializers. |
+| `src/star/actions/specs` | Built-in YAML action modules that define the shipped action catalog. |
+| `src/star/middleware` | Authentication, request integrity, request ID, observability, rate limiting, timeout, and optional security headers. |
+| `src/star/core` | Settings, errors, OpenAPI generation, storage utilities, security helpers, and shared response schemas. |
+| `src/star/routes` | Thin HTTP handlers for `/v1/actions`, `/v1/files`, `/health`, and `/metrics`. |
 | `tests` | Smoke, unit, and integration tests covering startup, settings, middleware, action build/runtime layers, file APIs, and OpenAPI behavior. |
 | `scripts` | Helper scripts for OpenAPI export, docs site generation, and local port forwarding. |
 
 ## 3. FastAPI Application Layer
 
-The application is built in `src/seg/app.py` by `create_app()`.
+The application is built in `src/star/app.py` by `create_app()`.
 
 ### Application initialization
 
@@ -80,19 +80,19 @@ Key startup behaviors are:
 
 - load `Settings` through `get_settings()` unless a test provides one explicitly
 - create storage directories through `ensure_storage_dirs(settings)`
-- register `/docs`, `/redoc`, and `/openapi.json` only when `seg_enable_docs` is true
+- register `/docs`, `/redoc`, and `/openapi.json` only when `star_enable_docs` is true
 - build the immutable runtime action registry through `build_registry_from_specs(settings)`
 - attach both `settings` and `action_registry` to `app.state`
 - register middleware, exception handlers, and routers
 
-`SEGApp` subclasses `FastAPI` and overrides `openapi()` so the application can lazily build and cache a runtime-aware schema through `build_openapi_schema()`.
+The runtime uses a custom `FastAPI` subclass that overrides `openapi()` so the application can lazily build and cache a runtime-aware schema through `build_openapi_schema()`.
 
 ### Router registration
 
 The app includes four route modules:
 
 - `/v1/actions`: authenticated discovery, contract retrieval, and execution for DSL-defined actions
-- `/v1/files`: SEG-managed upload, metadata retrieval, listing, content streaming, and deletion
+- `/v1/files`: STAR-managed upload, metadata retrieval, listing, content streaming, and deletion
 - `/health`: readiness endpoint that returns `{"status": "ok"}` in the standard response envelope
 - `/metrics`: Prometheus exposition endpoint
 
@@ -100,18 +100,18 @@ The app includes four route modules:
 
 Two global handlers are installed:
 
-- `http_exception_handler` maps Starlette HTTP exceptions into SEG envelopes while preserving `X-Request-Id`
+- `http_exception_handler` maps Starlette HTTP exceptions into STAR envelopes while preserving `X-Request-Id`
 - `generic_exception_handler` logs unhandled exceptions and returns a generic structured 500 response
 
-The route layer is intentionally thin. It resolves application state, delegates to runtime or storage handlers, and maps domain exceptions to stable SEG error codes.
+The route layer is intentionally thin. It resolves application state, delegates to runtime or storage handlers, and maps domain exceptions to stable STAR error codes.
 
 ## 4. Middleware Security Layer
 
-SEG applies several middleware layers in `src/seg/middleware`. In `app.py`, middleware is added in reverse of the runtime execution order because Starlette runs the last added middleware first.
+STAR applies several middleware layers in `src/star/middleware`. In `app.py`, middleware is added in reverse of the runtime execution order because Starlette runs the last added middleware first.
 
 Actual runtime order:
 
-1. `SecurityHeadersMiddleware` when `seg_enable_security_headers` is enabled
+1. `SecurityHeadersMiddleware` when `star_enable_security_headers` is enabled
 2. `RequestIDMiddleware`
 3. `ObservabilityMiddleware`
 4. `RateLimitMiddleware`
@@ -150,23 +150,23 @@ If security headers are disabled, the pipeline starts at `RequestIDMiddleware`.
 - Rejects requests that contain both `Content-Length` and `Transfer-Encoding`.
 - Enforces `application/json` for `POST /v1/actions/{action_id}` and `multipart/form-data` for `POST /v1/files`.
 - Enforces maximum body size through strict `Content-Length` parsing or streaming body counting when the header is absent.
-- Emits rejection metrics through `seg_request_integrity_rejections_total`.
+- Emits rejection metrics through `star_request_integrity_rejections_total`.
 
 ### `RateLimitMiddleware`
 
 - Uses an in-memory async-safe token bucket.
-- Enforces a global requests-per-second limit from `seg_rate_limit_rps`.
+- Enforces a global requests-per-second limit from `star_rate_limit_rps`.
 - Exempts `/metrics` and, when docs are enabled, the docs endpoints.
 - Returns a structured 429 response with `Retry-After` when the bucket is empty.
-- Emits `seg_rate_limited_total`.
+- Emits `star_rate_limited_total`.
 
 ### `TimeoutMiddleware`
 
 - Wraps downstream execution with `asyncio.wait_for()`.
-- Uses `seg_timeout_ms`, clamped to a minimum of 100 ms.
+- Uses `star_timeout_ms`, clamped to a minimum of 100 ms.
 - Exempts `/health` and `/metrics`.
 - Converts timeouts and cancellations to a standardized 504 response.
-- Emits `seg_timeouts_total`.
+- Emits `star_timeouts_total`.
 
 ### `RequestIDMiddleware`
 
@@ -186,11 +186,11 @@ If security headers are disabled, the pipeline starts at `RequestIDMiddleware`.
 
 - Removes `Server` and `X-Powered-By` response headers.
 - Sets baseline headers: `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, and `Permissions-Policy`.
-- Runs only when `seg_enable_security_headers` is true.
+- Runs only when `star_enable_security_headers` is true.
 
 ## 5. Action Execution Model
 
-The action system lives in `src/seg/actions` and is split into build-time, presentation, and runtime layers.
+The action system lives in `src/star/actions` and is split into build-time, presentation, and runtime layers.
 
 ### Build-time pipeline
 
@@ -236,24 +236,24 @@ end
 OutputProcessor --> ManagedStorage["Managed Storage"]
 ```
 
-### What an action means in SEG
+### What an action means in STAR
 
 An action is not arbitrary shell submitted by the client.
 
 An action is a predeclared command template whose binary, accepted params, flag mapping, output declarations, and public contract are all defined in YAML and compiled before the service accepts traffic. Clients only provide values for the declared parameter surface.
 
-In SEG, an action is safer than direct command execution because the command shape is frozen by the DSL and enforced by validation, rendering, policy checks, and response sanitization.
+In STAR, an action is safer than direct command execution because the command shape is frozen by the DSL and enforced by validation, rendering, policy checks, and response sanitization.
 
 ## 6. Managed File and Filesystem Security Model
 
-SEG supports two related file surfaces:
+STAR supports two related file surfaces:
 
 - the external managed file API under `/v1/files`
 - internal filesystem security helpers used by runtime storage and security-sensitive operations
 
 ### Managed file API
 
-`src/seg/routes/files/router.py` exposes the supported external file lifecycle:
+`src/star/routes/files/router.py` exposes the supported external file lifecycle:
 
 - `POST /v1/files` uploads a file, validates it, and persists blob plus metadata
 - `GET /v1/files` lists files with cursor pagination and filtering
@@ -261,13 +261,13 @@ SEG supports two related file surfaces:
 - `GET /v1/files/{id}/content` streams persisted blob content
 - `DELETE /v1/files/{id}` deletes a managed file
 
-The file API is UUID-based. Clients do not provide raw filesystem paths to retrieve stored content. Uploaded files are persisted as immutable blobs with metadata sidecars under storage rooted at `SEG_ROOT_DIR`.
+The file API is UUID-based. Clients do not provide raw filesystem paths to retrieve stored content. Uploaded files are persisted as immutable blobs with metadata sidecars under storage rooted at `STAR_ROOT_DIR`.
 
-Action outputs can also be materialized into SEG-managed storage. Declared `file + command` outputs use runtime placeholders created before subprocess execution and finalized into managed file records after successful output handling. Sanitized stdout can also be materialized into the reserved `outputs.stdout_file` entry when the client requests `stdout_as_file=true` and the selected action allows it.
+Action outputs can also be materialized into STAR-managed storage. Declared `file + command` outputs use runtime placeholders created before subprocess execution and finalized into managed file records after successful output handling. Sanitized stdout can also be materialized into the reserved `outputs.stdout_file` entry when the client requests `stdout_as_file=true` and the selected action allows it.
 
 ### Filesystem security primitives
 
-Lower-level path protections exist in `src/seg/core/security/paths.py` and related helpers.
+Lower-level path protections exist in `src/star/core/security/paths.py` and related helpers.
 
 `sanitize_rel_path()` rejects:
 
@@ -288,14 +288,14 @@ Lower-level path protections exist in `src/seg/core/security/paths.py` and relat
 
 `safe_open_no_follow()` opens the final component with `O_NOFOLLOW` when the platform supports it and verifies that the target is a regular file.
 
-These helpers remain relevant because SEG still treats `SEG_ROOT_DIR` as a hardened storage boundary, even though the public API prefers managed `file_id` references over direct path exposure.
+These helpers remain relevant because STAR still treats `STAR_ROOT_DIR` as a hardened storage boundary, even though the public API prefers managed `file_id` references over direct path exposure.
 
 ## 7. Configuration System
 
-Configuration is defined in `src/seg/core/config.py` with a Pydantic `BaseSettings` model.
+Configuration is defined in `src/star/core/config.py` with a Pydantic `BaseSettings` model.
 
 > [!IMPORTANT]
-> `SEG_ROOT_DIR` must be configured before SEG can start. If this value is missing or invalid, configuration loading aborts the process. Its default and recommended value is `/var/lib/seg`
+> `STAR_ROOT_DIR` must be configured before STAR can start. If this value is missing or invalid, configuration loading aborts the process. Its default and recommended value is `/var/lib/star`
 
 ### Loading behavior
 
@@ -308,22 +308,22 @@ Configuration is defined in `src/seg/core/config.py` with a Pydantic `BaseSettin
 
 Required settings include:
 
-- `SEG_ROOT_DIR`
+- `STAR_ROOT_DIR`
 
 Validated runtime controls include:
 
-- `SEG_MAX_FILE_BYTES`
-- `SEG_MAX_YML_BYTES`
-- `SEG_TIMEOUT_MS`
-- `SEG_RATE_LIMIT_RPS`
-- `SEG_APP_VERSION`
-- `SEG_ENABLE_DOCS`
-- `SEG_ENABLE_SECURITY_HEADERS`
-- `SEG_BLOCKED_BINARIES_EXTRA`
+- `STAR_MAX_FILE_BYTES`
+- `STAR_MAX_YML_BYTES`
+- `STAR_TIMEOUT_MS`
+- `STAR_RATE_LIMIT_RPS`
+- `STAR_APP_VERSION`
+- `STAR_ENABLE_DOCS`
+- `STAR_ENABLE_SECURITY_HEADERS`
+- `STAR_BLOCKED_BINARIES_EXTRA`
 
 ### API token loading
 
-The API token is not read directly from the settings model. `get_settings()` calls `load_seg_api_token()`, which loads the token from `/run/secrets/seg_api_token`. If that secret file is missing, the code falls back to `SEG_API_TOKEN_DEV` for development use.
+The API token is not read directly from the settings model. `get_settings()` calls `load_star_api_token()`, which loads the token from `/run/secrets/star_api_token`. If that secret file is missing, the code falls back to `STAR_API_TOKEN_DEV` for development use.
 
 `validate_api_token()` trims the token and enforces:
 
@@ -343,7 +343,7 @@ The API token is not read directly from the settings model. `get_settings()` cal
 
 ## 8. Observability and Metrics
 
-Observability is implemented in `src/seg/middleware/observability.py` and exposed by `src/seg/routes/metrics.py`.
+Observability is implemented in `src/star/middleware/observability.py` and exposed by `src/star/routes/metrics.py`.
 
 ### Prometheus exposure
 
@@ -353,16 +353,16 @@ Observability is implemented in `src/seg/middleware/observability.py` and expose
 
 The observability middleware exports:
 
-- `seg_http_requests_total` labeled by method, normalized path, and status code
-- `seg_http_request_duration_seconds` labeled by method, normalized path, and status class
-- `seg_http_inflight_requests`
-- `seg_http_errors_total` labeled by status class
+- `star_http_requests_total` labeled by method, normalized path, and status code
+- `star_http_request_duration_seconds` labeled by method, normalized path, and status class
+- `star_http_inflight_requests`
+- `star_http_errors_total` labeled by status class
 
 Additional middleware-specific metrics are also part of the exported registry:
 
-- `seg_request_integrity_rejections_total`
-- `seg_rate_limited_total`
-- `seg_timeouts_total`
+- `star_request_integrity_rejections_total`
+- `star_rate_limited_total`
+- `star_timeouts_total`
 
 Paths are normalized before labeling so the metrics layer can aggregate traffic consistently and reduce cardinality.
 
@@ -376,11 +376,11 @@ MetricsRoute --> Scraper
 
 ## 9. API Documentation System
 
-SEG generates OpenAPI dynamically from the live application, the runtime action registry, and the file route contracts.
+STAR generates OpenAPI dynamically from the live application, the runtime action registry, and the file route contracts.
 
 ### Runtime schema generation
 
-`src/seg/core/openapi.py` starts with FastAPI's `get_openapi()` output and then patches it to match SEG runtime behavior. The builder:
+`src/star/core/openapi.py` starts with FastAPI's `get_openapi()` output and then patches it to match STAR runtime behavior. The builder:
 
 - adds tags and external documentation
 - injects a global bearer authentication scheme
@@ -389,11 +389,11 @@ SEG generates OpenAPI dynamically from the live application, the runtime action 
 - enriches `POST /v1/actions/{action_id}` with action-specific examples and runtime response variants
 - documents the public contracts for `GET /v1/actions` and `GET /v1/actions/{action_id}`
 - applies explicit `/v1/files` contract overrides for upload, metadata retrieval, listing, content streaming, and delete operations
-- adds SEG response headers such as `X-Request-Id` and `Retry-After`
+- adds STAR response headers such as `X-Request-Id` and `Retry-After`
 - removes internal-only schemas from the published document
 - overrides the generated contracts for `/health` and `/metrics`
 
-The docs endpoints `/docs`, `/redoc`, and `/openapi.json` are controlled by `seg_enable_docs` in `app.py` and remain disabled by default for security.
+The docs endpoints `/docs`, `/redoc`, and `/openapi.json` are controlled by `star_enable_docs` in `app.py` and remain disabled by default for security.
 
 ### Export pipeline
 
@@ -419,27 +419,27 @@ The image:
 - installs runtime Python dependencies from `requirements/runtime.txt`
 - copies the application source into `/app`
 - removes group and other write permissions from `/app`
-- starts Uvicorn with `uvicorn --factory seg.app:create_app`
-- exposes `SEG_PORT`
-- runs a healthcheck against `http://localhost:${SEG_PORT}/health`
+- starts Uvicorn with `uvicorn --factory star.app:create_app`
+- exposes `STAR_PORT`
+- runs a healthcheck against `http://localhost:${STAR_PORT}/health`
 
 ### Compose service model
 
 The Compose service:
 
-- runs the ephemeral `seg-init` helper service before `seg` starts
+- runs the ephemeral `star-init` helper service before `star` starts
 - builds the image from the repository Dockerfile
-- passes container identity build args (`SEG_CONTAINER_USER`, `SEG_CONTAINER_GROUP`, `SEG_CONTAINER_UID`, `SEG_CONTAINER_GID`)
+- passes container identity build args (`STAR_CONTAINER_USER`, `STAR_CONTAINER_GROUP`, `STAR_CONTAINER_UID`, `STAR_CONTAINER_GID`)
 - loads environment variables from `.env`
-- mounts the persistent volume at `${SEG_ROOT_DIR}`
-- injects the API token through the `seg_api_token` Docker secret backed by `./secrets/seg_api_token.txt`
-- attaches the service to an external Docker network named by `SEG_SHARED_NETWORK`
-- publishes SEG to the host using `SEG_HOST_BIND_ADDRESS:SEG_HOST_PORT:SEG_PORT`
+- mounts the persistent volume at `${STAR_ROOT_DIR}`
+- injects the API token through the `star_api_token` Docker secret backed by `./secrets/star_api_token.txt`
+- attaches the service to an external Docker network named by `STAR_SHARED_NETWORK`
+- publishes STAR to the host using `STAR_HOST_BIND_ADDRESS:STAR_HOST_PORT:STAR_PORT`
 - restarts with `unless-stopped`
 
-`seg-init` creates the root directory, assigns ownership to the non-root runtime user, and normalizes directory and file permissions on the mounted storage volume before the API service starts.
+`star-init` creates the root directory, assigns ownership to the non-root runtime user, and normalizes directory and file permissions on the mounted storage volume before the API service starts.
 
-This matches the intended internal-service deployment model: SEG is meant to be reachable from other trusted containers on the shared network, not from a public edge.
+This matches the intended internal-service deployment model: STAR is meant to be reachable from other trusted containers on the shared network, not from a public edge.
 
 ## 11. Testing Architecture
 
