@@ -1,4 +1,4 @@
-# SEG Linting & Static Analysis dependency set.
+# STAR Linting & Static Analysis dependency set.
 # Python runtime: 3.12
 #
 # Purpose:

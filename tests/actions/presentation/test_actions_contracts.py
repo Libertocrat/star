@@ -1,4 +1,4 @@
-"""Unit tests for SEG action contracts builders."""
+"""Unit tests for STAR action contracts builders."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from seg.actions.presentation.contracts import (
+from star.actions.presentation.contracts import (
     build_action_contracts,
     build_params_contract,
     build_params_example,
@@ -23,7 +23,7 @@ def _build_contracts_registry(
 ):
     """Build a deterministic DSL registry for contracts edge-case coverage."""
 
-    import seg.actions.registry as registry_module
+    import star.actions.registry as registry_module
 
     specs_dir = tmp_path / "specs_contracts"
     specs_dir.mkdir(parents=True, exist_ok=True)

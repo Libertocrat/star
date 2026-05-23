@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from seg.actions.exceptions import (
+from star.actions.exceptions import (
     ActionBinaryBlockedError,
     ActionBinaryNotAllowedError,
     ActionBinaryPathForbiddenError,
@@ -128,7 +128,7 @@ def test_execute_returns_error_envelope_for_unknown_action(
         json=payload,
     )
 
-    from seg.core.errors import ACTION_NOT_FOUND
+    from star.core.errors import ACTION_NOT_FOUND
 
     assert response.status_code == ACTION_NOT_FOUND.http_status
 
@@ -278,7 +278,7 @@ def test_execute_binary_policy_errors_map_to_permission_denied(
         raise raised_error
 
     monkeypatch.setattr(
-        "seg.routes.actions.handlers.execute_action.dispatch_action",
+        "star.routes.actions.handlers.execute_action.dispatch_action",
         _raise,
     )
 
@@ -391,7 +391,7 @@ def _build_outputs_registry(
         Compiled ActionRegistry with outputs-capable actions.
     """
 
-    import seg.actions.registry as registry_module
+    import star.actions.registry as registry_module
 
     specs_dir = specs_root / "specs_outputs"
     specs_dir.mkdir(parents=True, exist_ok=True)
@@ -685,7 +685,7 @@ def test_execute__command_failure_cleans_up_files(
         settings=settings,
     )
 
-    meta_dir = Path(settings.seg_root_dir) / "data" / "files" / "meta"
+    meta_dir = Path(settings.star_root_dir) / "data" / "files" / "meta"
     before_count = len(list(meta_dir.glob("file_*.json"))) if meta_dir.exists() else 0
 
     response = client.post(
@@ -790,7 +790,7 @@ def test_execute_action_rejects_stdout_as_file_when_action_disallows_it(
         raise AssertionError("dispatch_action should not be called")
 
     monkeypatch.setattr(
-        "seg.routes.actions.handlers.execute_action.dispatch_action",
+        "star.routes.actions.handlers.execute_action.dispatch_action",
         _unexpected_dispatch,
     )
 

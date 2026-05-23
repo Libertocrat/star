@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Project
 
-- Initial public release of the Secure Execution Gateway (SEG)
+- Initial public release of the Secure Templated Actions Runtime (STAR)
 - Hardened FastAPI microservice for controlled execution of allowlisted filesystem actions
 
 ### Added
@@ -71,4 +71,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[0.1.0]: https://github.com/Libertocrat/seg/releases/tag/v0.1.0
+[0.1.0]: https://github.com/Libertocrat/star/releases/tag/v0.1.0

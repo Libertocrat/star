@@ -1,5 +1,5 @@
 """
-Unit tests for the SEG DSL runtime registry.
+Unit tests for the STAR DSL runtime registry.
 
 These tests freeze immutable registry invariants:
 - loading and compiling DSL modules
@@ -12,11 +12,11 @@ from __future__ import annotations
 
 import pytest
 
-import seg.actions.registry as registry_module
-from seg.actions.exceptions import ActionNotFoundError
-from seg.actions.models import ActionSpec
-from seg.actions.registry import ActionRegistry, build_registry_from_specs
-from seg.core.config import Settings
+import star.actions.registry as registry_module
+from star.actions.exceptions import ActionNotFoundError
+from star.actions.models import ActionSpec
+from star.actions.registry import ActionRegistry, build_registry_from_specs
+from star.core.config import Settings
 
 # ============================================================================
 # Registry Build
@@ -53,7 +53,7 @@ actions:
 
     settings = Settings.model_validate(
         {
-            "seg_root_dir": str(tmp_path),
+            "star_root_dir": str(tmp_path),
         }
     )
 
@@ -99,7 +99,7 @@ actions:
 
     settings = Settings.model_validate(
         {
-            "seg_root_dir": str(tmp_path),
+            "star_root_dir": str(tmp_path),
         }
     )
 

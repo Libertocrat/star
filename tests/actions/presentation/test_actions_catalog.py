@@ -1,4 +1,4 @@
-"""Unit tests for SEG action presentation catalog helpers."""
+"""Unit tests for STAR action presentation catalog helpers."""
 
 from __future__ import annotations
 
@@ -6,9 +6,9 @@ from dataclasses import asdict, is_dataclass
 
 import pytest
 
-from seg.actions.models.core import ActionSpec
-from seg.actions.models.presentation import ModuleSummary
-from seg.actions.presentation.catalog import (
+from star.actions.models.core import ActionSpec
+from star.actions.models.presentation import ModuleSummary
+from star.actions.presentation.catalog import (
     build_module_summaries,
     filter_modules,
     get_action,

@@ -9,7 +9,7 @@ They ensure that:
 - X-Request-Id propagates correctly.
 - Metrics are incremented correctly.
 - Exempt endpoints bypass timeout.
-- SegError is NOT converted into timeout.
+- StarError is NOT converted into timeout.
 - Timeout takes priority over domain errors.
 
 They do NOT validate internal asyncio mechanics.
@@ -25,12 +25,12 @@ from fastapi.responses import JSONResponse
 from fastapi.testclient import TestClient
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
-from seg.app import create_app
-from seg.core.config import Settings
-from seg.core.errors import INVALID_REQUEST, TIMEOUT, SegError
-from seg.core.schemas.envelope import ResponseEnvelope
-from seg.middleware.timeout import TIMEOUTS_TOTAL
-from seg.routes.actions.schemas import ExecuteActionData
+from star.app import create_app
+from star.core.config import Settings
+from star.core.errors import INVALID_REQUEST, TIMEOUT, StarError
+from star.core.schemas.envelope import ResponseEnvelope
+from star.middleware.timeout import TIMEOUTS_TOTAL
+from star.routes.actions.schemas import ExecuteActionData
 
 TEST_ACTION_ID = "test_runtime.ping"
 
@@ -40,7 +40,7 @@ TEST_ACTION_ID = "test_runtime.ping"
 
 
 def _timeout_metric_value(path: str, method: str) -> float:
-    """Return current `seg_timeouts_total` value for a label set.
+    """Return current `star_timeouts_total` value for a label set.
 
     Args:
         path: Normalized request path label.
@@ -52,7 +52,7 @@ def _timeout_metric_value(path: str, method: str) -> float:
     total = 0.0
     for metric in TIMEOUTS_TOTAL.collect():
         for sample in metric.samples:
-            if sample.name != "seg_timeouts_total":
+            if sample.name != "star_timeouts_total":
                 continue
             labels = sample.labels
             if labels.get("path") == path and labels.get("method") == method:
@@ -66,21 +66,21 @@ def _timeout_metric_value(path: str, method: str) -> float:
 
 
 @pytest.fixture
-def low_timeout_settings(api_token, seg_root_dir) -> Settings:
+def low_timeout_settings(api_token, star_root_dir) -> Settings:
     """Return settings with a strict 100ms timeout.
 
     Args:
         api_token: Authentication token fixture.
-        seg_root_dir: Root directory fixture.
+        star_root_dir: Root directory fixture.
 
     Returns:
         Settings configured for low timeout tests.
     """
     return Settings.model_validate(
         {
-            "seg_api_token": api_token,
-            "seg_root_dir": str(seg_root_dir),
-            "seg_timeout_ms": 100,
+            "star_api_token": api_token,
+            "star_root_dir": str(star_root_dir),
+            "star_timeout_ms": 100,
         }
     )
 
@@ -137,7 +137,7 @@ def slow_health_endpoint(monkeypatch):
         return JSONResponse(payload)
 
     monkeypatch.setattr(
-        "seg.routes.health.health",
+        "star.routes.health.health",
         slow_health,
     )
 
@@ -159,7 +159,7 @@ def slow_metrics_endpoint(monkeypatch):
         data = generate_latest()
         return Response(content=data, media_type=CONTENT_TYPE_LATEST)
 
-    monkeypatch.setattr("seg.routes.metrics.metrics", slow_metrics)
+    monkeypatch.setattr("star.routes.metrics.metrics", slow_metrics)
 
 
 @pytest.fixture
@@ -189,14 +189,14 @@ def slow_execute_endpoint_success(monkeypatch):
         )
 
     monkeypatch.setattr(
-        "seg.routes.actions.router.execute_action_handler",
+        "star.routes.actions.router.execute_action_handler",
         slow_execute_handler,
     )
 
 
 @pytest.fixture
 def slow_execute_endpoint_error(monkeypatch):
-    """Patch execute handler to simulate slow execution raising SegError.
+    """Patch execute handler to simulate slow execution raising StarError.
 
     Args:
         monkeypatch: Pytest helper for runtime attribute patching.
@@ -208,13 +208,13 @@ def slow_execute_endpoint_error(monkeypatch):
     async def slow_execute_handler(_request, _action_id, _payload):
         """Simulate delayed execute handler raising a domain error."""
         await asyncio.sleep(0.2)
-        raise SegError(
+        raise StarError(
             INVALID_REQUEST,
             message="delayed boom",
         )
 
     monkeypatch.setattr(
-        "seg.routes.actions.router.execute_action_handler",
+        "star.routes.actions.router.execute_action_handler",
         slow_execute_handler,
     )
 
@@ -261,17 +261,17 @@ def test_generic_slow_handler_is_intercepted_by_timeout(
 # ============================================================================
 
 
-def test_seg_action_error_is_not_converted_to_timeout(
+def test_star_action_error_is_not_converted_to_timeout(
     low_timeout_client,
     auth_headers,
 ):
     """
-    GIVEN a handler that raises SegError immediately
+    GIVEN a handler that raises StarError immediately
     WHEN it executes
     THEN it is NOT converted into a timeout response
     """
     response = low_timeout_client.post(
-        "/v1/actions/raise_seg_action_error",
+        "/v1/actions/raise_star_action_error",
         json={"params": {}},
         headers=auth_headers,
     )
@@ -323,7 +323,7 @@ def test_slow_execute_error_is_intercepted_by_timeout(
     auth_headers,
 ):
     """
-    GIVEN a slow action that eventually raises SegError
+    GIVEN a slow action that eventually raises StarError
     WHEN it exceeds timeout
     THEN TIMEOUT is returned instead of domain error
     """

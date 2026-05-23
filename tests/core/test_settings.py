@@ -1,20 +1,20 @@
-"""Tests for `seg.core.config.Settings`.
+"""Tests for `star.core.config.Settings`.
 
 These tests check loading from environment, defaults and validation
-invariants for SEG configuration.
+invariants for STAR configuration.
 """
 
 import pytest
 from pydantic import ValidationError
 
-from seg.core import config
-from seg.core.config import (
+from star.core import config
+from star.core.config import (
     Settings,
     get_settings,
-    load_seg_api_token,
+    load_star_api_token,
     validate_api_token,
 )
-from seg.core.utils.file_storage import (
+from star.core.utils.file_storage import (
     ensure_storage_dirs,
     get_blob_dir,
     get_data_root,
@@ -27,7 +27,7 @@ from seg.core.utils.file_storage import (
 # ============================================================================
 
 
-def test_settings_load_from_env(minimal_safe_env, api_token, seg_root_dir):
+def test_settings_load_from_env(minimal_safe_env, api_token, star_root_dir):
     """
     GIVEN the minimal required environment variables are set
     WHEN the Settings are validated from the environment
@@ -35,9 +35,9 @@ def test_settings_load_from_env(minimal_safe_env, api_token, seg_root_dir):
     """
     s = Settings.model_validate({})
 
-    # seg_api_token is no longer loaded via environment parsing in Settings.
-    assert s.seg_api_token == ""
-    assert s.seg_root_dir == str(seg_root_dir.resolve())
+    # star_api_token is no longer loaded via environment parsing in Settings.
+    assert s.star_api_token == ""
+    assert s.star_root_dir == str(star_root_dir.resolve())
 
 
 def test_settings_defaults_applied(minimal_safe_env):
@@ -48,27 +48,27 @@ def test_settings_defaults_applied(minimal_safe_env):
     """
     s = Settings.model_validate({})
 
-    assert s.seg_max_file_bytes == 104857600
-    assert s.seg_max_yml_bytes == 102400
-    assert s.seg_timeout_ms == 5000
-    assert s.seg_rate_limit_rps == 10
-    assert s.seg_app_version == "0.1.0"
-    assert s.seg_enable_docs is False
-    assert s.seg_enable_security_headers is True
+    assert s.star_max_file_bytes == 104857600
+    assert s.star_max_yml_bytes == 102400
+    assert s.star_timeout_ms == 5000
+    assert s.star_rate_limit_rps == 10
+    assert s.star_app_version == "0.1.0"
+    assert s.star_enable_docs is False
+    assert s.star_enable_security_headers is True
 
 
 # ---------------------------------------------------------------------------
-# SEG_ROOT_DIR VALIDATION
+# STAR_ROOT_DIR VALIDATION
 # ---------------------------------------------------------------------------
 
 
-def test_seg_root_dir_must_be_absolute(minimal_safe_env, monkeypatch):
+def test_star_root_dir_must_be_absolute(minimal_safe_env, monkeypatch):
     """
-    GIVEN a relative SEG_ROOT_DIR
+    GIVEN a relative STAR_ROOT_DIR
     WHEN settings are loaded
     THEN validation should fail
     """
-    monkeypatch.setenv("SEG_ROOT_DIR", "relative/path")
+    monkeypatch.setenv("STAR_ROOT_DIR", "relative/path")
 
     with pytest.raises(ValidationError):
         Settings.model_validate({})
@@ -76,12 +76,12 @@ def test_seg_root_dir_must_be_absolute(minimal_safe_env, monkeypatch):
 
 def test_data_root_is_derived_from_root(tmp_path, minimal_safe_env, monkeypatch):
     """
-    GIVEN a SEG_ROOT_DIR
+    GIVEN a STAR_ROOT_DIR
     WHEN get_data_root is called
     THEN it should resolve to root/data
     """
-    root_dir = tmp_path / "seg-root"
-    monkeypatch.setenv("SEG_ROOT_DIR", str(root_dir))
+    root_dir = tmp_path / "star-root"
+    monkeypatch.setenv("STAR_ROOT_DIR", str(root_dir))
 
     settings = Settings.model_validate({})
 
@@ -94,8 +94,8 @@ def test_storage_dirs_created(tmp_path, minimal_safe_env, monkeypatch):
     WHEN ensure_storage_dirs runs
     THEN all subdirectories must exist
     """
-    root_dir = tmp_path / "seg-root"
-    monkeypatch.setenv("SEG_ROOT_DIR", str(root_dir))
+    root_dir = tmp_path / "star-root"
+    monkeypatch.setenv("STAR_ROOT_DIR", str(root_dir))
 
     settings = Settings.model_validate({})
     ensure_storage_dirs(settings)
@@ -114,10 +114,10 @@ def test_storage_dirs_created(tmp_path, minimal_safe_env, monkeypatch):
 @pytest.mark.parametrize(
     "missing_var",
     [
-        "SEG_ROOT_DIR",
+        "STAR_ROOT_DIR",
     ],
     ids=[
-        "seg_root_dir",
+        "star_root_dir",
     ],
 )
 def test_missing_required_env_raises(minimal_safe_env, monkeypatch, missing_var):
@@ -142,16 +142,16 @@ def test_missing_required_env_raises(minimal_safe_env, monkeypatch, missing_var)
 @pytest.mark.parametrize(
     "env_field",
     [
-        "SEG_MAX_FILE_BYTES",
-        "SEG_MAX_YML_BYTES",
-        "SEG_TIMEOUT_MS",
-        "SEG_RATE_LIMIT_RPS",
+        "STAR_MAX_FILE_BYTES",
+        "STAR_MAX_YML_BYTES",
+        "STAR_TIMEOUT_MS",
+        "STAR_RATE_LIMIT_RPS",
     ],
     ids=[
-        "seg_max_file_bytes",
-        "seg_max_yml_bytes",
-        "seg_timeout_ms",
-        "seg_rate_limit_rps",
+        "star_max_file_bytes",
+        "star_max_yml_bytes",
+        "star_timeout_ms",
+        "star_rate_limit_rps",
     ],
 )
 def test_int_fields_invalid_string(minimal_safe_env, monkeypatch, env_field):
@@ -167,13 +167,13 @@ def test_int_fields_invalid_string(minimal_safe_env, monkeypatch, env_field):
         Settings.model_validate({})
 
 
-def test_seg_app_version_invalid_format_raises(minimal_safe_env, monkeypatch):
+def test_star_app_version_invalid_format_raises(minimal_safe_env, monkeypatch):
     """
-    GIVEN SEG_APP_VERSION is set with a non-semver value
+    GIVEN STAR_APP_VERSION is set with a non-semver value
     WHEN Settings are validated
     THEN validation fails with ValidationError
     """
-    monkeypatch.setenv("SEG_APP_VERSION", "v1.2.3")
+    monkeypatch.setenv("STAR_APP_VERSION", "v1.2.3")
 
     with pytest.raises(ValidationError):
         Settings.model_validate({})
@@ -190,11 +190,11 @@ def test_blocked_binary_extra_valid_csv(minimal_safe_env, monkeypatch):
     WHEN Settings are validated
     THEN blocked extra field is accepted as configured
     """
-    monkeypatch.setenv("SEG_BLOCKED_BINARIES_EXTRA", "bash,sh")
+    monkeypatch.setenv("STAR_BLOCKED_BINARIES_EXTRA", "bash,sh")
 
     s = Settings.model_validate({})
 
-    assert s.seg_blocked_binaries_extra == "bash,sh"
+    assert s.star_blocked_binaries_extra == "bash,sh"
 
 
 def test_blocked_binary_extra_blank_value_becomes_none(minimal_safe_env, monkeypatch):
@@ -203,11 +203,11 @@ def test_blocked_binary_extra_blank_value_becomes_none(minimal_safe_env, monkeyp
     WHEN Settings are validated
     THEN the value is normalized to None
     """
-    monkeypatch.setenv("SEG_BLOCKED_BINARIES_EXTRA", "   ")
+    monkeypatch.setenv("STAR_BLOCKED_BINARIES_EXTRA", "   ")
 
     settings = Settings.model_validate({})
 
-    assert settings.seg_blocked_binaries_extra is None
+    assert settings.star_blocked_binaries_extra is None
 
 
 def test_blocked_binary_extra_rejects_path_entries(minimal_safe_env, monkeypatch):
@@ -216,7 +216,7 @@ def test_blocked_binary_extra_rejects_path_entries(minimal_safe_env, monkeypatch
     WHEN Settings are validated
     THEN ValidationError is raised
     """
-    monkeypatch.setenv("SEG_BLOCKED_BINARIES_EXTRA", "echo,/bin/echo")
+    monkeypatch.setenv("STAR_BLOCKED_BINARIES_EXTRA", "echo,/bin/echo")
 
     with pytest.raises(ValidationError):
         Settings.model_validate({})
@@ -228,11 +228,11 @@ def test_blocked_binary_extra_accepts_duplicate_values(minimal_safe_env, monkeyp
     WHEN Settings are validated
     THEN validation succeeds without errors
     """
-    monkeypatch.setenv("SEG_BLOCKED_BINARIES_EXTRA", "bash,bash")
+    monkeypatch.setenv("STAR_BLOCKED_BINARIES_EXTRA", "bash,bash")
 
     s = Settings.model_validate({})
 
-    assert s.seg_blocked_binaries_extra == "bash,bash"
+    assert s.star_blocked_binaries_extra == "bash,bash"
 
 
 # ============================================================================
@@ -255,16 +255,16 @@ def test_docs_endpoints_disabled_by_default(client):
 
 def test_docs_endpoints_enabled_when_flag_true(minimal_safe_env, monkeypatch):
     """
-    GIVEN the required SEG environment variables and `SEG_ENABLE_DOCS=true`
+    GIVEN the required STAR environment variables and `STAR_ENABLE_DOCS=true`
     WHEN the application is created via the factory
     THEN `/openapi.json` and `/docs` are exposed
     """
     # minimal_safe_env ensures required vars are present; enable docs explicitly
-    monkeypatch.setenv("SEG_ENABLE_DOCS", "true")
+    monkeypatch.setenv("STAR_ENABLE_DOCS", "true")
 
     from fastapi.testclient import TestClient
 
-    from seg.app import create_app
+    from star.app import create_app
 
     app = create_app()  # will read settings from the environment
     client = TestClient(app)
@@ -276,18 +276,18 @@ def test_docs_endpoints_enabled_when_flag_true(minimal_safe_env, monkeypatch):
     assert resp_docs.status_code == 200
 
 
-def test_openapi_version_reflects_seg_app_version(minimal_safe_env, monkeypatch):
+def test_openapi_version_reflects_star_app_version(minimal_safe_env, monkeypatch):
     """
-    GIVEN SEG_APP_VERSION is provided in the environment and docs are enabled
+    GIVEN STAR_APP_VERSION is provided in the environment and docs are enabled
     WHEN the application OpenAPI document is requested
-    THEN info.version matches the configured SEG_APP_VERSION value
+    THEN info.version matches the configured STAR_APP_VERSION value
     """
-    monkeypatch.setenv("SEG_APP_VERSION", "7.8.9")
-    monkeypatch.setenv("SEG_ENABLE_DOCS", "true")
+    monkeypatch.setenv("STAR_APP_VERSION", "7.8.9")
+    monkeypatch.setenv("STAR_ENABLE_DOCS", "true")
 
     from fastapi.testclient import TestClient
 
-    from seg.app import create_app
+    from star.app import create_app
 
     app = create_app()
     client = TestClient(app)
@@ -311,44 +311,44 @@ def test_get_settings_loads_token_from_dev_fallback(
     WHEN fallback env is set
     THEN token is injected.
     """
-    missing_secret = tmp_path / "does-not-exist-seg-api-token"
-    monkeypatch.setattr(config, "SEG_API_TOKEN_SECRET_PATH", missing_secret)
+    missing_secret = tmp_path / "does-not-exist-star-api-token"
+    monkeypatch.setattr(config, "STAR_API_TOKEN_SECRET_PATH", missing_secret)
     get_settings.cache_clear()
 
     s = get_settings()
 
-    assert s.seg_api_token != ""
-    assert s.seg_api_token == validate_api_token(s.seg_api_token)
+    assert s.star_api_token != ""
+    assert s.star_api_token == validate_api_token(s.star_api_token)
 
 
-def test_load_seg_api_token_missing_secret_and_no_fallback_raises(
+def test_load_star_api_token_missing_secret_and_no_fallback_raises(
     monkeypatch, tmp_path
 ):
     """
-    GIVEN no Docker secret and no SEG_API_TOKEN_DEV.
+    GIVEN no Docker secret and no STAR_API_TOKEN_DEV.
     WHEN loading token
     THEN fail fast.
     """
-    monkeypatch.setenv("SEG_API_TOKEN_DEV", "")
-    missing_secret = tmp_path / "does-not-exist-seg-api-token"
-    monkeypatch.setattr(config, "SEG_API_TOKEN_SECRET_PATH", missing_secret)
+    monkeypatch.setenv("STAR_API_TOKEN_DEV", "")
+    missing_secret = tmp_path / "does-not-exist-star-api-token"
+    monkeypatch.setattr(config, "STAR_API_TOKEN_SECRET_PATH", missing_secret)
 
-    with pytest.raises(RuntimeError, match="SEG_API_TOKEN Docker secret not found"):
-        load_seg_api_token()
+    with pytest.raises(RuntimeError, match="STAR_API_TOKEN Docker secret not found"):
+        load_star_api_token()
 
 
-def test_load_seg_api_token_empty_secret_raises(tmp_path, monkeypatch):
+def test_load_star_api_token_empty_secret_raises(tmp_path, monkeypatch):
     """
     GIVEN empty Docker secret file
     WHEN loading token
     THEN fail fast.
     """
-    secret_file = tmp_path / "seg_api_token"
+    secret_file = tmp_path / "star_api_token"
     secret_file.write_text("\n", encoding="utf-8")
-    monkeypatch.setattr(config, "SEG_API_TOKEN_SECRET_PATH", secret_file)
+    monkeypatch.setattr(config, "STAR_API_TOKEN_SECRET_PATH", secret_file)
 
-    with pytest.raises(RuntimeError, match="SEG_API_TOKEN Docker secret is empty"):
-        load_seg_api_token()
+    with pytest.raises(RuntimeError, match="STAR_API_TOKEN Docker secret is empty"):
+        load_star_api_token()
 
 
 # ============================================================================
@@ -359,15 +359,15 @@ def test_load_seg_api_token_empty_secret_raises(tmp_path, monkeypatch):
 @pytest.mark.parametrize(
     "token,error_message",
     [
-        ("sh0rtt0k3n", "SEG_API_TOKEN must be at least 32 characters long"),
+        ("sh0rtt0k3n", "STAR_API_TOKEN must be at least 32 characters long"),
         (
             "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-            "SEG_API_TOKEN must contain characters from at least two "
+            "STAR_API_TOKEN must contain characters from at least two "
             "character classes",
         ),
         (
             "11111111111111111111111111111111",
-            "SEG_API_TOKEN must contain characters from at least two "
+            "STAR_API_TOKEN must contain characters from at least two "
             "character classes",
         ),
     ],
@@ -403,14 +403,14 @@ def test_get_settings_reads_token_from_secret_file(
 
     token = "A1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6"  # noqa: S105 - test token
 
-    secret_file = secrets_dir / "seg_api_token"
+    secret_file = secrets_dir / "star_api_token"
     secret_file.write_text(token, encoding="utf-8")
 
     # Redirect the secret path used by the configuration loader
-    monkeypatch.setattr(config, "SEG_API_TOKEN_SECRET_PATH", secret_file)
+    monkeypatch.setattr(config, "STAR_API_TOKEN_SECRET_PATH", secret_file)
 
     # Ensure no dev fallback is used
-    monkeypatch.delenv("SEG_API_TOKEN_DEV", raising=False)
+    monkeypatch.delenv("STAR_API_TOKEN_DEV", raising=False)
 
     # Clear cached settings so the new secret path is used
     get_settings.cache_clear()
@@ -419,5 +419,5 @@ def test_get_settings_reads_token_from_secret_file(
     s = get_settings()
 
     # Validate token was loaded and validated correctly
-    assert s.seg_api_token == token
-    assert s.seg_api_token == validate_api_token(token)
+    assert s.star_api_token == token
+    assert s.star_api_token == validate_api_token(token)

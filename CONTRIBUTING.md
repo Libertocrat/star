@@ -2,9 +2,9 @@
 
 ## 1. Introduction
 
-Thank you for your interest in contributing to the Secure Execution Gateway (SEG).
+Thank you for your interest in contributing to the Secure Templated Actions Runtime (STAR).
 
-SEG is an open source project focused on secure command execution, a DSL-defined action surface, API-based file management, and container-oriented isolation for automation environments.
+STAR is an open source secure automation runtime focused on predefined actions, authenticated API-based execution, managed file operations, and container-oriented isolation for workflow and AI-agent environments.
 
 ## 2. Contribution Status
 
@@ -84,6 +84,6 @@ The main technical and project documents are:
 - [DEVELOPMENT.md](DEVELOPMENT.md)
 - [scripts/README.md](scripts/README.md)
 
-These documents describe the internal design, DSL execution model, file API, testing strategy, release workflows, local development process, and helper scripts for SEG.
+These documents describe the internal design, DSL execution model, file API, testing strategy, release workflows, local development process, and helper scripts for STAR.
 
 ---

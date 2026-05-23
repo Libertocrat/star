@@ -1,7 +1,7 @@
 """
 Integration tests for the /health endpoint.
 
-These tests validate the liveness contract of the SEG service.
+These tests validate the liveness contract of the STAR service.
 They ensure the service is reachable and responds with a stable payload.
 """
 
@@ -12,7 +12,7 @@ They ensure the service is reachable and responds with a stable payload.
 
 def test_health_endpoint_returns_200(client):
     """
-    GIVEN a running SEG application
+    GIVEN a running STAR application
     WHEN the /health endpoint is requested
     THEN it returns HTTP 200
     """
@@ -23,7 +23,7 @@ def test_health_endpoint_returns_200(client):
 
 def test_health_endpoint_returns_expected_payload(client):
     """
-    GIVEN a running SEG application
+    GIVEN a running STAR application
     WHEN the /health endpoint is requested
     THEN it returns the expected health payload
     """

@@ -40,7 +40,7 @@ TRIVY_IMAGE_FLAGS = image \
 	--ignore-unfixed \
 	--no-progress \
 	--format json
-IMAGE_NAME ?= seg
+IMAGE_NAME ?= star
 IMAGE_TAG ?= local
 IMAGE_TARGET := $(IMAGE_NAME):$(IMAGE_TAG)
 

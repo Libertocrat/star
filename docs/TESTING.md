@@ -1,4 +1,4 @@
-# SEG Testing Strategy
+# STAR Testing Strategy
 
 ## Table of Contents
 
@@ -14,7 +14,7 @@
 
 ## 1. Testing Overview
 
-The SEG test suite validates both functional correctness and security-critical behavior.
+The STAR test suite validates both functional correctness and security-critical behavior.
 
 The current tests cover:
 
@@ -24,7 +24,7 @@ The current tests cover:
 - settings loading and validation
 - request and response schemas
 - middleware enforcement
-- file API behavior and SEG-managed storage lifecycle
+- file API behavior and STAR-managed storage lifecycle
 - runtime OpenAPI generation
 - API integration tests for `/v1/actions`, `/v1/files` and public endpoints
 
@@ -62,11 +62,11 @@ The current design goals are:
 - coverage of both success paths and rejection paths
 - direct validation of security-sensitive behavior for filesystem and HTTP handling
 
-`tests/conftest.py` enforces this through the autouse fixture `clean_seg_environment`.
+`tests/conftest.py` enforces this through the autouse fixture `clean_star_environment`.
 
-`clean_seg_environment`:
+`clean_star_environment`:
 
-- removes all `SEG_*` variables from the process environment
+- removes all `STAR_*` variables from the process environment
 - disables `.env` loading by setting `Settings.model_config["env_file"]` to `None`
 - clears the cached `get_settings()` result before each test
 
@@ -184,8 +184,8 @@ Shared fixtures in `tests/conftest.py` provide the common test environment.
 
 ### Environment and configuration isolation
 
-- `clean_seg_environment` enforces environment isolation for every test
-- `minimal_safe_env` sets a deterministic minimal SEG configuration with `SEG_API_TOKEN_DEV` and `SEG_ROOT_DIR`
+- `clean_star_environment` enforces environment isolation for every test
+- `minimal_safe_env` sets a deterministic minimal STAR configuration with `STAR_API_TOKEN_DEV` and `STAR_ROOT_DIR`
 - `settings` builds a valid `Settings` instance directly with `Settings.model_validate(...)`
 
 ### Registry and app fixtures
@@ -202,7 +202,7 @@ Shared fixtures in `tests/conftest.py` provide the common test environment.
 
 ### Filesystem and storage helpers
 
-- `seg_root_dir` creates a temporary SEG sandbox root directory
+- `star_root_dir` creates a temporary STAR sandbox root directory
 - `sandbox_file_factory` creates files inside the sandbox root and returns both absolute and sandbox-relative paths
 - `upload_file_id` uploads files through the real API and returns generated UUIDs
 - `file_factory` creates realistic sample files for MIME-sensitive tests

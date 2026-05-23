@@ -1,4 +1,4 @@
-"""Reusable fixtures and factories for SEG DSL action engine tests.
+"""Reusable fixtures and factories for STAR DSL action engine tests.
 
 This module centralizes small, composable factories used by tests for the
 YAML-based action definition engine so loader, validator, and future specs
@@ -11,7 +11,7 @@ from typing import Any
 
 import pytest
 
-from seg.actions.schemas import ModuleSpec
+from star.actions.schemas import ModuleSpec
 
 # ============================================================================
 # Action payload factories

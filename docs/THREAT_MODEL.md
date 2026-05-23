@@ -1,4 +1,4 @@
-# SEG Threat Model
+# STAR Threat Model
 
 ## Table of Contents
 
@@ -15,18 +15,18 @@
 
 ## 1. Security Overview
 
-SEG is an internal FastAPI service that exposes authenticated action execution and managed file endpoints.
+STAR is an internal FastAPI service that exposes authenticated action execution and managed file endpoints.
 
 The service does not accept arbitrary commands from clients. Instead, it builds its runtime action registry from YAML DSL specs that are validated and compiled at startup. Execution requests can only target actions present in that immutable registry, and runtime execution is further constrained by rendered-command checks and binary policy enforcement.
 
-SEG uses defense in depth through these mechanisms:
+STAR uses defense in depth through these mechanisms:
 
 - bearer token authentication enforced by `AuthMiddleware`
-- API token loading from the Docker secret `/run/secrets/seg_api_token`
+- API token loading from the Docker secret `/run/secrets/star_api_token`
 - request structure validation in `RequestIntegrityMiddleware`
 - strict startup validation of DSL YAML spec files
 - build-time and runtime binary policy checks
-- managed file storage rooted at `SEG_ROOT_DIR`
+- managed file storage rooted at `STAR_ROOT_DIR`
 - sandbox path enforcement in low-level filesystem helpers
 - optional baseline response security headers
 - container isolation and a non-root container user
@@ -40,7 +40,7 @@ The implemented security goals are:
 - prevent unauthorized callers from accessing protected endpoints
 - prevent arbitrary command execution outside the DSL-defined action surface
 - reject unsafe or malformed DSL module definitions before they become executable actions
-- prevent filesystem access outside SEG-managed storage boundaries
+- prevent filesystem access outside STAR-managed storage boundaries
 - reject malformed or structurally unsafe HTTP requests early
 - limit denial of service through oversized requests, request flooding, and long-running operations
 - keep action behavior deterministic by validating inputs, command rendering, and declared outputs
@@ -49,10 +49,10 @@ These goals do not include multi-tenant isolation or public Internet exposure.
 
 ## 3. Protected Assets
 
-SEG protects these assets:
+STAR protects these assets:
 
-- Host integrity. The service reduces host exposure by running in a container, using a non-root user, and restricting storage to a mounted SEG root directory.
-- Managed storage contents. File uploads, action outputs, blobs, and metadata are limited to a strict root boundary at `SEG_ROOT_DIR`.
+- Host integrity. The service reduces host exposure by running in a container, using a non-root user, and restricting storage to a mounted STAR root directory.
+- Managed storage contents. File uploads, action outputs, blobs, and metadata are limited to a strict root boundary at `STAR_ROOT_DIR`.
 - Action execution environment. Only DSL-defined actions that passed startup validation can run through `POST /v1/actions/{action_id}`.
 - Authentication token. The bearer token gates protected endpoints and is loaded from a Docker secret path.
 - Service availability. Body size limits, rate limiting, and request timeouts protect the service from simple abuse patterns.
@@ -61,24 +61,24 @@ SEG protects these assets:
 
 ## 4. Trust Boundaries
 
-SEG has three primary trust boundaries.
+STAR has three primary trust boundaries.
 
-1. HTTP boundary. Requests cross from trusted Docker-network peers or trusted host-local clients into the SEG application.
-2. Application to storage boundary. Validated API input is converted into managed file operations and controlled subprocess execution rooted in `SEG_ROOT_DIR`.
-3. Container boundary. SEG relies on the container runtime to isolate the process from the rest of the host environment.
+1. HTTP boundary. Requests cross from trusted Docker-network peers or trusted host-local clients into the STAR application.
+2. Application to storage boundary. Validated API input is converted into managed file operations and controlled subprocess execution rooted in `STAR_ROOT_DIR`.
+3. Container boundary. STAR relies on the container runtime to isolate the process from the rest of the host environment.
 
 ```mermaid
 flowchart TD
 ExternalClient --> InternalNetwork
-InternalNetwork --> SEG
-SEG --> ManagedStorage
-ManagedStorage --> SEGRootDir[SEG_ROOT_DIR]
+InternalNetwork --> STAR
+STAR --> ManagedStorage
+ManagedStorage --> STARRootDir[STAR_ROOT_DIR]
 ```
 
 Trust assumptions exist at each boundary:
 
 - clients are expected to come from trusted Docker-network peers or trusted host-local access paths, but requests are still treated as untrusted input
-- the SEG root directory is treated as the permitted storage boundary
+- the STAR root directory is treated as the permitted storage boundary
 - container isolation and Docker secret mounting are assumed to work correctly
 
 ## 5. Attack Surface
@@ -93,7 +93,7 @@ The application exposes these HTTP entry points:
 - `/v1/files/{id}/content` via GET. This endpoint streams file content by `file_id`.
 - `/health` via GET. This endpoint is unauthenticated.
 - `/metrics` via GET. This endpoint is unauthenticated.
-- `/docs`, `/redoc`, and `/openapi.json` while `seg_enable_docs` is enabled. These endpoints are unauthenticated while exposed and should remain disabled by default for security.
+- `/docs`, `/redoc`, and `/openapi.json` while `star_enable_docs` is enabled. These endpoints are unauthenticated while exposed and should remain disabled by default for security.
 
 Attack inputs include:
 
@@ -102,7 +102,7 @@ Attack inputs include:
 - `action_id` path parameters on `GET /v1/actions/{action_id}` and `POST /v1/actions/{action_id}`
 - discovery query parameters such as `q`, `tags`, and `match` on `GET /v1/actions`
 - `file_id` path parameters and file query or filter parameters on `/v1/files` routes
-- environment and secret based configuration such as `SEG_ROOT_DIR` and the API token secret
+- environment and secret based configuration such as `STAR_ROOT_DIR` and the API token secret
 
 Authentication coverage is as follows:
 
@@ -173,7 +173,7 @@ Authentication coverage is as follows:
 
 - `AuthMiddleware` enforces `Authorization: Bearer <token>` on protected endpoints.
 - Token comparison uses `hmac.compare_digest()`.
-- The token is loaded from `/run/secrets/seg_api_token` by `load_seg_api_token()`.
+- The token is loaded from `/run/secrets/star_api_token` by `load_star_api_token()`.
 - `validate_api_token()` enforces a minimum length and mixed character classes.
 - Duplicate `Authorization` headers are rejected earlier by `RequestIntegrityMiddleware`.
 
@@ -199,19 +199,19 @@ Authentication coverage is as follows:
 - `resolve_in_sandbox()` checks the resolved path against the strict sandbox root boundary.
 - Existing symlink path components are rejected during sandbox resolution.
 - `safe_open_no_follow()` uses `O_NOFOLLOW` when available and verifies that the opened target is a regular file.
-- Storage helpers keep blobs and metadata rooted under `SEG_ROOT_DIR`.
+- Storage helpers keep blobs and metadata rooted under `STAR_ROOT_DIR`.
 
 ### Action output mitigations
 
-- Stdout and stderr are transformed through the runtime sanitizer before they are returned, by redacting sensitive filesystem paths under static internal prefixes and the runtime `SEG_ROOT_DIR`.
+- Stdout and stderr are transformed through the runtime sanitizer before they are returned, by redacting sensitive filesystem paths under static internal prefixes and the runtime `STAR_ROOT_DIR`.
 - Configurable stdout and stderr size limits can truncate returned output.
 - Declared file outputs are handled through runtime placeholder and output-builder logic instead of trusting client-supplied destination paths.
 
 ### Denial of service mitigations
 
-- `RequestIntegrityMiddleware` enforces request body size limits using `seg_max_file_bytes`.
-- `RateLimitMiddleware` applies a process-local token bucket using `seg_rate_limit_rps`.
-- `TimeoutMiddleware` aborts long running requests using `seg_timeout_ms`.
+- `RequestIntegrityMiddleware` enforces request body size limits using `star_max_file_bytes`.
+- `RateLimitMiddleware` applies a process-local token bucket using `star_rate_limit_rps`.
+- `TimeoutMiddleware` aborts long running requests using `star_timeout_ms`.
 - Upload and content-processing paths enforce size-aware behavior before persisting or returning data.
 
 ### Request smuggling mitigations
@@ -224,10 +224,10 @@ Authentication coverage is as follows:
 Some risks remain by design or by deployment assumption.
 
 > [!WARNING]
-> `/health`, `/metrics`, and OpenAPI docs endpoints can be reached without authentication while docs are enabled. Keep SEG within trusted network boundaries, keep localhost-only publishing by default unless a wider bind is intentional, and enable `SEG_ENABLE_DOCS=true` only for local development or internal testing, never in production.
+> `/health`, `/metrics`, and OpenAPI docs endpoints can be reached without authentication while docs are enabled. Keep STAR within trusted network boundaries, keep localhost-only publishing by default unless a wider bind is intentional, and enable `STAR_ENABLE_DOCS=true` only for local development or internal testing, never in production.
 
-- SEG relies on container isolation. If the container runtime is misconfigured or compromised, container-level protections may not hold.
-- SEG relies on correct storage root configuration. An incorrect `SEG_ROOT_DIR` mount target weakens the filesystem boundary.
+- STAR relies on container isolation. If the container runtime is misconfigured or compromised, container-level protections may not hold.
+- STAR relies on correct storage root configuration. An incorrect `STAR_ROOT_DIR` mount target weakens the filesystem boundary.
 - `RateLimitMiddleware` is process-local. In multi-process or multi-instance deployments, each process keeps an independent token bucket.
 - `/health` and `/metrics` are intentionally unauthenticated. Docs endpoints are also unauthenticated while enabled and increase reachable surface inside the trusted network boundary.
 - Filesystem race conditions are reduced but not fully eliminated. The code explicitly notes TOCTOU limitations around some path-resolution patterns.
@@ -237,11 +237,11 @@ Some risks remain by design or by deployment assumption.
 
 The security model depends on these assumptions:
 
-- SEG runs within trusted network boundaries.
-- The container runtime correctly isolates the SEG process.
-- The API token secret is stored securely and mounted correctly at `/run/secrets/seg_api_token`.
-- `SEG_ROOT_DIR` points to the intended mounted storage volume.
-- Upstream services and operators treat SEG as a trusted internal component and do not expose it directly to untrusted public traffic.
+- STAR runs within trusted network boundaries.
+- The container runtime correctly isolates the STAR process.
+- The API token secret is stored securely and mounted correctly at `/run/secrets/star_api_token`.
+- `STAR_ROOT_DIR` points to the intended mounted storage volume.
+- Upstream services and operators treat STAR as a trusted internal component and do not expose it directly to untrusted public traffic.
 - Operators leave docs endpoints disabled in environments where exposing them is not acceptable.
 
 If these assumptions are violated, the practical security of the service is reduced even if the application code itself is unchanged.
@@ -259,9 +259,9 @@ CommandRenderer --> ProcessExecutor
 Routes --> FileService
 ProcessExecutor --> ManagedStorage
 FileService --> ManagedStorage
-ManagedStorage --> SEGRootDir[SEG_ROOT_DIR]
+ManagedStorage --> STARRootDir[STAR_ROOT_DIR]
 ```
 
-This flow summarizes the security model. Requests cross the HTTP boundary, pass through layered middleware checks, reach either the runtime action path or the managed file path, and interact with storage only through SEG-controlled helpers.
+This flow summarizes the security model. Requests cross the HTTP boundary, pass through layered middleware checks, reach either the runtime action path or the managed file path, and interact with storage only through STAR-controlled helpers.
 
 ---

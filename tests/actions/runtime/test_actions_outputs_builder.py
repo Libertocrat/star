@@ -1,4 +1,4 @@
-"""Unit tests for SEG runtime outputs builder."""
+"""Unit tests for STAR runtime outputs builder."""
 
 from __future__ import annotations
 
@@ -10,24 +10,24 @@ from uuid import UUID, uuid4
 import pytest
 from pydantic import BaseModel
 
-from seg.actions.exceptions import ActionRuntimeOutputError
-from seg.actions.models.core import (
+from star.actions.exceptions import ActionRuntimeOutputError
+from star.actions.models.core import (
     ActionSpec,
     CommandElement,
     OutputDef,
     OutputSource,
     OutputType,
 )
-from seg.actions.models.runtime import (
+from star.actions.models.runtime import (
     ActionExecutionOutput,
     ActionExecutionResult,
     RenderedAction,
 )
-from seg.actions.models.security import BinaryPolicy
-from seg.actions.runtime import file_manager
-from seg.actions.runtime.outputs_builder import _cleanup_known_outputs, build_outputs
-from seg.core.config import Settings
-from seg.core.utils.file_storage import (
+from star.actions.models.security import BinaryPolicy
+from star.actions.runtime import file_manager
+from star.actions.runtime.outputs_builder import _cleanup_known_outputs, build_outputs
+from star.core.config import Settings
+from star.core.utils.file_storage import (
     EMPTY_SHA256,
     compute_sha256_for_file,
     create_placeholder_file_metadata,
@@ -35,7 +35,7 @@ from seg.core.utils.file_storage import (
     get_meta_path,
     load_file_metadata,
 )
-from seg.routes.files.schemas import FileMetadata
+from star.routes.files.schemas import FileMetadata
 
 
 def _make_settings(tmp_path: Path) -> Settings:
@@ -50,8 +50,8 @@ def _make_settings(tmp_path: Path) -> Settings:
 
     return Settings.model_validate(
         {
-            "seg_api_token": "a" * 64,
-            "seg_root_dir": str(tmp_path),
+            "star_api_token": "a" * 64,
+            "star_root_dir": str(tmp_path),
         }
     )
 
@@ -143,21 +143,21 @@ def _patch_storage_to_settings(monkeypatch: pytest.MonkeyPatch, cfg: Settings) -
     """
 
     monkeypatch.setattr(
-        "seg.actions.runtime.outputs_builder.finalize_command_output_file",
+        "star.actions.runtime.outputs_builder.finalize_command_output_file",
         lambda **kwargs: file_manager.finalize_command_output_file(
             settings=cfg,
             **{k: v for k, v in kwargs.items() if k != "settings"},
         ),
     )
     monkeypatch.setattr(
-        "seg.actions.runtime.outputs_builder.create_ready_file_from_bytes",
+        "star.actions.runtime.outputs_builder.create_ready_file_from_bytes",
         lambda **kwargs: file_manager.create_ready_file_from_bytes(
             settings=cfg,
             **{k: v for k, v in kwargs.items() if k != "settings"},
         ),
     )
     monkeypatch.setattr(
-        "seg.actions.runtime.outputs_builder.cleanup_output_file",
+        "star.actions.runtime.outputs_builder.cleanup_output_file",
         lambda file_id, settings=None: file_manager.cleanup_output_file(
             file_id, settings=cfg
         ),
@@ -310,7 +310,7 @@ def test_outputs_builder__file_command_sets_unverified_before_ready(
         return original_save(metadata, settings)
 
     monkeypatch.setattr(
-        "seg.actions.runtime.file_manager.save_file_metadata", _capture_status
+        "star.actions.runtime.file_manager.save_file_metadata", _capture_status
     )
 
     spec = _make_spec(
@@ -539,7 +539,7 @@ def test_outputs_builder__cleanup_is_not_duplicated(monkeypatch):
 
     calls: list[UUID] = []
     monkeypatch.setattr(
-        "seg.actions.runtime.outputs_builder.cleanup_output_file",
+        "star.actions.runtime.outputs_builder.cleanup_output_file",
         lambda target_file_id, settings=None: calls.append(target_file_id),
     )
 
@@ -586,7 +586,7 @@ def test_build_outputs_creates_stdout_file_when_requested(tmp_path, monkeypatch)
     cfg = _make_settings(tmp_path)
     _patch_storage_to_settings(monkeypatch, cfg)
 
-    stdout_bytes = b"SEG_STDOUT_BYTES\n"
+    stdout_bytes = b"STAR_STDOUT_BYTES\n"
     result = build_outputs(
         _make_spec(outputs={}),
         RenderedAction(argv=["echo"], output_files={}),
@@ -713,7 +713,7 @@ def test_outputs_builder__raises_on_internal_failure(tmp_path, monkeypatch):
     blob.write_bytes(b"x")
 
     monkeypatch.setattr(
-        "seg.actions.runtime.outputs_builder.finalize_command_output_file",
+        "star.actions.runtime.outputs_builder.finalize_command_output_file",
         lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
     )
 

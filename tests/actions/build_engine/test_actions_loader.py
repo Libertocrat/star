@@ -1,4 +1,4 @@
-"""Unit tests for the SEG DSL specs loader.
+"""Unit tests for the STAR DSL specs loader.
 
 These tests freeze loader-layer invariants:
 - deterministic discovery across ordered spec directories
@@ -15,17 +15,17 @@ from typing import Any
 import pytest
 import yaml
 
-import seg.actions.build_engine.loader as loader_module
-from seg.actions.build_engine.loader import (
+import star.actions.build_engine.loader as loader_module
+from star.actions.build_engine.loader import (
     _mask_path,
     discover_spec_files,
     load_module_spec,
     load_module_specs,
     validate_yaml_file_safety,
 )
-from seg.actions.exceptions import ActionSpecsParseError
-from seg.actions.schemas import ModuleSpec
-from seg.core.config import Settings
+from star.actions.exceptions import ActionSpecsParseError
+from star.actions.schemas import ModuleSpec
+from star.core.config import Settings
 
 # ============================================================================
 # Local fixtures and helpers
@@ -45,8 +45,8 @@ def settings(tmp_path: Path) -> Settings:
 
     return Settings.model_validate(
         {
-            "seg_root_dir": str(tmp_path),
-            "seg_max_yml_bytes": 512,
+            "star_root_dir": str(tmp_path),
+            "star_max_yml_bytes": 512,
         }
     )
 
@@ -115,7 +115,7 @@ def write_yaml_str(path: Path, content: str) -> None:
 
 @pytest.fixture
 def valid_yaml_module_str() -> str:
-    """Return a realistic SEG DSL YAML string with full feature coverage.
+    """Return a realistic STAR DSL YAML string with full feature coverage.
 
     This fixture represents a human-written DSL module including all supported
     elements such as args, flags, constraints, and mixed command tokens.
@@ -362,7 +362,7 @@ def test_discover_spec_files_raises_when_invalid_extension_exists(core_specs_dir
     """
     (core_specs_dir / "module.txt").write_text("bad\n", encoding="utf-8")
 
-    with pytest.raises(ActionSpecsParseError, match="Invalid SEG DSL spec extension"):
+    with pytest.raises(ActionSpecsParseError, match="Invalid STAR DSL spec extension"):
         discover_spec_files([core_specs_dir])
 
 
@@ -406,7 +406,7 @@ def test_discover_spec_files_rejects_invalid_extension_in_nested_directory(
     nested.mkdir()
     (nested / "module.txt").write_text("bad\n", encoding="utf-8")
 
-    with pytest.raises(ActionSpecsParseError, match="Invalid SEG DSL spec extension"):
+    with pytest.raises(ActionSpecsParseError, match="Invalid STAR DSL spec extension"):
         discover_spec_files([core_specs_dir])
 
 
@@ -426,7 +426,7 @@ def test_discover_spec_files_rejects_invalid_namespace_directory_name(
     dirname: str,
 ):
     """
-    GIVEN a namespace directory whose name violates SEG naming rules
+    GIVEN a namespace directory whose name violates STAR naming rules
     WHEN discover_spec_files is called
     THEN ActionSpecsParseError is raised
     """
@@ -454,7 +454,7 @@ def test_discover_spec_files_rejects_invalid_yaml_filename_stem(
     filename: str,
 ):
     """
-    GIVEN a YAML filename stem that violates SEG naming rules
+    GIVEN a YAML filename stem that violates STAR naming rules
     WHEN discover_spec_files is called
     THEN ActionSpecsParseError is raised
     """
@@ -691,12 +691,12 @@ def test_validate_yaml_file_safety_rejects_large_file(
     settings: Settings,
 ):
     """
-    GIVEN a YAML file larger than seg_max_yml_bytes
+    GIVEN a YAML file larger than star_max_yml_bytes
     WHEN validate_yaml_file_safety is called
     THEN ActionSpecsParseError is raised
     """
     oversized = core_specs_dir / "big.yml"
-    oversized.write_text("a" * (settings.seg_max_yml_bytes + 1), encoding="utf-8")
+    oversized.write_text("a" * (settings.star_max_yml_bytes + 1), encoding="utf-8")
 
     with pytest.raises(ActionSpecsParseError, match="exceeds maximum allowed size"):
         validate_yaml_file_safety(oversized, settings)
@@ -840,7 +840,7 @@ def test_load_module_specs_rejects_invalid_extension(
     """
     (core_specs_dir / "invalid.txt").write_text("version: 1\n", encoding="utf-8")
 
-    with pytest.raises(ActionSpecsParseError, match="Invalid SEG DSL spec extension"):
+    with pytest.raises(ActionSpecsParseError, match="Invalid STAR DSL spec extension"):
         load_module_specs([core_specs_dir], settings)
 
 

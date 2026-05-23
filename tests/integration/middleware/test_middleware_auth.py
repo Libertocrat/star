@@ -15,7 +15,7 @@ or business logic.
 
 import pytest
 
-from seg.core.errors import UNAUTHORIZED
+from star.core.errors import UNAUTHORIZED
 
 TEST_ACTION_ID = "test_runtime.ping"
 

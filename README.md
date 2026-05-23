@@ -1,42 +1,46 @@
-<h1 align="center">Secure Execution Gateway</h1>
+<h1 align="center">STAR</h1>
 
 <p align="center">
-  <img src="docs/assets/seg-logo-600x400.png" width="400" alt="SEG Logo">
+  Safe actions. No raw shell.
+</p>
+
+<p align="center">
+  <img src="docs/assets/star_logo.png" width="400" alt="STAR Logo">
 </p>
 
 <p align="center">
   <em>
-    A security-focused execution gateway for automation platforms that replaces arbitrary command execution with DSL-defined, allowlisted operations.
+    STAR - Secure Templated Actions Runtime - is a secure automation runtime for workflows and AI agents, that replaces abritrary command execution with DSL-defined, templated operations.
   </em>
   <br>
   <em>
-    Designed for secure automation, workflow engines, and internal platforms.
+    Run predefined actions instead of arbitrary shell commands.
   </em>
 </p>
 
 <p align="center">
-  <a href="https://github.com/Libertocrat/seg/releases">
-    <img src="https://img.shields.io/github/v/release/Libertocrat/seg" alt="Release">
+  <a href="https://github.com/Libertocrat/star/releases">
+    <img src="https://img.shields.io/github/v/release/Libertocrat/star" alt="Release">
   </a>
-  <a href="https://github.com/Libertocrat/seg/blob/main/LICENSE">
-    <img src="https://img.shields.io/github/license/Libertocrat/seg" alt="License">
+  <a href="https://github.com/Libertocrat/star/blob/main/LICENSE">
+    <img src="https://img.shields.io/github/license/Libertocrat/star" alt="License">
   </a>
-  <a href="https://github.com/Libertocrat/seg/actions/workflows/ci.yml">
-    <img src="https://github.com/Libertocrat/seg/actions/workflows/ci.yml/badge.svg" alt="CI">
+  <a href="https://github.com/Libertocrat/star/actions/workflows/ci.yml">
+    <img src="https://github.com/Libertocrat/star/actions/workflows/ci.yml/badge.svg" alt="CI">
   </a>
-  <a href="https://github.com/Libertocrat/seg/actions/workflows/security.yml">
-    <img src="https://github.com/Libertocrat/seg/actions/workflows/security.yml/badge.svg" alt="Security">
+  <a href="https://github.com/Libertocrat/star/actions/workflows/security.yml">
+    <img src="https://github.com/Libertocrat/star/actions/workflows/security.yml/badge.svg" alt="Security">
   </a>
-  <a href="https://github.com/Libertocrat/seg/actions/workflows/release.yml">
-    <img src="https://github.com/Libertocrat/seg/actions/workflows/release.yml/badge.svg" alt="Release Pipeline">
+  <a href="https://github.com/Libertocrat/star/actions/workflows/release.yml">
+    <img src="https://github.com/Libertocrat/star/actions/workflows/release.yml/badge.svg" alt="Release Pipeline">
   </a>
-  <a href="https://github.com/Libertocrat/seg/pkgs/container/seg">
+  <a href="https://github.com/Libertocrat/star/pkgs/container/star">
     <img src="https://img.shields.io/badge/container-ghcr.io-blue?logo=docker" alt="Docker">
   </a>
   <a href="https://www.python.org/">
     <img src="https://img.shields.io/badge/python-3.12-blue?logo=python" alt="Python">
   </a>
-  <a href="https://libertocrat.github.io/seg/api-docs/">
+  <a href="https://libertocrat.github.io/star/api-docs/">
     <img src="https://img.shields.io/badge/OpenAPI-3.1-green" alt="OpenAPI">
   </a>
 </p>
@@ -65,20 +69,20 @@
 
 ## 1. Overview
 
-Secure Execution Gateway (SEG) is a security-focused FastAPI microservice that exposes a small execution surface for DSL-defined actions together with SEG-managed file lifecycle API endpoints.
+STAR - Secure Templated Actions Runtime - is a secure automation runtime that lets workflows and AI agents run predefined actions instead of arbitrary shell commands.
 
-SEG acts as an internal execution gateway for automation and platform workflows that need controlled command execution and managed file exchange without exposing arbitrary shell access.
+STAR exposes typed, allow-listed, system-level actions through an authenticated API, together with STAR-managed file lifecycle endpoints.
 
-At startup, SEG loads YAML action definitions, validates them, compiles them into immutable runtime specs, and exposes them through authenticated discovery and execution endpoints at `/v1/actions`. File ingestion, retrieval, listing, download, and deletion are handled through the `/v1/files` API.
+At startup, STAR loads YAML action definitions, validates them, compiles them into immutable runtime specs, and exposes them through authenticated discovery and execution endpoints at `/v1/actions`. File ingestion, retrieval, listing, download, and deletion are handled through the `/v1/files` API.
 
 In practice, an action is a predefined command template compiled from YAML, not free-form shell submitted by the client. Callers only provide values for the parameters declared by that action.
 
 > [!IMPORTANT]
-> SEG was originally created as a secure alternative to unsafe command execution mechanisms commonly used in workflow automation platforms.
+> STAR is designed for automation systems and AI agent stacks that need controlled execution boundaries.
 >
 > Several critical Remote Code Execution vulnerabilities discovered in n8n between late 2025 and early 2026 (for example [CVE-2025-68613](https://nvd.nist.gov/vuln/detail/CVE-2025-68613), [CVE-2026-21858](https://nvd.nist.gov/vuln/detail/CVE-2026-21858), and [CVE-2026-21877](https://nvd.nist.gov/vuln/detail/CVE-2026-21877)) highlighted the risks of exposing arbitrary command execution inside automation systems.
 >
-> SEG addresses this class of problems by replacing free-form command execution with strictly validated DSL action specs and runtime policy checks executed inside a sandboxed environment.
+> STAR addresses this class of problems by replacing free-form command execution with predefined, validated, allow-listed actions and runtime policy checks executed inside a sandboxed environment.
 
 ### Execution Boundary Model
 
@@ -92,7 +96,7 @@ C[Unrestricted Scripts]
 D[Privileged Workflow Automation]
 end
 
-subgraph SEG Execution Gateway
+subgraph STAR Secure Automation Runtime
 E[DSL-defined Actions]
 F[Runtime Policy Enforcement]
 G[Managed File API]
@@ -122,7 +126,7 @@ Possible use cases include:
 
 - Secure execution layer for automation platforms such as n8n
 - Controlled filesystem operations in microservice architectures
-- Secure file-processing gateway inside internal platforms
+- Secure file-processing runtime inside internal platforms
 - Replacement for unsafe command execution patterns in backend services
 - Hardened execution boundary for workflow engines and task runners
 
@@ -141,9 +145,9 @@ When combined with:
 
 these characteristics create a **high-risk environment for Remote Code Execution (RCE), privilege escalation, and data compromise**.
 
-Secure Execution Gateway (SEG) was designed as an **architectural response** to this class of problems.
+Secure Templated Actions Runtime (STAR) was designed as an **architectural response** to this class of problems.
 
-Instead of exposing arbitrary command execution, SEG introduces a hardened execution boundary where:
+Instead of exposing arbitrary command execution, STAR introduces a hardened execution boundary where:
 
 - operations are **explicitly allowlisted**
 - filesystem access is **sandboxed and constrained**
@@ -164,7 +168,7 @@ Several critical vulnerabilities discovered in workflow automation platforms bet
 | [CVE-2026-21877](https://nvd.nist.gov/vuln/detail/CVE-2026-21877) | Authenticated RCE | Unsafe file handling allowing code execution through uploaded content |
 
 > [!WARNING]
-> SEG is not a patch for these vulnerabilities.
+> STAR is not a patch for these vulnerabilities.
 > It is an architectural approach designed to remove entire classes of unsafe execution patterns from automation workflows.
 
 ## 3. Key Features
@@ -174,7 +178,7 @@ Several critical vulnerabilities discovered in workflow automation platforms bet
 - Runtime command rendering with typed params, flags, defaults, and output declarations
 - Authenticated action discovery and execution through `/v1/actions`
 - API-based file management through `/v1/files`
-- SEG-managed file outputs for declared command outputs and optional sanitized stdout materialization via `stdout_as_file`
+- STAR-managed file outputs for declared command outputs and optional sanitized stdout materialization via `stdout_as_file`
 - Defense-in-depth middleware for auth, request integrity, rate limiting, timeouts, request IDs, and observability
 - Runtime-aware OpenAPI generation with per-action examples and public contracts
 - Rootless container deployment model
@@ -213,57 +217,57 @@ For a full walkthrough, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## 5. Security Model
 
-SEG is designed around explicit controls rather than broad execution capabilities.
+STAR is designed around explicit controls rather than broad execution capabilities.
 
 - Bearer token authentication on protected endpoints
 - Request integrity validation at the ASGI boundary
 - Immutable in-memory registry of DSL-defined actions compiled at startup
 - Startup validation of DSL action spec files and semantic rules
 - Binary allowlisting and blocklisting during action build and execution
-- Filesystem storage rooted and sandboxed at `SEG_ROOT_DIR`
+- Filesystem storage rooted and sandboxed at `STAR_ROOT_DIR`
 - Typed file management via `/v1/files` instead of direct path exposure
 - Process-local rate limiting and per-request timeouts
 - Request correlation and Prometheus metrics for auditability
 
-An action ultimately becomes subprocess command execution, but only after SEG validates the DSL, validates request params, renders argv deterministically, enforces binary policy, and sanitizes outputs.
+An action ultimately becomes subprocess command execution, but only after STAR validates the DSL, validates request params, renders argv deterministically, enforces binary policy, and sanitizes outputs.
 
 For the full threat analysis, see [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md).
 
 ## 6. Quick Start
 
-SEG is designed to run inside Docker, stay reachable on the shared Docker network, and be published to localhost by default for local development and demos.
+STAR is designed to run inside Docker, stay reachable on the shared Docker network, and be published to localhost by default for local development and demos.
 
 > [!IMPORTANT]
-> Before starting the stack, create `secrets/seg_api_token.txt` and ensure the external Docker network named by `SEG_SHARED_NETWORK` exists.
+> Before starting the stack, create `secrets/star_api_token.txt` and ensure the external Docker network named by `STAR_SHARED_NETWORK` exists.
 
 Minimal local startup:
 
 ```bash
-git clone https://github.com/Libertocrat/seg.git
-cd seg
+git clone https://github.com/Libertocrat/star.git
+cd star
 
 # Create the runtime configuration file from the template
 # The ".env" file defines sandbox limits, runtime safeguards,
-# and Docker infrastructure parameters used by the SEG container
+# and Docker infrastructure parameters used by the STAR container
 cp .env.example .env
 mkdir -p secrets
-openssl rand -hex 32 > secrets/seg_api_token.txt
+openssl rand -hex 32 > secrets/star_api_token.txt
 
-# Replace docker-network if you changed SEG_SHARED_NETWORK in .env
+# Replace docker-network if you changed STAR_SHARED_NETWORK in .env
 docker network create docker-network || true
 docker compose up -d --build
 ```
 
 Notes:
 
-- by default, `docker-compose.yml` publishes SEG to `127.0.0.1:${SEG_HOST_PORT}`
+- by default, `docker-compose.yml` publishes STAR to `127.0.0.1:${STAR_HOST_PORT}`
 - runtime configuration is defined by the environment variables set in `.env`
   - check the `.env.example` file for detailed information about env variables
-- the container joins the external network defined by `SEG_SHARED_NETWORK`
-- internal Docker consumers should use `http://seg:${SEG_PORT}`
+- the container joins the external network defined by `STAR_SHARED_NETWORK`
+- internal Docker consumers should use `http://star:${STAR_PORT}`
 - the external Docker network must exist before `docker compose up`
-- `seg-init` prepares ownership and permissions on `SEG_ROOT_DIR` before `seg` starts
-- the runtime API token is loaded from `secrets/seg_api_token.txt` through the Docker secret mount
+- `star-init` prepares ownership and permissions on `STAR_ROOT_DIR` before `star` starts
+- the runtime API token is loaded from `secrets/star_api_token.txt` through the Docker secret mount
 
 Useful follow-up checks:
 
@@ -275,10 +279,10 @@ docker compose logs -f
 If host publishing is disabled in Compose and you still need temporary localhost access during development:
 
 ```bash
-./scripts/seg-forward.sh --env-file .env
+./scripts/star-forward.sh --env-file .env
 ```
 
-With the default Compose settings, SEG is available at:
+With the default Compose settings, STAR is available at:
 
 - `http://localhost:8080`
 
@@ -289,30 +293,30 @@ curl http://localhost:8080/health
 ```
 
 OpenAPI docs are disabled by default for security.
-Enable `SEG_ENABLE_DOCS=true` only for local development or internal testing.
+Enable `STAR_ENABLE_DOCS=true` only for local development or internal testing.
 Never enable docs in production deployments.
 
 When enabled:
 
 - `http://localhost:8080/docs`
 
-To publish SEG on a different host port, set `SEG_HOST_PORT` in `.env` (for example `SEG_HOST_PORT=8090`) and use `http://localhost:8090`.
+To publish STAR on a different host port, set `STAR_HOST_PORT` in `.env` (for example `STAR_HOST_PORT=8090`) and use `http://localhost:8090`.
 
-By default, SEG binds to `127.0.0.1` on the host. To expose it on all host interfaces, set `SEG_HOST_BIND_ADDRESS=0.0.0.0` intentionally and ensure proper network controls.
+By default, STAR binds to `127.0.0.1` on the host. To expose it on all host interfaces, set `STAR_HOST_BIND_ADDRESS=0.0.0.0` intentionally and ensure proper network controls.
 
 The local development workflow is documented in [DEVELOPMENT.md](DEVELOPMENT.md).
 
 ## 7. Configuration
 
-SEG runtime behavior is configured through environment variables defined in the local `.env` file. Docker Compose reads these variables and injects them into the container environment, where SEG validates and loads its runtime configuration at startup. Review [.env.example](.env.example) for the full documented list and detailed notes for every configurable variable.
+STAR runtime behavior is configured through environment variables defined in the local `.env` file. Docker Compose reads these variables and injects them into the container environment, where STAR validates and loads its runtime configuration at startup. Review [.env.example](.env.example) for the full documented list and detailed notes for every configurable variable.
 
 ```mermaid
 flowchart LR
 EnvFile[.env] --> Compose[Docker Compose]
 EnvFile --> RuntimeEnv[Container Environment]
-Compose --> SEG[SEG Container]
-RuntimeEnv --> Settings[SEG Settings Validation]
-Settings --> Runtime[SEG Runtime Configuration]
+Compose --> STAR[STAR Container]
+RuntimeEnv --> Settings[STAR Settings Validation]
+Settings --> Runtime[STAR Runtime Configuration]
 ```
 
 Values shown in `.env.example` are placeholder deployment values and do not necessarily represent application defaults or the configuration needed for your particular deployment environment.
@@ -321,46 +325,46 @@ Values shown in `.env.example` are placeholder deployment values and do not nece
 
 | Variable | Description | Default |
 | --- | --- | --- |
-| `SEG_ROOT_DIR` | Absolute storage root used by SEG for managed blobs and metadata. | `/var/lib/seg` |
-| `SEG_MAX_FILE_BYTES` | Maximum accepted upload size and file-processing size limit. | `104857600` |
-| `SEG_MAX_YML_BYTES` | Maximum size for one DSL spec file. | `102400` |
-| `SEG_MAX_STDOUT_BYTES` | Optional max stdout bytes returned from action execution. | unset |
-| `SEG_MAX_STDERR_BYTES` | Optional max stderr bytes returned from action execution. | unset |
-| `SEG_TIMEOUT_MS` | Per-request timeout in milliseconds. | `5000` |
-| `SEG_RATE_LIMIT_RPS` | Process-local requests per second limit. | `10` |
-| `SEG_APP_VERSION` | Version exposed by the runtime and OpenAPI metadata. | `0.1.0` |
-| `SEG_ENABLE_DOCS` | Enables `/docs`, `/redoc`, and `/openapi.json`. Keep disabled by default for security and enable only for local development or testing. | `false` |
-| `SEG_ENABLE_SECURITY_HEADERS` | Enables baseline response security headers. | `true` |
-| `SEG_BLOCKED_BINARIES_EXTRA` | Optional CSV of additional blocked binaries. | unset |
-| `SEG_CONTAINER_USER` | Build-time container user name for the SEG image. | `seg` |
-| `SEG_CONTAINER_GROUP` | Build-time container group name for the SEG image. | `seg` |
-| `SEG_CONTAINER_UID` | Container UID used by the image and `seg-init` volume ownership preparation. | `1001` |
-| `SEG_CONTAINER_GID` | Container GID used by the image and `seg-init` volume ownership preparation. | `1001` |
-| `SEG_SHARED_NETWORK` | External Docker network used by the Compose deployment. | `docker-network` |
-| `SEG_DATA_VOLUME` | Docker named volume used for SEG persistent data. | `seg_seg-data` |
-| `SEG_HOST_BIND_ADDRESS` | Host interface used by Compose when publishing SEG. | `127.0.0.1` |
-| `SEG_HOST_PORT` | Host port used by Compose for localhost access. | `8080` |
-| `SEG_PORT` | Internal listen port inside the container (reachable as `http://seg:8080`). | `8080` |
+| `STAR_ROOT_DIR` | Absolute storage root used by STAR for managed blobs and metadata. | `/var/lib/star` |
+| `STAR_MAX_FILE_BYTES` | Maximum accepted upload size and file-processing size limit. | `104857600` |
+| `STAR_MAX_YML_BYTES` | Maximum size for one DSL spec file. | `102400` |
+| `STAR_MAX_STDOUT_BYTES` | Optional max stdout bytes returned from action execution. | unset |
+| `STAR_MAX_STDERR_BYTES` | Optional max stderr bytes returned from action execution. | unset |
+| `STAR_TIMEOUT_MS` | Per-request timeout in milliseconds. | `5000` |
+| `STAR_RATE_LIMIT_RPS` | Process-local requests per second limit. | `10` |
+| `STAR_APP_VERSION` | Version exposed by the runtime and OpenAPI metadata. | `0.1.0` |
+| `STAR_ENABLE_DOCS` | Enables `/docs`, `/redoc`, and `/openapi.json`. Keep disabled by default for security and enable only for local development or testing. | `false` |
+| `STAR_ENABLE_SECURITY_HEADERS` | Enables baseline response security headers. | `true` |
+| `STAR_BLOCKED_BINARIES_EXTRA` | Optional CSV of additional blocked binaries. | unset |
+| `STAR_CONTAINER_USER` | Build-time container user name for the STAR image. | `star` |
+| `STAR_CONTAINER_GROUP` | Build-time container group name for the STAR image. | `star` |
+| `STAR_CONTAINER_UID` | Container UID used by the image and `star-init` volume ownership preparation. | `1001` |
+| `STAR_CONTAINER_GID` | Container GID used by the image and `star-init` volume ownership preparation. | `1001` |
+| `STAR_SHARED_NETWORK` | External Docker network used by the Compose deployment. | `docker-network` |
+| `STAR_DATA_VOLUME` | Docker named volume used for STAR persistent data. | `star_star-data` |
+| `STAR_HOST_BIND_ADDRESS` | Host interface used by Compose when publishing STAR. | `127.0.0.1` |
+| `STAR_HOST_PORT` | Host port used by Compose for localhost access. | `8080` |
+| `STAR_PORT` | Internal listen port inside the container (reachable as `http://star:8080`). | `8080` |
 
 > [!IMPORTANT]
-> When deploying SEG inside an existing container environment or microservice stack, the following variables should normally be reviewed and adapted before startup:
+> When deploying STAR inside an existing container environment or microservice stack, the following variables should normally be reviewed and adapted before startup:
 >
-> - `SEG_ROOT_DIR`
-> - `SEG_SHARED_NETWORK`
-> - `SEG_DATA_VOLUME`
+> - `STAR_ROOT_DIR`
+> - `STAR_SHARED_NETWORK`
+> - `STAR_DATA_VOLUME`
 > - `COMPOSE_PROJECT_NAME`
-> - `SEG_CONTAINER_UID`
-> - `SEG_CONTAINER_GID`
+> - `STAR_CONTAINER_UID`
+> - `STAR_CONTAINER_GID`
 >
-> These variables control how SEG integrates with the Docker network, sandbox root, and storage permissions.
+> These variables control how STAR integrates with the Docker network, sandbox root, and storage permissions.
 
-The API token is loaded from `/run/secrets/seg_api_token`, with `SEG_API_TOKEN_DEV` used only as a development fallback when the Docker secret is missing.
+The API token is loaded from `/run/secrets/star_api_token`, with `STAR_API_TOKEN_DEV` used only as a development fallback when the Docker secret is missing.
 
 For container identity, runtime limits, and other deployment settings, see the complete reference in [.env.example](.env.example).
 
 ## 8. API Overview
 
-SEG exposes a purposely small HTTP surface.
+STAR exposes a purposely small HTTP surface.
 
 ### Action endpoints
 
@@ -381,7 +385,7 @@ SEG exposes a purposely small HTTP surface.
 - `GET /health`
 - `GET /metrics`
 
-Interactive and dynamically generated OpenAPI docs are disabled by default for security. Enable them with `SEG_ENABLE_DOCS=true` only for local development or internal testing:
+Interactive and dynamically generated OpenAPI docs are disabled by default for security. Enable them with `STAR_ENABLE_DOCS=true` only for local development or internal testing:
 
 - `/docs`
 - `/redoc`
@@ -389,14 +393,14 @@ Interactive and dynamically generated OpenAPI docs are disabled by default for s
 
 Hosted API documentation by release is published at:
 
-- [SEG OpenAPI Docs](https://libertocrat.github.io/seg/api-docs)
+- [STAR OpenAPI Docs](https://libertocrat.github.io/star/api-docs)
 
 > [!NOTE]
 > This README intentionally does not document the current action catalog. The final public module and action set is still evolving.
 
 ## 9. Observability
 
-SEG exports Prometheus-compatible metrics and request correlation metadata.
+STAR exports Prometheus-compatible metrics and request correlation metadata.
 
 The `/metrics` endpoint includes request counters, duration histograms, inflight gauges, request integrity rejection counters, rate limit counters, and timeout counters. `X-Request-Id` is propagated or generated on every response.
 
@@ -405,9 +409,9 @@ The `/metrics` endpoint includes request counters, duration histograms, inflight
 The repository is organized around the application package, tests, documentation, and release tooling.
 
 ```text
-seg/
+star/
 |-- src/
-|   `-- seg/
+|   `-- star/
 |       |-- actions/
 |       |   |-- build_engine/    # YAML discovery, validation, and action compilation
 |       |   |-- presentation/    # discovery payloads, contracts, and examples
@@ -447,7 +451,7 @@ For full test details, see [docs/TESTING.md](docs/TESTING.md).
 
 ## 12. CI / DevSecOps
 
-SEG uses GitHub Actions plus a Makefile-driven local workflow for repeatable quality and security checks.
+STAR uses GitHub Actions plus a Makefile-driven local workflow for repeatable quality and security checks.
 
 The repository includes these workflows:
 
@@ -479,7 +483,7 @@ Local development is documented in [DEVELOPMENT.md](DEVELOPMENT.md).
 
 The main workflow is:
 
-- define or edit DSL specs under `src/seg/actions/specs`
+- define or edit DSL specs under `src/star/actions/specs`
 - run the container stack with Docker Compose
 - validate behavior through tests and the authenticated action endpoints
 - export and publish OpenAPI docs through the provided scripts and workflows
@@ -498,6 +502,6 @@ Use the coordinated disclosure process documented in [SECURITY.md](SECURITY.md).
 
 ## 17. License
 
-SEG is licensed under the Apache License 2.0. See [LICENSE](LICENSE) for the full text.
+STAR is licensed under the Apache License 2.0. See [LICENSE](LICENSE) for the full text.
 
 ---

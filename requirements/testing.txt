@@ -1,4 +1,4 @@
-# SEG Test & Quality dependency set.
+# STAR Test & Quality dependency set.
 # Python runtime: 3.12
 #
 # Purpose:

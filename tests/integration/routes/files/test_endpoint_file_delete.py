@@ -1,7 +1,7 @@
 """Integration tests for the /v1/files/{id} delete endpoint.
 
-These tests validate hard-delete semantics for SEG-managed files and
-standardized SEG error-envelope mappings.
+These tests validate hard-delete semantics for STAR-managed files and
+standardized STAR error-envelope mappings.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from uuid import UUID, uuid4
 
 from fastapi.testclient import TestClient
 
-from seg.core.errors import FILE_NOT_FOUND, INVALID_REQUEST, UNAUTHORIZED
+from star.core.errors import FILE_NOT_FOUND, INVALID_REQUEST, UNAUTHORIZED
 
 # ============================================================================
 # Helpers

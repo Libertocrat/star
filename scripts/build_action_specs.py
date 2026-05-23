@@ -1,22 +1,22 @@
-"""Manual helper script to inspect parsed SEG DSL module specs."""
+"""Manual helper script to inspect parsed STAR DSL module specs."""
 
 from pathlib import Path
 from pprint import pprint
 
-from seg.actions.build_engine.builder import build_actions
-from seg.actions.build_engine.loader import load_module_specs
-from seg.actions.build_engine.validator import validate_modules
-from seg.core.config import Settings
+from star.actions.build_engine.builder import build_actions
+from star.actions.build_engine.loader import load_module_specs
+from star.actions.build_engine.validator import validate_modules
+from star.core.config import Settings
 
 
 def main() -> None:
-    """Load core SEG DSL specs and print a readable summary."""
+    """Load core STAR DSL specs and print a readable summary."""
 
-    specs_dir = Path("src/seg/actions/specs")
+    specs_dir = Path("src/star/actions/specs")
     settings = Settings.model_validate(
         {
-            "seg_root_dir": "/tmp/seg",  # noqa: S108 -- fixed path for testing purposes
-            "seg_max_yml_bytes": 100 * 1024,
+            "star_root_dir": "/tmp/star",  # noqa: S108 -- fixed path for testing purposes
+            "star_max_yml_bytes": 100 * 1024,
         }
     )
 

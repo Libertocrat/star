@@ -17,8 +17,8 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from seg.core.errors import INVALID_REQUEST
-from seg.middleware.observability import (
+from star.core.errors import INVALID_REQUEST
+from star.middleware.observability import (
     HTTP_ERRORS_TOTAL,
     HTTP_INFLIGHT_REQUESTS,
     HTTP_REQUEST_DURATION_SECONDS,
@@ -31,12 +31,12 @@ from seg.middleware.observability import (
 
 
 def requests_total_value(method: str, path: str, status_code: str) -> float:
-    """Return current seg_http_requests_total value for a label set."""
+    """Return current star_http_requests_total value for a label set."""
 
     total = 0.0
     for metric in HTTP_REQUESTS_TOTAL.collect():
         for sample in metric.samples:
-            if sample.name != "seg_http_requests_total":
+            if sample.name != "star_http_requests_total":
                 continue
             labels = sample.labels
             if (
@@ -49,12 +49,12 @@ def requests_total_value(method: str, path: str, status_code: str) -> float:
 
 
 def duration_count_value(method: str, path: str, status_class: str) -> float:
-    """Return seg_http_request_duration_seconds_count for labels."""
+    """Return star_http_request_duration_seconds_count for labels."""
 
     total = 0.0
     for metric in HTTP_REQUEST_DURATION_SECONDS.collect():
         for sample in metric.samples:
-            if sample.name != "seg_http_request_duration_seconds_count":
+            if sample.name != "star_http_request_duration_seconds_count":
                 continue
             labels = sample.labels
             if (
@@ -67,12 +67,12 @@ def duration_count_value(method: str, path: str, status_class: str) -> float:
 
 
 def errors_total_value(status_class: str) -> float:
-    """Return current seg_http_errors_total value for a status class."""
+    """Return current star_http_errors_total value for a status class."""
 
     total = 0.0
     for metric in HTTP_ERRORS_TOTAL.collect():
         for sample in metric.samples:
-            if sample.name != "seg_http_errors_total":
+            if sample.name != "star_http_errors_total":
                 continue
             labels = sample.labels
             if labels.get("status_class") == status_class:
@@ -81,11 +81,11 @@ def errors_total_value(status_class: str) -> float:
 
 
 def inflight_gauge_value() -> float:
-    """Return current seg_http_inflight_requests gauge value."""
+    """Return current star_http_inflight_requests gauge value."""
 
     for metric in HTTP_INFLIGHT_REQUESTS.collect():
         for sample in metric.samples:
-            if sample.name == "seg_http_inflight_requests":
+            if sample.name == "star_http_inflight_requests":
                 return float(sample.value)
     return 0.0
 

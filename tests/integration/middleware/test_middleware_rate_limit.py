@@ -19,10 +19,10 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from seg.app import create_app
-from seg.core.config import Settings, get_settings
-from seg.core.errors import RATE_LIMITED
-from seg.middleware.rate_limit import RATE_LIMITED_TOTAL
+from star.app import create_app
+from star.core.config import Settings, get_settings
+from star.core.errors import RATE_LIMITED
+from star.middleware.rate_limit import RATE_LIMITED_TOTAL
 
 # ============================================================================
 # Helpers
@@ -30,7 +30,7 @@ from seg.middleware.rate_limit import RATE_LIMITED_TOTAL
 
 
 def _rate_limited_metric_value(path: str, method: str, reason: str) -> float:
-    """Return current `seg_rate_limited_total` value for a label set.
+    """Return current `star_rate_limited_total` value for a label set.
 
     Args:
         path: Normalized request path label.
@@ -43,7 +43,7 @@ def _rate_limited_metric_value(path: str, method: str, reason: str) -> float:
     total = 0.0
     for metric in RATE_LIMITED_TOTAL.collect():
         for sample in metric.samples:
-            if sample.name != "seg_rate_limited_total":
+            if sample.name != "star_rate_limited_total":
                 continue
             labels = sample.labels
             if (
@@ -56,21 +56,21 @@ def _rate_limited_metric_value(path: str, method: str, reason: str) -> float:
 
 
 @pytest.fixture
-def low_rps_settings(api_token, seg_root_dir) -> Settings:
+def low_rps_settings(api_token, star_root_dir) -> Settings:
     """Return settings with a strict 1 RPS limit.
 
     Args:
         api_token: Authentication token fixture.
-        seg_root_dir: Root directory fixture.
+        star_root_dir: Root directory fixture.
 
     Returns:
         Settings configured for low-RPS tests.
     """
     return Settings.model_validate(
         {
-            "seg_api_token": api_token,
-            "seg_root_dir": str(seg_root_dir),
-            "seg_rate_limit_rps": 1,
+            "star_api_token": api_token,
+            "star_root_dir": str(star_root_dir),
+            "star_rate_limit_rps": 1,
         }
     )
 
@@ -104,22 +104,22 @@ def low_rps_client(low_rps_app):
 
 
 @pytest.fixture
-def low_rps_docs_settings(api_token, seg_root_dir) -> Settings:
+def low_rps_docs_settings(api_token, star_root_dir) -> Settings:
     """Return settings with docs enabled and strict 1 RPS limit.
 
     Args:
         api_token: Authentication token fixture.
-        seg_root_dir: Root directory fixture.
+        star_root_dir: Root directory fixture.
 
     Returns:
         Settings configured for docs-enabled low-RPS tests.
     """
     return Settings.model_validate(
         {
-            "seg_api_token": api_token,
-            "seg_root_dir": str(seg_root_dir),
-            "seg_rate_limit_rps": 1,
-            "seg_enable_docs": True,
+            "star_api_token": api_token,
+            "star_root_dir": str(star_root_dir),
+            "star_rate_limit_rps": 1,
+            "star_enable_docs": True,
         }
     )
 
@@ -241,16 +241,16 @@ def test_rate_limit_respects_env_configuration(
     auth_headers,
 ):
     """
-    GIVEN SEG_RATE_LIMIT_RPS=2 configured via environment variables
+    GIVEN STAR_RATE_LIMIT_RPS=2 configured via environment variables
     WHEN the app is created from environment-backed settings
     THEN the third immediate request is rate limited
     """
     root_dir = tmp_path
     (root_dir / "tmp").mkdir(exist_ok=True)
 
-    monkeypatch.setenv("SEG_API_TOKEN_DEV", api_token)
-    monkeypatch.setenv("SEG_ROOT_DIR", str(root_dir))
-    monkeypatch.setenv("SEG_RATE_LIMIT_RPS", "2")
+    monkeypatch.setenv("STAR_API_TOKEN_DEV", api_token)
+    monkeypatch.setenv("STAR_ROOT_DIR", str(root_dir))
+    monkeypatch.setenv("STAR_RATE_LIMIT_RPS", "2")
 
     get_settings.cache_clear()
     app = create_app()

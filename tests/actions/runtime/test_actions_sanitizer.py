@@ -1,11 +1,11 @@
-"""Tests for SEG output sanitization and truncation layer."""
+"""Tests for STAR output sanitization and truncation layer."""
 
 from __future__ import annotations
 
 import pytest
 
-from seg.actions.models.runtime import ActionExecutionResult
-from seg.actions.runtime.sanitizer import (
+from star.actions.models.runtime import ActionExecutionResult
+from star.actions.runtime.sanitizer import (
     PATH_REDACTION,
     TRUNCATION_MARKER,
     sanitize_output,
@@ -35,7 +35,7 @@ def _make_result(
     [
         (b"\x1b[31mred\x1b[0m", b"red"),
         (b"a\x00b\x1fc\x7f", b"abc"),
-        (b"/tmp/seg/out.txt", PATH_REDACTION.encode("utf-8")),
+        (b"/tmp/star/out.txt", PATH_REDACTION.encode("utf-8")),
     ],
     ids=["ansi_strip", "control_chars", "path_redaction"],
 )
@@ -100,14 +100,14 @@ def test_transform_output_does_not_mark_base64_token_as_redacted():
     assert safe.stdout == token
 
 
-def test_transform_output_redacts_configured_seg_root_dir(settings):
-    """GIVEN stdout containing the configured SEG root directory
+def test_transform_output_redacts_configured_star_root_dir(settings):
+    """GIVEN stdout containing the configured STAR root directory
     WHEN transform_output is called with runtime settings
     THEN redacted is true and the configured path is replaced
     """
 
-    custom_settings = settings.model_copy(update={"seg_root_dir": "/custom/seg/root"})
-    result = _make_result(stdout=b"blob=/custom/seg/root/blobs/file_123.bin\n")
+    custom_settings = settings.model_copy(update={"star_root_dir": "/custom/star/root"})
+    result = _make_result(stdout=b"blob=/custom/star/root/blobs/file_123.bin\n")
 
     safe = transform_output(
         result,
@@ -126,7 +126,7 @@ def test_sanitize_output_redacts_absolute_path_with_boundary():
     THEN the sensitive path is replaced with the path redaction marker
     """
 
-    out = sanitize_output(b"created=/tmp/seg/out.txt\n")
+    out = sanitize_output(b"created=/tmp/star/out.txt\n")
 
     assert out == b"created=[REDACTED_PATH]\n"
 
@@ -137,7 +137,7 @@ def test_sanitize_output_redacts_absolute_path_without_extension():
     THEN the sensitive path is still replaced with the path redaction marker
     """
 
-    out = sanitize_output(b"secret path: /run/secrets/seg_api_token\n")
+    out = sanitize_output(b"secret path: /run/secrets/star_api_token\n")
 
     assert out == b"secret path: [REDACTED_PATH]\n"
 
@@ -149,19 +149,19 @@ def test_sanitize_output_redacts_static_sensitive_path_prefixes():
     """
 
     raw = (
-        b"app=/app/seg/app.py\n"
-        b"spec=/etc/seg/actions.d/custom.yml\n"
-        b"secret=/run/secrets/seg_api_token\n"
-        b"tmp=/tmp/seg/out.txt\n"
+        b"app=/app/star/app.py\n"
+        b"spec=/etc/star/actions.d/custom.yml\n"
+        b"secret=/run/secrets/star_api_token\n"
+        b"tmp=/tmp/star/out.txt\n"
         b"proc=/proc/self/environ\n"
     )
 
     out = sanitize_output(raw)
 
-    assert b"/app/seg/app.py" not in out
-    assert b"/etc/seg/actions.d/custom.yml" not in out
-    assert b"/run/secrets/seg_api_token" not in out
-    assert b"/tmp/seg/out.txt" not in out
+    assert b"/app/star/app.py" not in out
+    assert b"/etc/star/actions.d/custom.yml" not in out
+    assert b"/run/secrets/star_api_token" not in out
+    assert b"/tmp/star/out.txt" not in out
     assert b"/proc/self/environ" not in out
     assert out.count(PATH_REDACTION.encode("utf-8")) == 5
 
@@ -180,16 +180,16 @@ def test_sanitize_output_does_not_redact_non_sensitive_absolute_paths():
     assert PATH_REDACTION.encode("utf-8") not in out
 
 
-def test_sanitize_output_redacts_configured_seg_root_dir(settings):
-    """GIVEN output containing the configured SEG root directory
+def test_sanitize_output_redacts_configured_star_root_dir(settings):
+    """GIVEN output containing the configured STAR root directory
     WHEN sanitize_output is called with runtime settings
-    THEN the configured SEG root path is replaced with the redaction marker
+    THEN the configured STAR root path is replaced with the redaction marker
     """
 
-    custom_settings = settings.model_copy(update={"seg_root_dir": "/custom/seg/root"})
+    custom_settings = settings.model_copy(update={"star_root_dir": "/custom/star/root"})
 
     out = sanitize_output(
-        b"blob=/custom/seg/root/blobs/file_123.bin\n",
+        b"blob=/custom/star/root/blobs/file_123.bin\n",
         settings=custom_settings,
     )
 
@@ -283,7 +283,7 @@ def test_redacted_when_sensitive_path_present():
     THEN redacted is True
     """
 
-    result = _make_result(stdout=b"\x1b[31m/tmp/seg/secret.txt\x1b[0m", stderr=b"")
+    result = _make_result(stdout=b"\x1b[31m/tmp/star/secret.txt\x1b[0m", stderr=b"")
 
     safe = transform_output(result, max_stdout=1024, max_stderr=1024)
 

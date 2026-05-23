@@ -1,8 +1,8 @@
 # Security Policy
 
-Secure Execution Gateway (SEG) is designed for trusted deployments with a defense-in-depth security model. The project includes authentication, a DSL-defined action registry, request validation middleware, managed file storage under `/v1/files`, authenticated action discovery and execution under `/v1/actions`, and container-based isolation.
+Secure Templated Actions Runtime (STAR) is a secure automation runtime for workflows and AI agents that need predefined system-level actions without arbitrary shell execution. The project includes authentication, a DSL-defined action registry, request validation middleware, managed file storage under `/v1/files`, authenticated action discovery and execution under `/v1/actions`, and container-based isolation.
 
-In SEG, an action is a predefined command template compiled from validated YAML specs. Clients can execute only the actions present in the runtime registry; they cannot submit arbitrary shell commands.
+In STAR, an action is a predefined command template compiled from validated YAML specs. Clients can execute only the actions present in the runtime registry; they cannot submit arbitrary shell commands.
 
 The authenticated application API is centered on `GET /v1/actions`, `GET /v1/actions/{action_id}`, `POST /v1/actions/{action_id}`, and the protected `/v1/files` routes.
 
@@ -16,12 +16,12 @@ This document focuses on vulnerability reporting and coordinated disclosure.
 
 ## Deployment Model
 
-SEG is intended to run inside trusted container infrastructure. It is typically deployed on a Docker network for service-to-service access and may also be published to localhost for trusted host-local access.
+STAR is intended to run as an internal microservice inside trusted container infrastructure. It is typically deployed on a Docker network for service-to-service access and may also be published to localhost for trusted host-local access.
 
 The service is not designed to be exposed directly to the public Internet.
 
 > [!WARNING]
-> Do not expose SEG directly on a public edge. The service assumes a trusted deployment boundary and intentionally leaves `/health`, `/metrics`, and OpenAPI docs endpoints unauthenticated while docs remain enabled.
+> Do not expose STAR directly on a public edge. The service assumes a trusted deployment boundary and intentionally leaves `/health`, `/metrics`, and OpenAPI docs endpoints unauthenticated while docs remain enabled.
 
 ## Supported Versions
 

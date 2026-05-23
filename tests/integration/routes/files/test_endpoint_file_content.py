@@ -1,6 +1,6 @@
 """Integration tests for the /v1/files/{id}/content endpoint.
 
-These tests validate streamed binary download semantics, SEG error-envelope
+These tests validate streamed binary download semantics, STAR error-envelope
 mapping, and storage-state validation behavior.
 """
 
@@ -14,7 +14,7 @@ from uuid import UUID, uuid4
 import pytest
 from fastapi.testclient import TestClient
 
-from seg.core.errors import (
+from star.core.errors import (
     FILE_NOT_FOUND,
     INTERNAL_ERROR,
     INVALID_REQUEST,
@@ -37,7 +37,7 @@ def _upload_file_and_get_id(
     """Upload a file through the HTTP API and return its file UUID.
 
     Args:
-            client: Test client bound to the SEG application.
+            client: Test client bound to the STAR application.
             auth_headers: Authorization headers for protected endpoints.
             filename: Name to send for the multipart file field.
             content: Raw bytes to upload.
@@ -95,7 +95,7 @@ def force_path_stat_failure(monkeypatch):
         monkeypatch: pytest fixture used to patch runtime behavior.
     """
 
-    from seg.routes.files.handlers import get_file_content as files_handler
+    from star.routes.files.handlers import get_file_content as files_handler
 
     original_get_blob_path = files_handler.get_blob_path
 
@@ -166,7 +166,7 @@ def test_files_content_get_streams_existing_file_successfully(
     """
 
     app = create_upload_app()
-    payload = b"hello SEG content\n"
+    payload = b"hello STAR content\n"
 
     with TestClient(app) as client:
         file_id = _upload_file_and_get_id(
@@ -202,7 +202,7 @@ def test_files_content_get_stream_integrity_matches_uploaded_hash(
     """
 
     app = create_upload_app()
-    payload = b"deterministic SEG content hash test\n"
+    payload = b"deterministic STAR content hash test\n"
     expected_sha = hashlib.sha256(payload).hexdigest()
 
     with TestClient(app) as client:
@@ -415,7 +415,7 @@ def test_files_content_get_returns_file_not_found_when_metadata_missing(
     auth_headers,
 ):
     """
-    GIVEN a random UUID that does not exist in SEG metadata storage
+    GIVEN a random UUID that does not exist in STAR metadata storage
     WHEN GET /v1/files/{id}/content is called
     THEN the endpoint returns FILE_NOT_FOUND in the standard error envelope
     """
@@ -666,7 +666,7 @@ def test_files_content_get_stored_filename_mismatch(
     tmp_path,
 ):
     """
-    GIVEN metadata JSON exists but stored_filename does not match the SEG-managed blob
+    GIVEN metadata JSON exists but stored_filename does not match the STAR-managed blob
           naming convention for the requested file
     WHEN GET /v1/files/{id}/content is called
     THEN the endpoint returns INVALID_REQUEST in the standard error envelope
@@ -817,7 +817,7 @@ def test_files_content_get_handles_metadata_read_os_error(
             raise OSError("read failure")
 
         monkeypatch.setattr(
-            "seg.routes.files.utils.load_file_metadata",
+            "star.routes.files.utils.load_file_metadata",
             _raise_os_error,
         )
 
@@ -920,7 +920,7 @@ def test_files_content_get_stream_iterator_produces_full_content(
     """
 
     app = create_upload_app()
-    payload = b"SEG stream iterator content test\nwith multiple lines\n"
+    payload = b"STAR stream iterator content test\nwith multiple lines\n"
 
     with TestClient(app) as client:
         file_id = _upload_file_and_get_id(

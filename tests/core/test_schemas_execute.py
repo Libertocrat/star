@@ -3,13 +3,13 @@
 Tests for ExecuteActionRequest schema.
 
 These tests define and freeze the input contract for execution requests
-handled by SEG. They focus on schema invariants, not action behavior.
+handled by STAR. They focus on schema invariants, not action behavior.
 """
 
 import pytest
 from pydantic import ValidationError
 
-from seg.routes.actions.schemas import ExecuteActionRequest
+from star.routes.actions.schemas import ExecuteActionRequest
 
 # ============================================================================
 # Success Cases

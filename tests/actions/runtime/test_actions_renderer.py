@@ -1,7 +1,7 @@
-"""Unit tests for SEG runtime renderer.
+"""Unit tests for STAR runtime renderer.
 
 These tests validate deterministic argv generation and strict runtime argument
-constraints for the SEG DSL action renderer.
+constraints for the STAR DSL action renderer.
 """
 
 from __future__ import annotations
@@ -14,8 +14,8 @@ from uuid import uuid4
 import pytest
 from pydantic import BaseModel
 
-from seg.actions.exceptions import ActionInvalidArgError, ActionRuntimeRenderError
-from seg.actions.models.core import (
+from star.actions.exceptions import ActionInvalidArgError, ActionRuntimeRenderError
+from star.actions.models.core import (
     ActionSpec,
     ArgDef,
     CommandElement,
@@ -25,12 +25,12 @@ from seg.actions.models.core import (
     OutputType,
     ParamType,
 )
-from seg.actions.models.security import BinaryPolicy
-from seg.actions.runtime import file_manager
-from seg.actions.runtime.renderer import render_command
-from seg.core.config import Settings
-from seg.core.utils.file_storage import get_blob_path, load_file_metadata
-from seg.routes.files.schemas import FileMetadata
+from star.actions.models.security import BinaryPolicy
+from star.actions.runtime import file_manager
+from star.actions.runtime.renderer import render_command
+from star.core.config import Settings
+from star.core.utils.file_storage import get_blob_path, load_file_metadata
+from star.routes.files.schemas import FileMetadata
 
 
 def _make_metadata(file_id, *, size_bytes: int = 10) -> FileMetadata:
@@ -103,8 +103,8 @@ def _make_settings(tmp_path: Path) -> Settings:
 
     return Settings.model_validate(
         {
-            "seg_api_token": "a" * 64,
-            "seg_root_dir": str(tmp_path),
+            "star_api_token": "a" * 64,
+            "star_root_dir": str(tmp_path),
         }
     )
 
@@ -523,11 +523,11 @@ def test_render_command__resolves_file_id_to_blob_path(
     blob_path.write_bytes(b"ok")
 
     monkeypatch.setattr(
-        "seg.actions.runtime.renderer.load_file_metadata",
+        "star.actions.runtime.renderer.load_file_metadata",
         lambda _: _make_metadata(file_id, size_bytes=2),
     )
     monkeypatch.setattr(
-        "seg.actions.runtime.renderer.get_blob_path",
+        "star.actions.runtime.renderer.get_blob_path",
         lambda _: blob_path,
     )
 
@@ -554,11 +554,11 @@ def test_render_command__fails_when_file_metadata_is_missing(monkeypatch):
     file_id = uuid4()
 
     monkeypatch.setattr(
-        "seg.actions.runtime.renderer.load_file_metadata",
+        "star.actions.runtime.renderer.load_file_metadata",
         lambda _: None,
     )
     monkeypatch.setattr(
-        "seg.actions.runtime.renderer.get_blob_path",
+        "star.actions.runtime.renderer.get_blob_path",
         lambda _: Path("/unused"),
     )
 
@@ -584,11 +584,11 @@ def test_renderer__rejects_non_ready_file_input(monkeypatch, tmp_path: Path):
     blob_path.write_bytes(b"ok")
 
     monkeypatch.setattr(
-        "seg.actions.runtime.renderer.load_file_metadata",
+        "star.actions.runtime.renderer.load_file_metadata",
         lambda _: _make_metadata_with_status(file_id, status="pending"),
     )
     monkeypatch.setattr(
-        "seg.actions.runtime.renderer.get_blob_path",
+        "star.actions.runtime.renderer.get_blob_path",
         lambda _: blob_path,
     )
 
@@ -617,11 +617,11 @@ def test_render_command__fails_when_blob_path_is_missing(monkeypatch, tmp_path: 
     missing_blob_path = tmp_path / "missing.bin"
 
     monkeypatch.setattr(
-        "seg.actions.runtime.renderer.load_file_metadata",
+        "star.actions.runtime.renderer.load_file_metadata",
         lambda _: _make_metadata(file_id, size_bytes=10),
     )
     monkeypatch.setattr(
-        "seg.actions.runtime.renderer.get_blob_path",
+        "star.actions.runtime.renderer.get_blob_path",
         lambda _: missing_blob_path,
     )
 
@@ -650,11 +650,11 @@ def test_render_command__fails_when_file_size_exceeds_max_size(
     blob_path.write_bytes(b"ok")
 
     monkeypatch.setattr(
-        "seg.actions.runtime.renderer.load_file_metadata",
+        "star.actions.runtime.renderer.load_file_metadata",
         lambda _: _make_metadata(file_id, size_bytes=999),
     )
     monkeypatch.setattr(
-        "seg.actions.runtime.renderer.get_blob_path",
+        "star.actions.runtime.renderer.get_blob_path",
         lambda _: blob_path,
     )
 
@@ -692,11 +692,11 @@ def test_render_command__fails_when_file_extension_not_allowed(
     blob_path.write_bytes(b"ok")
 
     monkeypatch.setattr(
-        "seg.actions.runtime.renderer.load_file_metadata",
+        "star.actions.runtime.renderer.load_file_metadata",
         lambda _: _make_metadata(file_id, size_bytes=10),
     )
     monkeypatch.setattr(
-        "seg.actions.runtime.renderer.get_blob_path",
+        "star.actions.runtime.renderer.get_blob_path",
         lambda _: blob_path,
     )
 
@@ -730,11 +730,11 @@ def test_render_command__fails_when_file_mime_type_not_allowed(
     blob_path.write_bytes(b"ok")
 
     monkeypatch.setattr(
-        "seg.actions.runtime.renderer.load_file_metadata",
+        "star.actions.runtime.renderer.load_file_metadata",
         lambda _: _make_metadata(file_id, size_bytes=10),
     )
     monkeypatch.setattr(
-        "seg.actions.runtime.renderer.get_blob_path",
+        "star.actions.runtime.renderer.get_blob_path",
         lambda _: blob_path,
     )
 
@@ -854,11 +854,11 @@ def test_render_command_list_file_id_resolves_paths(monkeypatch, tmp_path: Path)
     blobs = {first_id: first_blob, second_id: second_blob}
 
     monkeypatch.setattr(
-        "seg.actions.runtime.renderer.load_file_metadata",
+        "star.actions.runtime.renderer.load_file_metadata",
         lambda file_id: _make_metadata(file_id),
     )
     monkeypatch.setattr(
-        "seg.actions.runtime.renderer.get_blob_path",
+        "star.actions.runtime.renderer.get_blob_path",
         lambda file_id: blobs[file_id],
     )
 
@@ -945,11 +945,11 @@ def test_render_command_list_missing_file(monkeypatch):
     file_id = uuid4()
 
     monkeypatch.setattr(
-        "seg.actions.runtime.renderer.load_file_metadata",
+        "star.actions.runtime.renderer.load_file_metadata",
         lambda _: None,
     )
     monkeypatch.setattr(
-        "seg.actions.runtime.renderer.get_blob_path",
+        "star.actions.runtime.renderer.get_blob_path",
         lambda _: Path("/unused"),
     )
 
@@ -1079,7 +1079,7 @@ def test_render_command__preserves_command_token_order():
         ),
     )
 
-    assert render_command(spec, {"name": "seg"}) == ["echo", "-n", "seg", "!"]
+    assert render_command(spec, {"name": "star"}) == ["echo", "-n", "star", "!"]
 
 
 def test_render_command__interpolates_const_placeholders_for_supported_types():
@@ -1127,7 +1127,7 @@ def test_render_command__interpolates_repeated_const_placeholder():
         ),
     )
 
-    assert render_command(spec, {"name": "seg"}) == ["echo", "seg:seg"]
+    assert render_command(spec, {"name": "star"}) == ["echo", "star:star"]
 
 
 def test_render_command__rejects_const_template_value_with_whitespace():
@@ -1217,13 +1217,13 @@ def test_renderer__file_command_creates_placeholder_metadata(tmp_path, monkeypat
 
     cfg = _make_settings(tmp_path)
     monkeypatch.setattr(
-        "seg.actions.runtime.renderer.create_command_output_placeholders",
+        "star.actions.runtime.renderer.create_command_output_placeholders",
         lambda spec, settings=None: file_manager.create_command_output_placeholders(
             spec, settings=cfg
         ),
     )
     monkeypatch.setattr(
-        "seg.actions.runtime.renderer.resolve_output_blob_path",
+        "star.actions.runtime.renderer.resolve_output_blob_path",
         lambda file_id, settings=None: file_manager.resolve_output_blob_path(
             file_id, settings=cfg
         ),
@@ -1256,13 +1256,13 @@ def test_renderer__file_command_injects_blob_path(tmp_path, monkeypatch):
 
     cfg = _make_settings(tmp_path)
     monkeypatch.setattr(
-        "seg.actions.runtime.renderer.create_command_output_placeholders",
+        "star.actions.runtime.renderer.create_command_output_placeholders",
         lambda spec, settings=None: file_manager.create_command_output_placeholders(
             spec, settings=cfg
         ),
     )
     monkeypatch.setattr(
-        "seg.actions.runtime.renderer.resolve_output_blob_path",
+        "star.actions.runtime.renderer.resolve_output_blob_path",
         lambda file_id, settings=None: file_manager.resolve_output_blob_path(
             file_id, settings=cfg
         ),
@@ -1292,7 +1292,7 @@ def test_renderer__file_stdout_does_not_create_metadata(tmp_path, monkeypatch):
 
     cfg = _make_settings(tmp_path)
     monkeypatch.setattr(
-        "seg.actions.runtime.renderer.create_command_output_placeholders",
+        "star.actions.runtime.renderer.create_command_output_placeholders",
         lambda spec, settings=None: file_manager.create_command_output_placeholders(
             spec, settings=cfg
         ),
@@ -1322,7 +1322,7 @@ def test_renderer__file_stdout_does_not_modify_argv(tmp_path, monkeypatch):
 
     cfg = _make_settings(tmp_path)
     monkeypatch.setattr(
-        "seg.actions.runtime.renderer.create_command_output_placeholders",
+        "star.actions.runtime.renderer.create_command_output_placeholders",
         lambda spec, settings=None: file_manager.create_command_output_placeholders(
             spec, settings=cfg
         ),
@@ -1369,7 +1369,7 @@ def test_render_command__wraps_unexpected_errors(monkeypatch):
         """Raise a deterministic runtime failure for error-wrapping tests."""
         raise RuntimeError("boom")
 
-    monkeypatch.setattr("seg.actions.runtime.renderer._resolve_arg", _explode)
+    monkeypatch.setattr("star.actions.runtime.renderer._resolve_arg", _explode)
 
     with pytest.raises(ActionRuntimeRenderError, match="Unexpected failure"):
         render_command(spec, {"name": "safe"})

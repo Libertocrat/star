@@ -1,4 +1,4 @@
-"""Export SEG OpenAPI schema to a JSON file.
+"""Export STAR OpenAPI schema to a JSON file.
 
 This script builds the application using create_app()
 and writes the generated OpenAPI schema to disk.
@@ -13,8 +13,8 @@ import os
 import re
 from pathlib import Path
 
-from seg.app import create_app
-from seg.core.config import Settings
+from star.app import create_app
+from star.core.config import Settings
 
 OPENAPI_OUTPUT_PATH = Path("docs/api-docs/output/openapi.json")
 
@@ -40,7 +40,7 @@ def get_release_version() -> str:
 
 # Minimal valid settings for schema generation; values won't affect the schema but must
 # satisfy validation. The runtime keeps docs disabled by default for security, so
-# we set `seg_enable_docs=True` explicitly here to generate the published schema
+# we set `star_enable_docs=True` explicitly here to generate the published schema
 # without changing the normal application default.
 def build_docs_settings() -> Settings:
     """Create a minimal settings object for documentation generation.
@@ -50,18 +50,18 @@ def build_docs_settings() -> Settings:
     """
 
     return Settings(
-        seg_app_version=get_release_version(),
-        seg_api_token="docs-token",  # noqa: S106 -- fixed token for documentation purposes only
-        seg_root_dir="/var/lib/seg",
-        seg_enable_docs=True,
-        seg_max_file_bytes=1048576,
-        seg_max_yml_bytes=100 * 1024,
-        seg_max_stdout_bytes=None,
-        seg_max_stderr_bytes=None,
-        seg_timeout_ms=5000,
-        seg_rate_limit_rps=5,
-        seg_enable_security_headers=True,
-        seg_blocked_binaries_extra=None,
+        star_app_version=get_release_version(),
+        star_api_token="docs-token",  # noqa: S106 -- fixed token for documentation purposes only
+        star_root_dir="/var/lib/star",
+        star_enable_docs=True,
+        star_max_file_bytes=1048576,
+        star_max_yml_bytes=100 * 1024,
+        star_max_stdout_bytes=None,
+        star_max_stderr_bytes=None,
+        star_timeout_ms=5000,
+        star_rate_limit_rps=5,
+        star_enable_security_headers=True,
+        star_blocked_binaries_extra=None,
     )
 
 

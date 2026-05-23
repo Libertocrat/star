@@ -1,4 +1,4 @@
-"""Unit tests for SEG runtime command executor.
+"""Unit tests for STAR runtime command executor.
 
 This suite validates subprocess execution behavior, timeout handling,
 error wrapping, and runtime execution metadata.
@@ -9,16 +9,16 @@ from __future__ import annotations
 import pytest
 from pydantic import BaseModel
 
-from seg.actions.exceptions import (
+from star.actions.exceptions import (
     ActionBinaryBlockedError,
     ActionBinaryNotAllowedError,
     ActionBinaryPathForbiddenError,
     ActionExecutionTimeoutError,
     ActionRuntimeExecError,
 )
-from seg.actions.models.core import ActionSpec
-from seg.actions.models.security import BinaryPolicy
-from seg.actions.runtime.executor import execute_command
+from star.actions.models.core import ActionSpec
+from star.actions.models.security import BinaryPolicy
+from star.actions.runtime.executor import execute_command
 
 
 def _make_spec(
@@ -27,7 +27,7 @@ def _make_spec(
         "echo",
         "cat",
         "sleep",
-        "seg_binary_that_does_not_exist_123456",
+        "star_binary_that_does_not_exist_123456",
     ),
     blocked: tuple[str, ...] = (),
 ) -> ActionSpec:
@@ -214,7 +214,7 @@ async def test_execute_command__non_zero_exit_returns_result():
     """
 
     result = await execute_command(
-        ["cat", "/definitely/missing-seg-file"], _make_spec()
+        ["cat", "/definitely/missing-star-file"], _make_spec()
     )
 
     assert result.returncode != 0
@@ -265,7 +265,7 @@ async def test_execute_command__binary_not_found():
     """
 
     with pytest.raises(ActionRuntimeExecError, match="Failed to execute command"):
-        await execute_command(["seg_binary_that_does_not_exist_123456"], _make_spec())
+        await execute_command(["star_binary_that_does_not_exist_123456"], _make_spec())
 
 
 # ============================================================================
@@ -330,7 +330,7 @@ async def test_execute_command__stderr_is_bytes():
     """
 
     result = await execute_command(
-        ["cat", "/definitely/missing-seg-file"], _make_spec()
+        ["cat", "/definitely/missing-star-file"], _make_spec()
     )
 
     assert isinstance(result.stderr, bytes)
@@ -355,7 +355,7 @@ async def test_execute_command__wraps_unexpected_errors(monkeypatch):
         raise RuntimeError("boom")
 
     monkeypatch.setattr(
-        "seg.actions.runtime.executor.asyncio.create_subprocess_exec",
+        "star.actions.runtime.executor.asyncio.create_subprocess_exec",
         _boom,
     )
 
@@ -375,9 +375,9 @@ async def test_execute_command__wraps_unexpected_errors(monkeypatch):
     "argv",
     [
         ["echo", "hello"],
-        ["echo", "seg"],
+        ["echo", "star"],
     ],
-    ids=["hello", "seg"],
+    ids=["hello", "star"],
 )
 @pytest.mark.asyncio
 async def test_execute_command__multiple_valid_commands(argv: list[str]):

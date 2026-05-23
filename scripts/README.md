@@ -9,30 +9,30 @@ This directory contains helper scripts used for local development, release artif
 
 | Script | Purpose |
 | --- | --- |
-| `scripts/seg-forward.sh` | Forward a localhost port to a running SEG container when Compose port publishing is disabled or not desired |
+| `scripts/star-forward.sh` | Forward a localhost port to a running STAR container when Compose port publishing is disabled or not desired |
 | `scripts/export_openapi.py` | Build the FastAPI app and write the OpenAPI schema to disk |
 | `scripts/build_docs_site.py` | Build a versioned Swagger UI site for GitHub Pages from the exported schema |
 
-## seg-forward.sh
+## star-forward.sh
 
-Creates a temporary localhost port forward to a running SEG container.
+Creates a temporary localhost port forward to a running STAR container.
 
-This script is optional when using the default Compose mapping (`SEG_HOST_BIND_ADDRESS` + `SEG_HOST_PORT`), and is mainly useful when host publishing is disabled and access is needed only for temporary local testing.
+This script is optional when using the default Compose mapping (`STAR_HOST_BIND_ADDRESS` + `STAR_HOST_PORT`), and is mainly useful when host publishing is disabled and access is needed only for temporary local testing.
 
-The script starts an ephemeral `alpine/socat` container on the same Docker network as SEG. The forward binds to `127.0.0.1`, not to all host interfaces.
+The script starts an ephemeral `alpine/socat` container on the same Docker network as STAR. The forward binds to `127.0.0.1`, not to all host interfaces.
 
 ### Responsibilities
 
-- Resolve the target SEG container
+- Resolve the target STAR container
 - Choose or validate a local TCP port
-- Start a temporary TCP forward to the SEG service port
+- Start a temporary TCP forward to the STAR service port
 
 ### Required configuration
 
 Required variables:
 
-- `SEG_SHARED_NETWORK`: Docker network shared with SEG
-- `SEG_PORT`: TCP port exposed by the SEG container
+- `STAR_SHARED_NETWORK`: Docker network shared with STAR
+- `STAR_PORT`: TCP port exposed by the STAR container
 - `COMPOSE_PROJECT_NAME`: required only when `--container` is not provided
 
 If `--env-file` is provided, the required variables are loaded from that file. If `--env-file` is not provided, the required variables must already exist in the shell environment.
@@ -42,7 +42,7 @@ In normal local use, pass the same `.env` file that was used to start the Compos
 ### Container resolution
 
 - If `--container <name>` is provided, that running container is used
-- Otherwise the script searches for a running container whose name starts with `$COMPOSE_PROJECT_NAME-seg`
+- Otherwise the script searches for a running container whose name starts with `$COMPOSE_PROJECT_NAME-star`
 - Zero matches or multiple matches cause an error
 
 ### Local port selection
@@ -54,7 +54,7 @@ In normal local use, pass the same `.env` file that was used to start the Compos
 ### Flags
 
 - `--env-file <path>`: load variables from a file
-- `--container <name>`: use a specific SEG container
+- `--container <name>`: use a specific STAR container
 - `--local-port <port>`: use a specific localhost port
 - `--dry-run`: print actions without starting the proxy container
 - `-h`, `--help`: show usage and exit
@@ -62,25 +62,25 @@ In normal local use, pass the same `.env` file that was used to start the Compos
 ### Example
 
 ```bash
-docker compose up -d seg
-./scripts/seg-forward.sh --env-file .env
+docker compose up -d star
+./scripts/star-forward.sh --env-file .env
 ```
 
 After the forward starts, the local URLs printed by the script include:
 
 - `http://localhost:<PORT>/health`
-- `http://localhost:<PORT>/docs` when `SEG_ENABLE_DOCS=true`
-- `http://localhost:<PORT>/openapi.json` when `SEG_ENABLE_DOCS=true`
+- `http://localhost:<PORT>/docs` when `STAR_ENABLE_DOCS=true`
+- `http://localhost:<PORT>/openapi.json` when `STAR_ENABLE_DOCS=true`
 
-The forwarding script does not enable docs endpoints by itself. It only forwards traffic to whatever the running SEG container currently exposes.
+The forwarding script does not enable docs endpoints by itself. It only forwards traffic to whatever the running STAR container currently exposes.
 
 ### Reference
 
-- [scripts/specs/seg-forward.spec.md](scripts/specs/seg-forward.spec.md)
+- [scripts/specs/star-forward.spec.md](scripts/specs/star-forward.spec.md)
 
 ## export_openapi.py
 
-Builds the SEG application and writes the generated OpenAPI schema to `docs/api-docs/output/openapi.json`.
+Builds the STAR application and writes the generated OpenAPI schema to `docs/api-docs/output/openapi.json`.
 
 ### Responsibilities
 
@@ -98,14 +98,14 @@ Builds the SEG application and writes the generated OpenAPI schema to `docs/api-
 ### Behavior
 
 - The script strips a leading `v` before storing the version in settings
-- The generated settings set `seg_enable_docs=True` explicitly so export behavior stays stable regardless of runtime defaults
+- The generated settings set `star_enable_docs=True` explicitly so export behavior stays stable regardless of runtime defaults
 - The output directory is created automatically if needed
 - The JSON file is written with indentation and a trailing newline
 
 ### Requirements
 
-- Python dependencies required by SEG must be installed
-- The SEG package must be importable in the current environment
+- Python dependencies required by STAR must be installed
+- The STAR package must be importable in the current environment
 
 ### Example
 
