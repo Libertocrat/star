@@ -1,0 +1,10 @@
+      ____   ______   ___    ____
+     / ___| |_   _|  / _ \  |  _ \
+     \___ \   | |   / /_\ \ | |_) |
+      ___) |  | |   |  _  | |  _ <
+     |____/   |_|   |_| |_| |_| \_\   v0.1.0
+
+     Secure Templated Actions Runtime
+     Safe actions. No raw shell.
+
+                 github.com/libertocrat/star

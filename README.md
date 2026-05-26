@@ -1,4 +1,4 @@
-<h1 align="center">STAR</h1>
+<h1 align="center">STAR - Secure Templated Actions Runtime</h1>
 
 <p align="center">
   Safe actions. No raw shell.
