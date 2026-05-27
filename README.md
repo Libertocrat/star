@@ -10,7 +10,7 @@
 
 <p align="center">
   <em>
-    STAR - Secure Templated Actions Runtime - is a secure automation runtime for workflows and AI agents, that replaces abritrary command execution with DSL-defined, templated operations.
+    STAR - Secure Templated Actions Runtime - is a secure automation runtime for workflows and AI agents, that replaces arbitrary command execution with DSL-defined, templated operations.
   </em>
   <br>
   <em>
@@ -49,458 +49,258 @@
 
 ## Table of Contents
 
-- [1. Overview](#1-overview)
-- [2. Motivation](#2-motivation)
-- [3. Key Features](#3-key-features)
-- [4. Architecture Overview](#4-architecture-overview)
-- [5. Security Model](#5-security-model)
-- [6. Quick Start](#6-quick-start)
-- [7. Configuration](#7-configuration)
-- [8. API Overview](#8-api-overview)
-- [9. Observability](#9-observability)
-- [10. Project Structure](#10-project-structure)
-- [11. Testing Strategy](#11-testing-strategy)
-- [12. CI / DevSecOps](#12-ci--devsecops)
-- [13. Documentation](#13-documentation)
-- [14. Development](#14-development)
-- [15. Contributing](#15-contributing)
-- [16. Security Reporting](#16-security-reporting)
-- [17. License](#17-license)
+- [Why STAR](#why-star)
+- [Quick Start](#quick-start)
+- [See STAR in Action](#see-star-in-action)
+- [What STAR Gives You](#what-star-gives-you)
+- [How STAR Works](#how-star-works)
+- [Security Discoverability](#security-discoverability)
+- [Documentation](#documentation)
+- [Roadmap](#roadmap)
+- [Security Reporting](#security-reporting)
+- [License](#license)
 
-## 1. Overview
+## Why STAR
 
-STAR - Secure Templated Actions Runtime - is a secure automation runtime that lets workflows and AI agents run predefined actions instead of arbitrary shell commands.
+STAR is a secure automation runtime that lets workflows, AI agents, and low-code builders run predefined actions instead of arbitrary shell commands.
 
-STAR exposes typed, allow-listed, system-level actions through an authenticated API, together with STAR-managed file lifecycle endpoints.
-
-At startup, STAR loads YAML action definitions, validates them, compiles them into immutable runtime specs, and exposes them through authenticated discovery and execution endpoints at `/v1/actions`. File ingestion, retrieval, listing, download, and deletion are handled through the `/v1/files` API.
-
-In practice, an action is a predefined command template compiled from YAML, not free-form shell submitted by the client. Callers only provide values for the parameters declared by that action.
+It exposes a typed, authenticated API for allow-listed actions and managed file operations. Instead of letting callers send raw shell, STAR loads YAML-defined actions, validates them at startup, builds an immutable runtime registry, and only accepts parameters declared by those actions.
 
 > [!IMPORTANT]
-> STAR is designed for automation systems and AI agent stacks that need controlled execution boundaries.
+> STAR is designed to reduce exposure from unsafe automation patterns, not to magically remove all risk.
 >
-> Several critical Remote Code Execution vulnerabilities discovered in n8n between late 2025 and early 2026 (for example [CVE-2025-68613](https://nvd.nist.gov/vuln/detail/CVE-2025-68613), [CVE-2026-21858](https://nvd.nist.gov/vuln/detail/CVE-2026-21858), and [CVE-2026-21877](https://nvd.nist.gov/vuln/detail/CVE-2026-21877)) highlighted the risks of exposing arbitrary command execution inside automation systems.
->
-> STAR addresses this class of problems by replacing free-form command execution with predefined, validated, allow-listed actions and runtime policy checks executed inside a sandboxed environment.
+> Its core value is replacing open-ended command execution with predefined, validated, controlled operations that are easier to audit, constrain, and reason about.
 
-### Execution Boundary Model
+Automation platforms often need to read files, transform data, inspect content, generate artifacts, or run system-level helpers. The common shortcut is to expose a broad command-execution primitive. That shortcut is flexible, but it also expands the blast radius of prompt injection, workflow misconfiguration, sandbox escape, and file-handling mistakes.
 
-```mermaid
-flowchart TD
+STAR takes a different approach:
 
-subgraph Risky Automation Patterns
-A[Arbitrary Command Execution]
-B[Dynamic Expressions]
-C[Unrestricted Scripts]
-D[Privileged Workflow Automation]
-end
-
-subgraph STAR Secure Automation Runtime
-E[DSL-defined Actions]
-F[Runtime Policy Enforcement]
-G[Managed File API]
-H[Observability and Auditability]
-end
-
-subgraph Controlled Operations
-I[Deterministic Command Rendering]
-J[Safe Automation Workflows]
-end
-
-A --> E
-B --> E
-C --> E
-D --> E
-
-E --> F
-F --> G
-G --> H
-H --> I
-I --> J
-```
-
-### Use Cases
-
-Possible use cases include:
-
-- Secure execution layer for automation platforms such as n8n
-- Controlled filesystem operations in microservice architectures
-- Secure file-processing runtime inside internal platforms
-- Replacement for unsafe command execution patterns in backend services
-- Hardened execution boundary for workflow engines and task runners
-
-## 2. Motivation
-
-The rapid adoption of low-code automation platforms, agentic AI systems, and workflow orchestration tools has dramatically increased the number of systems capable of executing complex automated tasks with access to sensitive data and infrastructure.
-
-Many of these platforms prioritize **speed to market and ease of use** over defensive system design. As a result, execution primitives such as command execution, dynamic expressions, or unrestricted scripting frequently become high-risk attack surfaces.
-
-When combined with:
-
-- viral adoption of automation platforms
-- widespread self-hosted deployments
-- privileged access to internal systems and data
-- limited security expertise among many users
-
-these characteristics create a **high-risk environment for Remote Code Execution (RCE), privilege escalation, and data compromise**.
-
-Secure Templated Actions Runtime (STAR) was designed as an **architectural response** to this class of problems.
-
-Instead of exposing arbitrary command execution, STAR introduces a hardened execution boundary where:
-
-- operations are **explicitly allowlisted**
-- filesystem access is **sandboxed and constrained**
-- execution occurs inside a **rootless container environment**
-- APIs enforce **typed request contracts**
-- observability enables **traceable and auditable operations**
-
-This model replaces unsafe execution patterns with **controlled, deterministic operations** suitable for automation systems that must balance flexibility with security.
-
-### Example vulnerabilities illustrating the risk
-
-Several critical vulnerabilities discovered in workflow automation platforms between late 2025 and early 2026 illustrate the inherent risk of exposing arbitrary execution capabilities.
-
-| CVE | Type | Description |
-| ---- | ---- | ---- |
-| [CVE-2025-68613](https://nvd.nist.gov/vuln/detail/CVE-2025-68613) | Authenticated RCE | Expression evaluation flaw allowing code execution inside n8n workflows |
-| [CVE-2026-21858](https://nvd.nist.gov/vuln/detail/CVE-2026-21858) | Unauthenticated RCE | "Ni8mare" vulnerability enabling remote takeover via webhook processing |
-| [CVE-2026-21877](https://nvd.nist.gov/vuln/detail/CVE-2026-21877) | Authenticated RCE | Unsafe file handling allowing code execution through uploaded content |
-
-> [!WARNING]
-> STAR is not a patch for these vulnerabilities.
-> It is an architectural approach designed to remove entire classes of unsafe execution patterns from automation workflows.
-
-## 3. Key Features
-
-- DSL-defined action model backed by YAML specs
-- Immutable in-memory action registry built at startup from validated specs
-- Runtime command rendering with typed params, flags, defaults, and output declarations
-- Authenticated action discovery and execution through `/v1/actions`
-- API-based file management through `/v1/files`
-- STAR-managed file outputs for declared command outputs and optional sanitized stdout materialization via `stdout_as_file`
-- Defense-in-depth middleware for auth, request integrity, rate limiting, timeouts, request IDs, and observability
-- Runtime-aware OpenAPI generation with per-action examples and public contracts
-- Rootless container deployment model
-- Automated CI, security scanning, release, and API docs publication workflows
-
-## 4. Architecture Overview
-
-At runtime, requests move through a short and explicit pipeline:
-
-```mermaid
-flowchart TD
-Client --> Middleware
-Middleware --> Routes
-Routes --> Registry
-Registry --> Runtime
-Runtime --> Execution
-Runtime --> ManagedFiles
-ManagedFiles --> Storage
-```
-
-The action system itself is layered:
-
-```mermaid
-flowchart LR
-Specs[YAML specs] --> Loader
-Loader --> Validator
-Validator --> Builder
-Builder --> Registry
-Registry --> Presentation
-Registry --> Renderer
-Renderer --> Executor
-Executor --> Outputs
-```
-
-For a full walkthrough, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
-
-## 5. Security Model
-
-STAR is designed around explicit controls rather than broad execution capabilities.
-
-- Bearer token authentication on protected endpoints
-- Request integrity validation at the ASGI boundary
-- Immutable in-memory registry of DSL-defined actions compiled at startup
-- Startup validation of DSL action spec files and semantic rules
-- Binary allowlisting and blocklisting during action build and execution
-- Filesystem storage rooted and sandboxed at `STAR_ROOT_DIR`
-- Typed file management via `/v1/files` instead of direct path exposure
-- Process-local rate limiting and per-request timeouts
-- Request correlation and Prometheus metrics for auditability
-
-An action ultimately becomes subprocess command execution, but only after STAR validates the DSL, validates request params, renders argv deterministically, enforces binary policy, and sanitizes outputs.
-
-For the full threat analysis, see [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md).
-
-## 6. Quick Start
-
-STAR is designed to run inside Docker, stay reachable on the shared Docker network, and be published to localhost by default for local development and demos.
-
-> [!IMPORTANT]
-> Before starting the stack, create `secrets/star_api_token.txt` and ensure the external Docker network named by `STAR_SHARED_NETWORK` exists.
-
-Minimal local startup:
-
-```bash
-git clone https://github.com/Libertocrat/star.git
-cd star
-
-# Create the runtime configuration file from the template
-# The ".env" file defines sandbox limits, runtime safeguards,
-# and Docker infrastructure parameters used by the STAR container
-cp .env.example .env
-mkdir -p secrets
-openssl rand -hex 32 > secrets/star_api_token.txt
-
-# Replace docker-network if you changed STAR_SHARED_NETWORK in .env
-docker network create docker-network || true
-docker compose up -d --build
-```
-
-Notes:
-
-- by default, `docker-compose.yml` publishes STAR to `127.0.0.1:${STAR_HOST_PORT}`
-- runtime configuration is defined by the environment variables set in `.env`
-  - check the `.env.example` file for detailed information about env variables
-- the container joins the external network defined by `STAR_SHARED_NETWORK`
-- internal Docker consumers should use `http://star:${STAR_PORT}`
-- the external Docker network must exist before `docker compose up`
-- `star-init` prepares ownership and permissions on `STAR_ROOT_DIR` before `star` starts
-- the runtime API token is loaded from `secrets/star_api_token.txt` through the Docker secret mount
-
-Useful follow-up checks:
-
-```bash
-docker compose ps
-docker compose logs -f
-```
-
-If host publishing is disabled in Compose and you still need temporary localhost access during development:
-
-```bash
-./scripts/star-forward.sh --env-file .env
-```
-
-With the default Compose settings, STAR is available at:
-
-- `http://localhost:8080`
-
-Healthcheck:
-
-```bash
-curl http://localhost:8080/health
-```
-
-OpenAPI docs are disabled by default for security.
-Enable `STAR_ENABLE_DOCS=true` only for local development or internal testing.
-Never enable docs in production deployments.
-
-When enabled:
-
-- `http://localhost:8080/docs`
-
-To publish STAR on a different host port, set `STAR_HOST_PORT` in `.env` (for example `STAR_HOST_PORT=8090`) and use `http://localhost:8090`.
-
-By default, STAR binds to `127.0.0.1` on the host. To expose it on all host interfaces, set `STAR_HOST_BIND_ADDRESS=0.0.0.0` intentionally and ensure proper network controls.
-
-The local development workflow is documented in [DEVELOPMENT.md](DEVELOPMENT.md).
-
-## 7. Configuration
-
-STAR runtime behavior is configured through environment variables defined in the local `.env` file. Docker Compose reads these variables and injects them into the container environment, where STAR validates and loads its runtime configuration at startup. Review [.env.example](.env.example) for the full documented list and detailed notes for every configurable variable.
-
-```mermaid
-flowchart LR
-EnvFile[.env] --> Compose[Docker Compose]
-EnvFile --> RuntimeEnv[Container Environment]
-Compose --> STAR[STAR Container]
-RuntimeEnv --> Settings[STAR Settings Validation]
-Settings --> Runtime[STAR Runtime Configuration]
-```
-
-Values shown in `.env.example` are placeholder deployment values and do not necessarily represent application defaults or the configuration needed for your particular deployment environment.
-
-### Important variables
-
-| Variable | Description | Default |
-| --- | --- | --- |
-| `STAR_ROOT_DIR` | Absolute storage root used by STAR for managed blobs and metadata. | `/var/lib/star` |
-| `STAR_MAX_FILE_BYTES` | Maximum accepted upload size and file-processing size limit. | `104857600` |
-| `STAR_MAX_YML_BYTES` | Maximum size for one DSL spec file. | `102400` |
-| `STAR_MAX_STDOUT_BYTES` | Optional max stdout bytes returned from action execution. | unset |
-| `STAR_MAX_STDERR_BYTES` | Optional max stderr bytes returned from action execution. | unset |
-| `STAR_TIMEOUT_MS` | Per-request timeout in milliseconds. | `5000` |
-| `STAR_RATE_LIMIT_RPS` | Process-local requests per second limit. | `10` |
-| `STAR_APP_VERSION` | Version exposed by the runtime and OpenAPI metadata. | `0.1.0` |
-| `STAR_ENABLE_DOCS` | Enables `/docs`, `/redoc`, and `/openapi.json`. Keep disabled by default for security and enable only for local development or testing. | `false` |
-| `STAR_ENABLE_SECURITY_HEADERS` | Enables baseline response security headers. | `true` |
-| `STAR_BLOCKED_BINARIES_EXTRA` | Optional CSV of additional blocked binaries. | unset |
-| `STAR_CONTAINER_USER` | Build-time container user name for the STAR image. | `star` |
-| `STAR_CONTAINER_GROUP` | Build-time container group name for the STAR image. | `star` |
-| `STAR_CONTAINER_UID` | Container UID used by the image and `star-init` volume ownership preparation. | `1001` |
-| `STAR_CONTAINER_GID` | Container GID used by the image and `star-init` volume ownership preparation. | `1001` |
-| `STAR_SHARED_NETWORK` | External Docker network used by the Compose deployment. | `docker-network` |
-| `STAR_DATA_VOLUME` | Docker named volume used for STAR persistent data. | `star_star-data` |
-| `STAR_HOST_BIND_ADDRESS` | Host interface used by Compose when publishing STAR. | `127.0.0.1` |
-| `STAR_HOST_PORT` | Host port used by Compose for localhost access. | `8080` |
-| `STAR_PORT` | Internal listen port inside the container (reachable as `http://star:8080`). | `8080` |
-
-> [!IMPORTANT]
-> When deploying STAR inside an existing container environment or microservice stack, the following variables should normally be reviewed and adapted before startup:
->
-> - `STAR_ROOT_DIR`
-> - `STAR_SHARED_NETWORK`
-> - `STAR_DATA_VOLUME`
-> - `COMPOSE_PROJECT_NAME`
-> - `STAR_CONTAINER_UID`
-> - `STAR_CONTAINER_GID`
->
-> These variables control how STAR integrates with the Docker network, sandbox root, and storage permissions.
-
-The API token is loaded from `/run/secrets/star_api_token`, with `STAR_API_TOKEN_DEV` used only as a development fallback when the Docker secret is missing.
-
-For container identity, runtime limits, and other deployment settings, see the complete reference in [.env.example](.env.example).
-
-## 8. API Overview
-
-STAR exposes a purposely small HTTP surface.
-
-### Action endpoints
-
-- `GET /v1/actions` lists available actions grouped by module, with optional `q`, `tags` (CSV), and `match` (`any`/`all`) filters
-- `GET /v1/actions/{action_id}` returns the public contract for one DSL-defined action
-- `POST /v1/actions/{action_id}` executes one action with a `params` payload and optional request-level execution options such as `stdout_as_file`
-
-### File endpoints
-
-- `POST /v1/files` uploads and persists a managed file
-- `GET /v1/files` lists managed files with cursor pagination and optional filters
-- `GET /v1/files/{id}` retrieves metadata by `file_id`
-- `GET /v1/files/{id}/content` streams file content
-- `DELETE /v1/files/{id}` deletes a managed file
-
-### Public endpoints
-
-- `GET /health`
-- `GET /metrics`
-
-Interactive and dynamically generated OpenAPI docs are disabled by default for security. Enable them with `STAR_ENABLE_DOCS=true` only for local development or internal testing:
-
-- `/docs`
-- `/redoc`
-- `/openapi.json`
-
-Hosted API documentation by release is published at:
-
-- [STAR OpenAPI Docs](https://libertocrat.github.io/star/api-docs)
+- typed actions instead of raw shell
+- validated parameters instead of free-form command strings
+- managed files instead of arbitrary path exposure
+- authenticated API access instead of anonymous execution surfaces
+- rootless container execution with runtime guardrails
 
 > [!NOTE]
-> This README intentionally does not document the current action catalog. The final public module and action set is still evolving.
+> Public automation incidents in platforms such as n8n have shown how dangerous code-execution, expression-evaluation, and unsafe file-handling features can become in workflow systems. STAR is positioned as an architectural containment layer for those classes of problems.
 
-## 9. Observability
+## Quick Start
 
-STAR exports Prometheus-compatible metrics and request correlation metadata.
+The fastest current path is to download only the deployment package, extract, and launch STAR from there. Execute this to have STAR setup and running:
 
-The `/metrics` endpoint includes request counters, duration histograms, inflight gauges, request integrity rejection counters, rate limit counters, and timeout counters. `X-Request-Id` is propagated or generated on every response.
-
-## 10. Project Structure
-
-The repository is organized around the application package, tests, documentation, and release tooling.
-
-```text
-star/
-|-- src/
-|   `-- star/
-|       |-- actions/
-|       |   |-- build_engine/    # YAML discovery, validation, and action compilation
-|       |   |-- presentation/    # discovery payloads, contracts, and examples
-|       |   |-- runtime/         # rendering, execution, sanitization, outputs
-|       |   |-- schemas/         # DSL and module schema models
-|       |   |-- specs/           # built-in YAML action specs
-|       |   `-- registry.py      # immutable runtime registry
-|       |-- core/                # config, errors, storage, security, openapi
-|       |-- middleware/          # auth, integrity, observability, timeout, etc.
-|       |-- routes/              # /v1/actions, /v1/files, /health, /metrics
-|       `-- app.py               # FastAPI application factory
-|-- tests/                       # smoke, unit, and integration tests
-|-- docs/                        # architecture, testing, CI, and threat model docs
-|-- scripts/                     # developer and release helper utilities
-|-- requirements/                # runtime, testing, linting, security, and dev sets
-|-- .github/workflows/           # CI, security, release, and docs publishing
-|-- docker-compose.yml           # local container stack
-|-- Dockerfile                   # container image build
-|-- .env.example                 # runtime configuration template
-`-- Makefile                     # local quality and security workflow entry point
+```bash
+tmpdir="$(mktemp -d)" && \
+curl -fsSL https://github.com/Libertocrat/star/archive/refs/heads/main.tar.gz -o "$tmpdir/star.tar.gz" && \
+tar -xzf "$tmpdir/star.tar.gz" -C "$tmpdir" && \
+cp -a "$tmpdir"/star-main/deploy/star "$tmpdir"/star-main/deploy/star-runtime . && \
+chmod +x ./star ./star-runtime/scripts/*.sh && \
+rm -rf "$tmpdir" && \
+./star
 ```
 
-## 11. Testing Strategy
+That command leaves `./star` available as the top-level STAR lifecycle command. From there, you use `./star` to configure STAR, start it, inspect status, run built-in tutorials, follow logs, and stop the runtime without managing the internal Docker workflow by hand.
 
-The test suite combines smoke tests, unit tests, and integration tests.
+This gives you the local runtime control surface:
 
-Current coverage includes:
+- `./star` for the guided interactive flow
+- `./star --auto` for a non-interactive default deploy
+- `./star demo` for built-in API demos
+- `./star status` to inspect package, Docker, runtime, health, and docs state
+- `./star down` to safely stop the runtime
+- `./star help` to access help docs
 
-- DSL loader, validator, and builder behavior
-- public action catalog, contracts, and serializers
-- runtime renderer, executor, sanitizer, and output builders
-- file upload, listing, metadata, download, and delete behavior
-- settings validation and OpenAPI generation
-- middleware enforcement and security-sensitive HTTP validation
+> [!IMPORTANT]
+> STAR currently uses the repository tarball as its fast-deploy bootstrap.
+> A dedicated release bundle is planned so this step can become a shorter `curl | tar` flow later.
 
-For full test details, see [docs/TESTING.md](docs/TESTING.md).
+Requirements for the deploy flow are Docker and Docker Compose v2. Built-in demos also use `curl` and `jq`; if they are missing, the demo flow can prompt to install them automatically when possible. Most users should manage STAR from the directory that contains `./star`, without entering `star-runtime/` except to adjust `.env`, inspect the API token, or add custom YAML specs.
 
-## 12. CI / DevSecOps
+## See STAR in Action
 
-STAR uses GitHub Actions plus a Makefile-driven local workflow for repeatable quality and security checks.
+The `./star` orchestrator is the primary lifecycle interface for package users. The walkthrough below is structured like a lightweight tutorial so each command has a clear purpose before the animated demos are added.
 
-The repository includes these workflows:
+### 1. Guided Startup
 
-- [CI quality gate](.github/workflows/ci.yml)
-- [deep security workflow](.github/workflows/security.yml)
-- [container release pipeline](.github/workflows/release.yml)
-- [versioned API docs publishing pipeline](.github/workflows/release-docs.yml)
+Run the interactive flow when you want STAR to guide configuration and startup step by step.
 
-For details, see [docs/CI.md](docs/CI.md).
+```bash
+./star
+```
 
-## 13. Documentation
+This gets STAR configured, creates the base local runtime files, and leaves the service ready to use.
 
-Detailed design and workflow material lives in:
+<!-- GIF placeholder: Guided startup tutorial. Show a user running ./star in a clean directory, accepting the configuration prompts, letting STAR start the runtime, and ending on the post-start next steps. Focus on the orchestrator as the main entrypoint and keep terminal output readable. -->
 
-| Document | Description |
+### 2. Fast Non-Interactive Deploy
+
+Run the auto mode when you want STAR configured and started with default behavior and minimal decisions.
+
+```bash
+./star --auto
+```
+
+This is the quickest path to get STAR ready and running with the default local settings.
+
+<!-- GIF placeholder: Auto deploy tutorial. Show ./star --auto configuring STAR, creating any required local runtime state, starting the Docker runtime, and finishing with a healthy service. Make the sequence feel like a one-command fast deploy story. -->
+
+### 3. Built-In Demo Flow
+
+Run the demo entrypoint to explore the STAR API through guided scenarios.
+
+```bash
+./star demo
+```
+
+This opens STAR's built-in tutorials so you can explore the runtime step by step.
+
+The current built-in tutorials cover:
+
+- Files API walkthrough
+- Actions API walkthrough
+- Generate random tokens
+- Measure and inspect a text file
+- Search patterns in a text file
+- Encrypt and decrypt a file
+
+<!-- GIF placeholder: Demo tutorial for ./star demo. Show the interactive demo menu, pick the encrypt and decrypt walkthrough manually, follow the prompts step by step, and finish on the demo summary. Keep the flow beginner-friendly and focused on the outcome of learning STAR through built-in tutorials. -->
+
+### 4. Runtime Status and Logs
+
+Inspect package health, runtime reachability, and docs availability from the orchestrator.
+
+```bash
+./star status
+./star logs -f
+```
+
+Use this when you want a quick "is STAR healthy?" check and a live view of what the runtime is doing.
+
+<!-- GIF placeholder: Status and logs tutorial. Show ./star status first to inspect package, Docker, service, health, and docs state, then switch to ./star logs -f to follow runtime output while STAR is running. Emphasize that routine runtime inspection stays anchored on the top-level ./star command. -->
+
+### 5. Swagger / OpenAPI Exploration
+
+In the default deploy flow, STAR enables Swagger / OpenAPI docs for local testing and demos. You can use them to explore `/v1/actions` and `/v1/files` interactively.
+
+Run `./star status` to get the docs URL, then open `/docs` and try the API interactively.
+
+```bash
+./star status
+```
+
+<!-- GIF placeholder: Swagger exploration tutorial. Show a default local STAR deployment, run ./star status to reveal the docs URL, open the Swagger UI, browse /v1/actions and /v1/files, execute a simple request in the interactive docs, and return to the terminal. Mention in the flow that --production disables docs by default. -->
+
+## What STAR Gives You
+
+- DSL-defined, allow-listed actions compiled at startup into an immutable registry
+- authenticated API access for discovery and execution through `/v1/actions`
+- managed file upload, listing, metadata, download, and delete flows through `/v1/files`
+- deterministic command rendering with typed params, flags, defaults, and declared outputs
+- rootless container deployment with configurable runtime limits and response hardening
+- built-in `./star` lifecycle commands for configure, startup, demos, status, logs, and shutdown
+- OpenAPI support for local exploration, enabled by default in the standard local deploy flow
+
+> [!WARNING]
+> STAR intentionally narrows what callers can do. If your use case depends on arbitrary shell execution, STAR is designed to replace that pattern, not to wrap it in a thinner UI.
+> You can define custom actions if the command execution you need isn't covered by our base actions.
+
+## How STAR Works
+
+At a high level, STAR sits between an automation system and the real system effects that would otherwise be exposed through raw command execution.
+
+```mermaid
+flowchart LR
+WorkflowOrAgent[Workflow / Agent] --> API[STAR API]
+API --> Contract[Typed Action Contract]
+Contract --> Runtime[Controlled Runtime]
+Runtime --> Output[Managed Output]
+```
+
+### Before / After
+
+| Pattern | Flow |
 | --- | --- |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System architecture, DSL action pipeline, runtime execution, and OpenAPI design |
-| [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md) | Threat model, trust boundaries, and mitigations |
-| [docs/TESTING.md](docs/TESTING.md) | Testing strategy, fixtures, and local execution |
-| [docs/CI.md](docs/CI.md) | CI, security scanning, release, and docs publication workflows |
-| [DEVELOPMENT.md](DEVELOPMENT.md) | Local development environment and Makefile workflow |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | Current contribution policy |
-| [SECURITY.md](SECURITY.md) | Vulnerability disclosure policy |
-| [scripts/README.md](scripts/README.md) | Developer and release helper scripts |
+| Unsafe default | Workflow or agent -> arbitrary shell command -> broad system effects |
+| STAR model | Workflow or agent -> authenticated STAR API -> validated params -> controlled runtime -> managed outputs |
 
-## 14. Development
+STAR still executes real commands under the hood, but only after validating the DSL, validating request payloads, enforcing runtime policy, constraining file access, and sanitizing outputs.
 
-Local development is documented in [DEVELOPMENT.md](DEVELOPMENT.md).
+## Security Discoverability
 
-The main workflow is:
+This section is intentionally brief and index-friendly. It is not a full threat model.
 
-- define or edit DSL specs under `src/star/actions/specs`
-- run the container stack with Docker Compose
-- validate behavior through tests and the authenticated action endpoints
-- export and publish OpenAPI docs through the provided scripts and workflows
+> [!IMPORTANT]
+> The items below are included to help users, researchers, and security indexers understand where STAR is relevant.
+>
+> STAR should be described as helping mitigate, reducing exposure to, or containing the blast radius of these categories. It is not a direct patch for third-party CVEs.
 
-## 15. Contributing
+### OWASP LLM Top 10 Risks STAR Helps Address
 
-External pull requests are currently paused while the project stabilizes its public API, security model, testing surface, and release process.
+| OWASP risk | STAR mitigation / protection |
+| --- | --- |
+| [LLM01:2025 Prompt Injection](https://genai.owasp.org/llmrisk/llm01-prompt-injection/) | STAR helps mitigate prompt-to-action abuse by exposing a validated action surface instead of arbitrary command execution. |
+| [LLM02:2025 Sensitive Information Disclosure](https://genai.owasp.org/llmrisk/llm022025-sensitive-information-disclosure/) | STAR helps reduce disclosure risk through authenticated endpoints, managed file IDs, storage boundaries, and output/path sanitization. |
+| [LLM05:2025 Improper Output Handling](https://genai.owasp.org/llmrisk/llm052025-improper-output-handling/) | STAR helps mitigate unsafe tool-output handling by sanitizing stdout/stderr, stripping unsafe control sequences, redacting sensitive paths, and bounding returned output. |
+| [LLM06:2025 Excessive Agency](https://genai.owasp.org/llmrisk/llm062025-excessive-agency/) | STAR helps reduce excessive agency by constraining execution to predefined, typed actions instead of unrestricted tool access. |
+| [LLM10:2025 Unbounded Consumption](https://genai.owasp.org/llmrisk/llm102025-unbounded-consumption/) | STAR helps reduce abuse and overload through request-size limits, timeouts, rate limiting, and bounded runtime output. |
 
-For the current policy, see [CONTRIBUTING.md](CONTRIBUTING.md).
+### MITRE ATLAS Techniques Relevant to STAR
 
-## 16. Security Reporting
+| ATLAS technique | STAR mitigation / protection |
+| --- | --- |
+| [AML.T0050 Command and Scripting Interpreter](https://atlas.mitre.org/techniques/AML.T0050) | STAR helps mitigate open command-execution exposure by replacing it with validated, allow-listed action execution. |
+| [AML.T0051 LLM Prompt Injection](https://atlas.mitre.org/techniques/AML.T0051) | STAR helps reduce the downstream blast radius of prompt-driven tool misuse, even though it does not classify prompt intent itself. |
+| [AML.T0053 AI Agent Tool Invocation](https://atlas.mitre.org/techniques/AML.T0053) | STAR helps protect agent integrations by acting as a constrained tool-execution boundary. |
+| [AML.T0037 Data from Local System](https://atlas.mitre.org/techniques/AML.T0037) | STAR helps mitigate arbitrary local-file exposure through managed file APIs and sandboxed storage rules. |
+| [AML.T0086 Exfiltration via AI Agent Tool Invocation](https://atlas.mitre.org/techniques/AML.T0086) | STAR helps reduce exfiltration paths through constrained actions, file controls, and output sanitization. |
+| [AML.T0072 Reverse Shell](https://atlas.mitre.org/techniques/AML.T0072) | STAR helps reduce common reverse-shell pathways by avoiding shell-based public execution primitives. |
+| [AML.T0029 Denial of AI Service](https://atlas.mitre.org/techniques/AML.T0029) | STAR helps mitigate simple service-exhaustion pressure with request-size checks, timeouts, and rate limiting. |
+| [AML.T0034 Excessive Queries](https://atlas.mitre.org/techniques/AML.T0034) | STAR helps reduce repeated abusive invocation patterns at the API boundary through throttling and runtime limits. |
+| [AML.T0049 Exploit Public-Facing Application](https://atlas.mitre.org/techniques/AML.T0049) | STAR helps harden the execution boundary with authentication, request-integrity checks, and runtime controls. |
+
+### Selected n8n CVEs STAR Helps Mitigate by Design
+
+| CVE | STAR mitigation / protection |
+| --- | --- |
+| [CVE-2025-68613](https://nvd.nist.gov/vuln/detail/CVE-2025-68613) | STAR helps mitigate this class of expression-driven RCE by replacing free-form execution patterns with predefined, validated actions. |
+| [CVE-2026-21858](https://nvd.nist.gov/vuln/detail/CVE-2026-21858) | STAR helps reduce exposure by constraining file access to managed APIs and sandboxed storage rules instead of broad workflow-side file handling. |
+| [CVE-2026-21877](https://nvd.nist.gov/vuln/detail/CVE-2026-21877) | STAR helps reduce unsafe code/file handling exposure by narrowing execution and managed file-ingestion surfaces. |
+| [CVE-2026-27497](https://nvd.nist.gov/vuln/detail/CVE-2026-27497) | STAR helps mitigate this style of ad hoc workflow-side code execution by replacing it with constrained action contracts. |
+| [CVE-2026-33660](https://nvd.nist.gov/vuln/detail/CVE-2026-33660) | STAR helps reduce Merge-node-style local-file read and RCE exposure by avoiding broad workflow execution features. |
+| [CVE-2026-42234](https://nvd.nist.gov/vuln/detail/CVE-2026-42234) | STAR helps reduce reliance on embedded general-purpose code nodes by shifting automation to predefined actions. |
+
+> [!NOTE]
+> Some of the n8n CVEs listed above are not one-to-one equivalents of the old Execute Command pattern. They are included because they illustrate the broader class of workflow-side code execution, unsafe file access, and overly flexible runtime features that STAR is intended to replace or contain.
+
+## Documentation
+
+Use this README for the quick overview, then go deeper through the focused docs:
+
+- [deploy/README.md](deploy/README.md) for the runtime package guide focused on `./star`, lifecycle commands, and deploy-bundle usage
+- [DEVELOPMENT.md](DEVELOPMENT.md) for local development workflow and environment setup
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for system design, action pipeline, and runtime behavior
+- [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md) for security boundaries, trust assumptions, and mitigations
+- [docs/TESTING.md](docs/TESTING.md) for test strategy and execution
+- [docs/CI.md](docs/CI.md) for CI, security workflow, release pipeline, and docs publication
+- [CONTRIBUTING.md](CONTRIBUTING.md) for contribution policy
+- [SECURITY.md](SECURITY.md) for vulnerability disclosure and reporting
+- [scripts/README.md](scripts/README.md) for helper scripts
+- [STAR OpenAPI Docs](https://libertocrat.github.io/star/api-docs/) for hosted API documentation by release
+
+## Roadmap
+
+- ship a dedicated deploy bundle for a shorter one-command installation flow
+- expand the built-in action catalog while preserving tight execution boundaries
+- publish more visual demos, including full lifecycle and Swagger walkthroughs
+- add more workflow and agent integration examples
+- deepen operator-facing documentation for policy and deployment patterns
+
+## Security Reporting
 
 Do not report vulnerabilities in public issues.
 
 Use the coordinated disclosure process documented in [SECURITY.md](SECURITY.md). For encrypted reporting, the repository includes [SECURITY_PGP_KEY.asc](SECURITY_PGP_KEY.asc).
 
-## 17. License
+## License
 
 STAR is licensed under the Apache License 2.0. See [LICENSE](LICENSE) for the full text.
 
