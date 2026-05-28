@@ -15,7 +15,7 @@
 
 ## 1. Security Overview
 
-STAR is an internal FastAPI service that exposes authenticated action execution and managed file endpoints.
+STAR is a secure automation runtime that is typically deployed as an internal FastAPI service and exposes authenticated action execution and managed file endpoints.
 
 The service does not accept arbitrary commands from clients. Instead, it builds its runtime action registry from YAML DSL specs that are validated and compiled at startup. Execution requests can only target actions present in that immutable registry, and runtime execution is further constrained by rendered-command checks and binary policy enforcement.
 
@@ -93,7 +93,7 @@ The application exposes these HTTP entry points:
 - `/v1/files/{id}/content` via GET. This endpoint streams file content by `file_id`.
 - `/health` via GET. This endpoint is unauthenticated.
 - `/metrics` via GET. This endpoint is unauthenticated.
-- `/docs`, `/redoc`, and `/openapi.json` while `star_enable_docs` is enabled. These endpoints are unauthenticated while exposed and should remain disabled by default for security.
+- `/docs`, `/redoc`, and `/openapi.json` while `star_enable_docs` is enabled. These endpoints are unauthenticated whenever exposed. Source-tree deployments often keep them off, while the packaged local deploy flow may enable them for localhost exploration, so they should stay disabled for wider or production-oriented exposure.
 
 Attack inputs include:
 
@@ -224,7 +224,7 @@ Authentication coverage is as follows:
 Some risks remain by design or by deployment assumption.
 
 > [!WARNING]
-> `/health`, `/metrics`, and OpenAPI docs endpoints can be reached without authentication while docs are enabled. Keep STAR within trusted network boundaries, keep localhost-only publishing by default unless a wider bind is intentional, and enable `STAR_ENABLE_DOCS=true` only for local development or internal testing, never in production.
+> `/health`, `/metrics`, and OpenAPI docs endpoints can be reached without authentication while docs are enabled. Keep STAR within trusted network boundaries, keep localhost-only publishing by default unless a wider bind is intentional, and disable docs for wider or production-oriented exposure even though local packaged deployments may enable them for exploration.
 
 - STAR relies on container isolation. If the container runtime is misconfigured or compromised, container-level protections may not hold.
 - STAR relies on correct storage root configuration. An incorrect `STAR_ROOT_DIR` mount target weakens the filesystem boundary.
@@ -242,7 +242,7 @@ The security model depends on these assumptions:
 - The API token secret is stored securely and mounted correctly at `/run/secrets/star_api_token`.
 - `STAR_ROOT_DIR` points to the intended mounted storage volume.
 - Upstream services and operators treat STAR as a trusted internal component and do not expose it directly to untrusted public traffic.
-- Operators leave docs endpoints disabled in environments where exposing them is not acceptable.
+- Operators leave docs endpoints disabled or localhost-scoped in environments where exposing them is not acceptable.
 
 If these assumptions are violated, the practical security of the service is reduced even if the application code itself is unchanged.
 
