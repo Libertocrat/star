@@ -1,6 +1,6 @@
 # Security Policy
 
-Secure Templated Actions Runtime (STAR) is a secure automation runtime for workflows and AI agents that need predefined system-level actions without arbitrary shell execution. The project includes authentication, a DSL-defined action registry, request validation middleware, managed file storage under `/v1/files`, authenticated action discovery and execution under `/v1/actions`, and container-based isolation.
+Secure Templated Actions Runtime (STAR) is a secure automation runtime and constrained tool-execution boundary for workflows and AI agents that need predefined system-level actions without arbitrary shell execution. The project includes authentication, a DSL-defined action registry, request validation middleware, managed file storage under `/v1/files`, authenticated action discovery and execution under `/v1/actions`, and container-based isolation.
 
 In STAR, an action is a predefined command template compiled from validated YAML specs. Clients can execute only the actions present in the runtime registry; they cannot submit arbitrary shell commands.
 
@@ -11,17 +11,18 @@ Detailed security design and threat analysis are documented separately:
 - [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md): system architecture and security-relevant components
 - [docs/THREAT_MODEL.md](./docs/THREAT_MODEL.md): threat analysis, trust boundaries, and mitigations
 - [docs/CI.md](./docs/CI.md): automated testing, security checks, release, and OpenAPI docs workflows
+- [docs/AI_SECURITY.md](./docs/AI_SECURITY.md): STAR's applicability to AI-agent, OWASP GenAI/LLM, and MITRE ATLAS risk scenarios
 
 This document focuses on vulnerability reporting and coordinated disclosure.
 
 ## Deployment Model
 
-STAR is intended to run as an internal microservice inside trusted container infrastructure. It is typically deployed on a Docker network for service-to-service access and may also be published to localhost for trusted host-local access.
+STAR is intended to run as an internal service inside trusted container infrastructure. It is typically deployed on a Docker network for service-to-service access and may also be published to localhost for trusted host-local access.
 
 The service is not designed to be exposed directly to the public Internet.
 
 > [!WARNING]
-> Do not expose STAR directly on a public edge. The service assumes a trusted deployment boundary and intentionally leaves `/health`, `/metrics`, and OpenAPI docs endpoints unauthenticated while docs remain enabled.
+> Do not expose STAR directly on a public edge. The service assumes a trusted deployment boundary and intentionally leaves `/health` and `/metrics` unauthenticated; `/docs`, `/redoc`, and `/openapi.json` are also unauthenticated whenever docs are enabled for local exploration or internal testing.
 
 ## Supported Versions
 

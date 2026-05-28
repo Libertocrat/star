@@ -20,6 +20,9 @@
 
 Minimal setup for contributors who want to run the project and execute the local CI checks. To run the full DevSecOps pipeline locally, see [2. Development Environment Requirements](#2-development-environment-requirements) and [4. Environment Setup](#4-environment-setup).
 
+> [!NOTE]
+> This guide is for contributors working from a source checkout. If you want to run STAR as a packaged runtime, follow [README.md](README.md) or [deploy/README.md](deploy/README.md) and use the guided `deploy/star` entrypoint.
+
 ```bash
 git clone https://github.com/Libertocrat/star.git
 cd star
@@ -337,7 +340,7 @@ python -m pip install -r requirements/dev.txt
 
 ### Local container stack
 
-The local container workflow uses `.env.example`, `docker-compose.yml`, and the helper scripts in `scripts/`.
+The source-tree contributor workflow uses `.env.example`, `docker-compose.yml`, and the helper scripts in `scripts/`.
 
 > [!IMPORTANT]
 > Create the `secrets/` directory, generate the API token file, and ensure the external Docker network exists before running `docker compose up`.
@@ -390,7 +393,7 @@ When validating action behavior locally, prefer these checks:
 - inspect one public contract with `GET /v1/actions/{action_id}`
 - execute one action with `POST /v1/actions/{action_id}` and set `stdout_as_file: true` when validating stdout-to-file materialization
 - upload or retrieve supporting files through `/v1/files`
-- set `STAR_ENABLE_DOCS=true` only when you need to inspect `/openapi.json`, `/docs`, or `/redoc` during local development
+- in the source-tree Compose workflow, set `STAR_ENABLE_DOCS=true` only when you need to inspect `/openapi.json`, `/docs`, or `/redoc` during local development; the packaged `deploy/star` flow uses a different local default for exploration
 
 ## 5. Dependency Sets
 

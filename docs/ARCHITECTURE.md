@@ -16,7 +16,7 @@
 
 ## 1. System Overview
 
-Secure Templated Actions Runtime (STAR) is a FastAPI-based internal microservice that exposes a small authenticated execution surface together with a STAR-managed file service accessible through `/v1/files`.
+Secure Templated Actions Runtime (STAR) is a FastAPI-based secure automation runtime and constrained tool-execution boundary for workflows, AI agents, and low-code automations. It is typically deployed as an internal service and exposes a small authenticated execution surface together with a STAR-managed file service accessible through `/v1/files`.
 
 The service is not a generic shell gateway. At startup, STAR discovers YAML-based Action DSL specifications, validates them, compiles them into immutable runtime `ActionSpec` objects, and stores them in an in-memory registry. At request time, clients can only execute those predeclared actions through `/v1/actions/{action_id}`.
 
@@ -393,7 +393,7 @@ STAR generates OpenAPI dynamically from the live application, the runtime action
 - removes internal-only schemas from the published document
 - overrides the generated contracts for `/health` and `/metrics`
 
-The docs endpoints `/docs`, `/redoc`, and `/openapi.json` are controlled by `star_enable_docs` in `app.py` and remain disabled by default for security.
+The docs endpoints `/docs`, `/redoc`, and `/openapi.json` are controlled by `star_enable_docs` in `app.py`. Source-tree contributor deployments commonly leave them disabled unless they are actively needed, while the packaged `deploy/star` flow enables them by default for local exploration and `--production` flips that generated default for new runtime configs.
 
 ### Export pipeline
 
@@ -407,7 +407,7 @@ The repository contains a dedicated GitHub Actions workflow in `.github/workflow
 
 ## 10. Container Runtime Model
 
-The container runtime is defined by `Dockerfile` and `docker-compose.yml`.
+The source-tree contributor runtime is defined by `Dockerfile` and `docker-compose.yml`. Release packages also ship the guided deploy wrapper at `deploy/star` together with runtime assets under `deploy/star-runtime/`.
 
 ### Docker image
 
