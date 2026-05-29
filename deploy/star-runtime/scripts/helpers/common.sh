@@ -50,6 +50,10 @@ fi
 
 if [[ "${STAR_COLOR_ENABLED}" == "true" ]]; then
     STAR_COLOR_RESET='\033[0m'
+    STAR_COLOR_PRIMARY='\033[38;5;33m'
+    STAR_COLOR_SECONDARY='\033[38;5;37m'
+    STAR_COLOR_PRIMARY_DIM='\033[2;38;5;33m'
+    STAR_COLOR_SECONDARY_DIM='\033[2;38;5;37m'
     STAR_COLOR_INFO='\033[36m'
     STAR_COLOR_SPINNER='\033[96m'
     STAR_COLOR_OK='\033[32m'
@@ -59,6 +63,10 @@ if [[ "${STAR_COLOR_ENABLED}" == "true" ]]; then
     STAR_COLOR_SECTION='\033[1;34m'
 else
     STAR_COLOR_RESET=''
+    STAR_COLOR_PRIMARY=''
+    STAR_COLOR_SECONDARY=''
+    STAR_COLOR_PRIMARY_DIM=''
+    STAR_COLOR_SECONDARY_DIM=''
     STAR_COLOR_INFO=''
     STAR_COLOR_SPINNER=''
     STAR_COLOR_OK=''
@@ -70,6 +78,18 @@ fi
 
 readonly STAR_COLOR_ENABLED
 readonly STAR_COLOR_RESET
+# shellcheck disable=SC2034
+# Brand colors are kept as shared references for sourced scripts and future UI variants.
+readonly STAR_COLOR_PRIMARY
+# shellcheck disable=SC2034
+# Brand colors are kept as shared references for sourced scripts and future UI variants.
+readonly STAR_COLOR_SECONDARY
+# shellcheck disable=SC2034
+# Brand colors are kept as shared references for sourced scripts and future UI variants.
+readonly STAR_COLOR_PRIMARY_DIM
+# shellcheck disable=SC2034
+# Brand colors are kept as shared references for sourced scripts and future UI variants.
+readonly STAR_COLOR_SECONDARY_DIM
 readonly STAR_COLOR_INFO
 readonly STAR_COLOR_SPINNER
 readonly STAR_COLOR_OK
@@ -87,7 +107,7 @@ info() {
 
 # Print a success message to stdout.
 success() {
-    printf '%b[OK]%b %s\n' "${STAR_COLOR_OK}" "${STAR_COLOR_RESET}" "$*"
+    printf '%b[ OK ]%b %s\n' "${STAR_COLOR_OK}" "${STAR_COLOR_RESET}" "$*"
 }
 
 # Print a warning message to stderr.
@@ -97,7 +117,7 @@ warn() {
 
 # Print a non-fatal error message to stderr.
 error() {
-    printf '%b[ERROR]%b %s\n' "${STAR_COLOR_ERROR}" "${STAR_COLOR_RESET}" "$*" >&2
+    printf '%b[FAIL]%b %s\n' "${STAR_COLOR_ERROR}" "${STAR_COLOR_RESET}" "$*" >&2
 }
 
 # Print an error and terminate with a non-zero exit code.
@@ -109,7 +129,7 @@ die() {
 # Print a visual section header for script output.
 section() {
     local title="${1:-}"
-    printf '\n%b==== %s ====%b\n' "${STAR_COLOR_SECTION}" "${title}" "${STAR_COLOR_RESET}"
+    printf '\n%b---- %s ----%b\n' "${STAR_COLOR_SECTION}" "${title}" "${STAR_COLOR_RESET}"
 }
 
 # Print a numbered step marker.
@@ -272,7 +292,7 @@ prompt_default() {
     local default_value="${2-}"
     local input=''
 
-    printf '%b[?]%b %s [%s]: ' \
+    printf '%b[ ?> ]%b %s [%s]: ' \
     "${STAR_COLOR_PROMPT}" "${STAR_COLOR_RESET}" \
     "${prompt_text}" "${default_value}" >&2
 
@@ -302,11 +322,11 @@ confirm() {
 
     while true; do
         if [[ "${default_upper}" == "Y" ]]; then
-            printf '%b[?]%b %s [Y/n]: ' \
+            printf '%b[ ?> ]%b %s [Y/n]: ' \
             "${STAR_COLOR_PROMPT}" "${STAR_COLOR_RESET}" \
             "${prompt_text}" >&2
         else
-            printf '%b[?]%b %s [y/N]: ' \
+            printf '%b[ ?> ]%b %s [y/N]: ' \
             "${STAR_COLOR_PROMPT}" "${STAR_COLOR_RESET}" \
             "${prompt_text}" >&2
         fi

@@ -20,7 +20,7 @@ TOKEN_RESTORE_STATUS="not checked"
 usage() {
     cat <<'EOF'
 Usage:
-  star-down.sh [options]
+  ./star down [options]
 
 Description:
   Stops the STAR runtime stack. By default, it keeps Docker volumes, Docker network, and images.
@@ -36,14 +36,14 @@ Options:
   -h, --help        Show this help.
 
 Examples:
-  ./scripts/star-down.sh
-  ./scripts/star-down.sh --remove-orphans
-  ./scripts/star-down.sh --volumes
-  ./scripts/star-down.sh --network
-  ./scripts/star-down.sh --docker-cleanup
-  ./scripts/star-down.sh --docker-cleanup --force
-  ./scripts/star-down.sh --docker-cleanup --force --silent
-  ./scripts/star-down.sh --dry-run
+  ./star down
+  ./star down --remove-orphans
+  ./star down --volumes
+  ./star down --network
+  ./star down --docker-cleanup
+  ./star down --docker-cleanup --force
+  ./star down --docker-cleanup --force --silent
+  ./star down --dry-run
 EOF
 }
 
