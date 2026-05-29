@@ -28,7 +28,7 @@ DEMO_ENCRYPTION_PASSWORD="demo-password-used-only-for-star-encryption-demo"
 usage() {
     cat <<'EOF'
 Usage:
-  star-demo.sh [options]
+  ./star demo [options]
 
 Description:
   Runs an interactive STAR API walkthrough with focused demos.
@@ -49,12 +49,12 @@ Supported demos:
   6 | encrypt
 
 Examples:
-  ./scripts/star-demo.sh
-  ./scripts/star-demo.sh --demo encrypt
-  ./scripts/star-demo.sh --demo 6
-  ./scripts/star-demo.sh --auto --demo encrypt
-  ./scripts/star-demo.sh --demo inspect --keep-files
-  ./scripts/star-demo.sh -v --demo actions
+  ./star demo
+  ./star demo --demo encrypt
+  ./star demo --demo 6
+  ./star demo --auto --demo encrypt
+  ./star demo --demo inspect --keep-files
+  ./star demo -v --demo actions
 EOF
 }
 
@@ -145,7 +145,7 @@ ensure_env_file_present() {
         return 0
     fi
 
-    error "Run: ./scripts/star-configure.sh"
+    error "Run: './star configure'"
     return 1
 }
 
@@ -167,33 +167,33 @@ ensure_runtime_available() {
     warn "STAR is not reachable at ${health_endpoint}."
 
     if [[ "${AUTO_MODE}" != "true" ]]; then
-        if ! confirm "STAR is not reachable at ${health_endpoint}. Start it now with ./scripts/star-up.sh?" "Y"; then
+        if ! confirm "Start it now with './star up'?" "Y"; then
             printf 'STAR is not running. Start it with:\n' >&2
-            printf '  ./scripts/star-up.sh\n' >&2
+            printf "  './star up'\n" >&2
             return 10
         fi
     else
-        info "Auto mode enabled. Starting STAR with ./scripts/star-up.sh"
+        info "Auto mode enabled. Starting STAR with './star up'"
     fi
 
     if ! run_with_spinner "Starting STAR runtime" "${STAR_SCRIPTS_DIR}/star-up.sh" --silent; then
         warn "STAR startup with --silent failed."
 
         if [[ "${AUTO_MODE}" != "true" ]]; then
-            if confirm "Retry startup with full star-up output?" "Y"; then
+            if confirm "Retry startup with full './star up' output?" "Y"; then
                 if ! "${STAR_SCRIPTS_DIR}/star-up.sh"; then
                     error "STAR startup failed."
-                    error "Run: ./scripts/star-up.sh"
+                    error "Run: './star up'"
                     return 1
                 fi
             else
                 error "STAR startup failed."
-                error "Run: ./scripts/star-up.sh"
+                error "Run: './star up'"
                 return 1
             fi
         else
             error "STAR startup failed."
-            error "Run: ./scripts/star-up.sh"
+            error "Run: './star up'"
             return 1
         fi
     fi
@@ -204,7 +204,7 @@ ensure_runtime_available() {
     fi
 
     error "STAR startup failed."
-    error "Run: ./scripts/star-up.sh"
+    error "Run: './star up'"
     return 1
 }
 
@@ -226,13 +226,13 @@ print_demo_menu() {
     section "STAR Runtime Demo"
     cat <<'EOF'
 Available demos:
-  1) Files API walkthrough
-  2) Actions API walkthrough
-  3) Generate random tokens
-  4) Measure and inspect a text file
-  5) Search patterns in a text file
-  6) Encrypt and decrypt a file
-  q) Quit
+  [1] Files API walkthrough
+  [2] Actions API walkthrough
+  [3] Generate random tokens
+  [4] Measure and inspect a text file
+  [5] Search patterns in a text file
+  [6] Encrypt and decrypt a file
+  [q] Quit
 EOF
 }
 
@@ -261,13 +261,9 @@ select_demo_from_menu() {
 
     while true; do
         print_demo_menu
-        printf '\nSelect a demo [6]: '
-        read -r selected_input || selected_input=""
+        printf '\n' >&2
+        selected_input="$(prompt_default "Select a demo" "6")"
         selected_input="$(trim "${selected_input}")"
-
-        if [[ -z "${selected_input}" ]]; then
-            selected_input="6"
-        fi
 
         if [[ "${selected_input,,}" == "q" ]]; then
             return 11
@@ -322,7 +318,7 @@ prompt_stop_runtime() {
     fi
 
     warn "Failed to stop STAR runtime with --silent."
-    warn "Run: ./scripts/star-down.sh"
+    warn "Run: './star down'"
     return 0
 }
 

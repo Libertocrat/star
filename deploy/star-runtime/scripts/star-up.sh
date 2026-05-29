@@ -15,7 +15,7 @@ PRODUCTION_MODE=false
 usage() {
     cat <<'EOF'
 Usage:
-  star-up.sh [options]
+  ./star up [options]
 
 Description:
   Starts the STAR runtime stack using the generated .env file and local STAR API token file.
@@ -29,12 +29,12 @@ Options:
   -h, --help    Show this help.
 
 Examples:
-  ./scripts/star-up.sh
-  ./scripts/star-up.sh --pull
-  ./scripts/star-up.sh --no-wait
-  ./scripts/star-up.sh --production
-  ./scripts/star-up.sh --silent
-  ./scripts/star-up.sh --dry-run
+  ./star up
+  ./star up --pull
+  ./star up --no-wait
+  ./star up --production
+  ./star up --silent
+  ./star up --dry-run
 EOF
 }
 
@@ -147,12 +147,12 @@ validate_existing_token_file() {
     local token
 
     token="$(read_token)" || {
-        error "Run ./scripts/star-configure.sh to create a valid STAR API token."
+        error "Run './star configure' to create a valid STAR API token."
         return 1
     }
 
     if ! validate_token_strength "${token}"; then
-        error "Existing STAR API token is too weak. Run ./scripts/star-configure.sh or replace it manually with a strong token."
+        error "Existing STAR API token is too weak. Run './star configure' or replace it manually with a strong token."
         return 1
     fi
 
@@ -327,7 +327,7 @@ check_user_specs_dir() {
     fi
 
     warn "User specs directory not found: $(path_relative_to_pwd "${STAR_USER_SPECS_DIR}")"
-    warn "Custom user modules will not be available. Run ./scripts/star-configure.sh or create user-specs/ manually."
+    warn "Custom user modules will not be available. Run './star configure' or create user-specs/ manually."
 }
 
 # Ensure the external Docker network exists before compose startup.
@@ -442,7 +442,7 @@ main() {
     fi
 
     ensure_file_exists "${STAR_ENV_FILE}" ".env file" || {
-        error "Run ./scripts/star-configure.sh first."
+        error "Run './star configure' first."
         exit 1
     }
 

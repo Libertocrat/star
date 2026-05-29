@@ -63,7 +63,7 @@ SHOW_TOKEN_OUTPUT=false
 usage() {
     cat <<'EOF'
 Usage:
-  star-configure.sh [options]
+  ./star configure [options]
 
 Description:
   Generates STAR runtime configuration files and local secrets.
@@ -77,11 +77,11 @@ Options:
   -h, --help     Show this help
 
 Examples:
-  ./scripts/star-configure.sh
-  ./scripts/star-configure.sh --auto
-  ./scripts/star-configure.sh --auto --production
-  ./scripts/star-configure.sh --auto --force
-  ./scripts/star-configure.sh --force --show-token
+  ./star configure
+  ./star configure --auto
+  ./star configure --auto --production
+  ./star configure --auto --force
+  ./star configure --force --show-token
 EOF
 }
 
@@ -122,7 +122,7 @@ parse_args() {
 show_intro() {
     section "STAR Runtime Configuration"
     info "This wizard creates the local .env file, STAR API token, and runtime directories."
-    info "It does not start or modify Docker resources."
+    info "After configuration, you can start Docker resources with './star up'."
 }
 
 # Initialize selected values with recommended defaults.

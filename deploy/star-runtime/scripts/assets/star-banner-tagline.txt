@@ -1,0 +1,3 @@
+     Safe actions. No raw shell.
+     --------------------------------
+     github.com/libertocrat/star
