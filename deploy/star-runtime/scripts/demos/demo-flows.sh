@@ -333,7 +333,7 @@ run_demo_encrypt() {
     printf '  upload -> preview -> encrypt -> inspect -> decrypt -> verify checksum equality.\n\n'
 
     demo_step "Upload shared demo text file"
-    upload_demo_asset "encrypt demo original file" || return 1
+    upload_demo_asset "original file" || return 1
     original_id="${LAST_UPLOADED_FILE_ID}"
     original_sha="$(star_api_extract_metadata_field "sha256")"
     original_mime="$(star_api_extract_metadata_field "mime_type")"
@@ -361,7 +361,7 @@ run_demo_encrypt() {
         return 1
     fi
 
-    track_created_file "${encrypted_id}" "encrypt demo encrypted file"
+    track_created_file "${encrypted_id}" "encrypted file"
     demo_pause
 
     demo_step "Inspect encrypted file type"
@@ -387,7 +387,7 @@ run_demo_encrypt() {
         return 1
     fi
 
-    track_created_file "${decrypted_id}" "encrypt demo decrypted file"
+    track_created_file "${decrypted_id}" "decrypted file"
     demo_pause
 
     demo_step "Preview first lines of decrypted file"
@@ -422,13 +422,18 @@ run_demo_encrypt() {
     printf '\nIntegrity:\n'
     printf '  %-27s %s\n' "Original == decrypted" "${sha_match}"
 
-    printf '\nDecrypted preview:\n'
-    print_stdout_excerpt "${decrypted_preview}" 8
+    # In recording mode: skip decrypted preview to shorten output
+    if [[ "${STAR_REC_MODE:-}" != "1" ]]; then
+        printf '\nDecrypted preview:\n'
+        print_stdout_excerpt "${decrypted_preview}" 8
+    fi
 
     if [[ "${sha_match}" != "yes" ]]; then
         error "Checksum verification failed for decrypted file."
         return 1
     fi
+
+    demo_pause
 }
 
 # Dispatch to one selected demo implementation.

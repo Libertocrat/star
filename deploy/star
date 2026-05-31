@@ -32,7 +32,11 @@ if [[ "${STAR_ROOT_COLOR_ENABLED}" == "true" ]]; then
     STAR_ROOT_COLOR_RESET='\033[0m'
     STAR_ROOT_COLOR_PRIMARY='\033[38;5;33m'
     STAR_ROOT_COLOR_SECONDARY='\033[38;5;37m'
+    # shellcheck disable=SC2034
+    # Reserved for future root-level recording/banner style variants.
     STAR_ROOT_COLOR_PRIMARY_DIM='\033[2;38;5;33m'
+    # shellcheck disable=SC2034
+    # Reserved for future root-level recording/banner style variants.
     STAR_ROOT_COLOR_SECONDARY_DIM='\033[2;38;5;37m'
     STAR_ROOT_COLOR_INFO='\033[36m'
     STAR_ROOT_COLOR_WARN='\033[33m'
@@ -41,7 +45,11 @@ else
     STAR_ROOT_COLOR_RESET=''
     STAR_ROOT_COLOR_PRIMARY=''
     STAR_ROOT_COLOR_SECONDARY=''
+    # shellcheck disable=SC2034
+    # Reserved for future root-level recording/banner style variants.
     STAR_ROOT_COLOR_PRIMARY_DIM=''
+    # shellcheck disable=SC2034
+    # Reserved for future root-level recording/banner style variants.
     STAR_ROOT_COLOR_SECONDARY_DIM=''
     STAR_ROOT_COLOR_INFO=''
     STAR_ROOT_COLOR_WARN=''
@@ -161,6 +169,7 @@ validate_deployment_package() {
         "star-runtime/scripts/star-down.sh"
         "star-runtime/scripts/star-demo.sh"
         "star-runtime/scripts/helpers/common.sh"
+        "star-runtime/scripts/helpers/recording.sh"
         "star-runtime/scripts/helpers/star-api.sh"
         "star-runtime/scripts/demos/demo-common.sh"
         "star-runtime/scripts/demos/demo-deps.sh"
@@ -682,8 +691,10 @@ run_global_auto_flow() {
 
     if ! has_env_file; then
         if [[ "${ROOT_SILENT_MODE}" == "true" ]]; then
+            run_recording_transition --pause-ms 1500
             run_runtime_script "${STAR_SCRIPTS_DIR}/star-configure.sh" "true" "${configure_args[@]}"
         else
+            run_recording_transition --pause-ms 1500
             run_runtime_script "${STAR_SCRIPTS_DIR}/star-configure.sh" "false" "${configure_args[@]}"
         fi
     else
@@ -692,12 +703,15 @@ run_global_auto_flow() {
 
     if [[ "${ROOT_SILENT_MODE}" == "true" ]]; then
         up_args+=("--silent")
+        run_recording_transition --clear-tty
         run_runtime_script "${STAR_SCRIPTS_DIR}/star-up.sh" "true" "${up_args[@]}"
     else
+        run_recording_transition --clear-tty
         run_runtime_script "${STAR_SCRIPTS_DIR}/star-up.sh" "false" "${up_args[@]}"
     fi
 
     if [[ "${ROOT_DEMO_MODE}" == "true" ]]; then
+        run_recording_transition --clear-tty
         run_runtime_script "${STAR_SCRIPTS_DIR}/star-demo.sh" "false" "--auto"
     fi
 }
@@ -721,6 +735,7 @@ run_global_interactive_flow() {
             return 0
         fi
 
+        run_recording_transition --clear-tty
         run_runtime_script "${STAR_SCRIPTS_DIR}/star-configure.sh" "false" "${configure_args[@]}"
         ran_configure=true
     fi
@@ -744,11 +759,13 @@ run_global_interactive_flow() {
     else
         if [[ "${ran_configure}" == "true" ]]; then
             if confirm "Start STAR now?" "Y"; then
+                run_recording_transition --clear-tty
                 run_runtime_script "${STAR_SCRIPTS_DIR}/star-up.sh" "false" "${up_args[@]}"
                 started_runtime=true
             fi
         else
             if confirm "Start STAR now?" "Y"; then
+                run_recording_transition --clear-tty
                 run_runtime_script "${STAR_SCRIPTS_DIR}/star-up.sh" "false" "${up_args[@]}"
                 started_runtime=true
             fi
@@ -762,6 +779,7 @@ run_global_interactive_flow() {
 
         if [[ "${demo_ready}" == "true" ]]; then
             if confirm "Run guided demo now?" "Y"; then
+                run_recording_transition --clear-tty
                 run_runtime_script "${STAR_SCRIPTS_DIR}/star-demo.sh" "false"
             fi
         fi

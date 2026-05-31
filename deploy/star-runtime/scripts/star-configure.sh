@@ -631,8 +631,10 @@ main() {
         validate_existing_env_host_port
     else
         if [[ "${AUTO_MODE}" == "true" ]]; then
+            run_recording_transition --clear-tty
             run_auto_flow
         else
+            run_recording_transition --clear-tty
             run_interactive_flow
         fi
     fi
