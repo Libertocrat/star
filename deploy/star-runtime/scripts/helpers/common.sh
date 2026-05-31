@@ -18,6 +18,7 @@ STAR_SECRET_FILE="${STAR_SECRET_DIR}/star_api_token.txt"
 STAR_USER_SPECS_DIR="${STAR_RUNTIME_DIR}/user-specs"
 STAR_USER_SPEC_EXAMPLES_DIR="${STAR_RUNTIME_DIR}/user-spec-examples"
 STAR_DEMO_ASSETS_DIR="${STAR_RUNTIME_DIR}/demo-assets"
+STAR_RECORDING_FILE="${STAR_SCRIPTS_DIR}/helpers/recording.sh"
 
 readonly STAR_COMMON_DIR
 readonly STAR_SCRIPTS_DIR
@@ -38,6 +39,7 @@ readonly STAR_USER_SPEC_EXAMPLES_DIR
 # shellcheck disable=SC2034
 # Read by scripts that source this library.
 readonly STAR_DEMO_ASSETS_DIR
+readonly STAR_RECORDING_FILE
 
 # -----------------------------------------------------------------------------
 # Colors and output
@@ -99,6 +101,7 @@ readonly STAR_COLOR_PROMPT
 readonly STAR_COLOR_SECTION
 
 STAR_STEP_COUNTER=0
+RECORDING_SOURCED=false
 
 # Print an informational message to stdout.
 info() {
@@ -188,6 +191,74 @@ say_step() {
 
     [[ "${silent_mode}" == "true" ]] && return 0
     step "$@"
+}
+
+# Source recording helpers when recording mode is explicitly enabled.
+source_recording() {
+    if [[ "${STAR_REC_MODE:-}" != "1" ]]; then
+        return 0
+    fi
+
+    if [[ "${RECORDING_SOURCED}" == "true" ]]; then
+        return 0
+    fi
+
+    if [[ ! -f "${STAR_RECORDING_FILE}" ]]; then
+        error "Missing required file: $(path_relative_to_pwd "${STAR_RECORDING_FILE}")"
+        return 1
+    fi
+
+    # shellcheck disable=SC1091
+    # shellcheck source=deploy/star-runtime/scripts/helpers/recording.sh
+    source "${STAR_RECORDING_FILE}"
+    RECORDING_SOURCED=true
+    return 0
+}
+
+# Run a recording transition only when recording mode is enabled.
+run_recording_transition() {
+    local pause_ms=""
+    local clear_tty="false"
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --pause-ms)
+                if [[ $# -lt 2 ]]; then
+                    error "run_recording_transition: --pause-ms requires a non-negative integer value."
+                    return 2
+                fi
+
+                if [[ ! "$2" =~ ^[0-9]+$ ]]; then
+                    error "run_recording_transition: --pause-ms value must be a non-negative integer."
+                    return 2
+                fi
+
+                pause_ms="$2"
+                shift 2
+                ;;
+            --clear-tty)
+                clear_tty="true"
+                shift
+                ;;
+            *)
+                error "run_recording_transition: unknown option '$1'."
+                return 2
+                ;;
+        esac
+    done
+
+    if [[ "${STAR_REC_MODE:-}" != "1" ]]; then
+        return 0
+    fi
+
+    source_recording || return 1
+
+    # Resolve pause from recording helper (STAR_REC_PAUSE_MS/default) when omitted.
+    if [[ -z "${pause_ms}" ]]; then
+        pause_ms="$(recording_pause_ms)"
+    fi
+
+    recording_transition "${pause_ms}" "${clear_tty}"
 }
 
 # Execute a command while rendering a single-line spinner in interactive terminals.

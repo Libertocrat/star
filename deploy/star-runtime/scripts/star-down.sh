@@ -339,6 +339,9 @@ main() {
     run_compose_down
     remove_network_if_requested
     restore_token_permissions
+
+    # If recording mode: Display final output on its own screen
+    run_recording_transition --clear-tty
     print_final_output
 }
 

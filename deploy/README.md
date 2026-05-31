@@ -43,7 +43,7 @@ Run configuration, startup, and a guided demo in one sequence:
 ```
 
 > [!NOTE]
-> `'./star --silent'` is also available for minimal-output automation, and `'./star --production'` applies production-oriented configure/start behavior.
+> `./star --silent` is also available for minimal-output automation, and `./star --production` applies production-oriented configure/start behavior.
 
 Built-in demos use `curl` and `jq`. If they are missing, the demo flow can prompt to install them automatically when possible.
 
@@ -71,13 +71,13 @@ Useful explicit subcommands:
 Swagger / OpenAPI docs are enabled by default in the standard local deploy flow so STAR is easier to explore and test.
 
 > [!WARNING]
-> For production-oriented deployments, prefer `'./star configure --force --production'` when you want to regenerate configuration with production-oriented defaults, or set `STAR_ENABLE_DOCS=false` manually in `.env`.
+> For production-oriented deployments, prefer `./star configure --force --production` when you want to regenerate configuration with production-oriented defaults, or set `STAR_ENABLE_DOCS=false` manually in `.env`.
 
 If you use `--production`, configure with production-oriented settings, or manually disable docs in `.env`, you can re-check STAR status as follows:
 
-1. Safely stop STAR with `'./star down'`
-2. Restart with `'./star up'`
-3. Run `'./star status'` to verify config and runtime
+1. Safely stop STAR with `./star down`
+2. Restart with `./star up`
+3. Run `./star status` to verify config and runtime
 
 ## Customize
 

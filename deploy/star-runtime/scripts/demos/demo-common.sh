@@ -63,7 +63,14 @@ demo_pause() {
     printf '\n' >&2
     printf '%b[NEXT]%b Press any key to continue...' \
         "${STAR_COLOR_PROMPT:-}" "${STAR_COLOR_RESET:-}" >&2
-    read -rsn1 || true
+
+    if [[ "${STAR_REC_MODE:-}" == "1" ]]; then
+        # In recording mode, emulate user pacing without waiting for a key press.
+        run_recording_transition --clear-tty
+    else
+        read -rsn1 || true
+    fi
+
     # Clear prompt line, then move up and clear the temporary separator line.
     printf '\r\033[2K\033[1A\r\033[2K' >&2
 }

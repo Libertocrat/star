@@ -223,7 +223,7 @@ ensure_demo_asset_present() {
 
 # Print the menu shown whenever --demo is not provided.
 print_demo_menu() {
-    section "STAR Runtime Demo"
+    section "STAR Demo Menu"
     cat <<'EOF'
 Available demos:
   [1] Files API walkthrough
@@ -260,6 +260,9 @@ select_demo_from_menu() {
     local selected_slug=""
 
     while true; do
+        # If recording mode: Display demo menu on its own screen
+        run_recording_transition --clear-tty
+
         print_demo_menu
         printf '\n' >&2
         selected_input="$(prompt_default "Select a demo" "6")"
@@ -284,6 +287,8 @@ run_one_demo_session() {
 
     reset_demo_state
 
+    # If recording mode: Clear before displaying demo steps
+    run_recording_transition --clear-tty
     if run_selected_demo; then
         demo_status=0
     else
@@ -334,6 +339,9 @@ print_goodbye_summary() {
 # Run all one-time checks and initialization before any demo session loop.
 run_initial_checks_once() {
     local startup_status=0
+
+    # If recording mode: Brief pause to show STAR banner
+    run_recording_transition --pause-ms 1500
 
     show_intro
     ensure_demo_dependencies "${AUTO_MODE}" || return 1

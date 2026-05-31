@@ -473,6 +473,8 @@ main() {
         fi
     fi
 
+    # If recording mode: Display final output on its own screen
+    run_recording_transition --clear-tty
     if [[ "${DRY_RUN:-false}" == "true" ]]; then
         print_dry_run_output
     else
