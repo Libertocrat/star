@@ -314,7 +314,7 @@ The release job performs these stages:
 10. Push the generated tags to GHCR
 11. Install release tooling required for archive packaging (`zip`)
 12. Install Python dependencies for OpenAPI export
-13. Export the OpenAPI schema by running `scripts/export_openapi.py`
+13. Export the OpenAPI schema by running `scripts/export_openapi.py` with `STAR_DOCS_ROOT_DIR` set to a writable runner temporary path
 14. Prepare OpenAPI release files in `dist/` (`openapi.json` and `openapi-vX.Y.Z.json`)
 15. Build deploy bundle archives from `deploy/` with `star-deploy/` as archive root
 16. Generate `SHA256SUMS` for OpenAPI and deploy bundle artifacts
@@ -376,7 +376,7 @@ The workflow performs these stages:
 2. Validate strict semantic version format `vX.Y.Z`
 3. Set up Python 3.12 and cache pip downloads
 4. Install runtime and testing dependencies and the editable project
-5. Export the OpenAPI schema with `scripts/export_openapi.py`
+5. Export the OpenAPI schema with `scripts/export_openapi.py` while setting `STAR_DOCS_ROOT_DIR` to a writable runner temporary path
 6. Validate the exported schema with `openapi_spec_validator`
 7. Set up Node.js 20
 8. Install `swagger-ui-dist@5.17.14`
