@@ -5,69 +5,75 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.0] - 2026-03-17
-
-☘️ First release shipped on St. Patrick's Day: may it keep mischievous commands away.
+## [0.1.0] - 2026-06-01
 
 ### Project
 
-- Initial public release of the Secure Templated Actions Runtime (STAR)
-- Hardened FastAPI microservice for controlled execution of allowlisted filesystem actions
+- First official public STAR release (`v0.1.0`) as the canonical project baseline.
+- Completed repository-wide migration and rebranding from SEG to STAR across code, container, documentation, and release surfaces.
+- Established STAR as a hardened FastAPI runtime for deterministic execution of predefined, allowlisted actions.
 
 ### Added
 
-- FastAPI application factory with runtime-configurable documentation endpoints and custom OpenAPI generation
-- Unified action execution API exposed at `/v1/execute` for typed action execution with a standardized response envelope
-- Dynamic action discovery and explicit in-memory registry for allowlisted operations
-- Stable machine-readable error taxonomy for dispatcher, middleware, and route failures
-- Runtime-generated OpenAPI contract that projects registered actions, examples, response headers, and auth exposure rules
-- Sandboxed file actions for checksum calculation, MIME detection, deletion, move, and composite file verification
-- Extension-to-MIME policy mapping for content validation workflows in `file_verify`
-- Prometheus metrics endpoint and request correlation support through `X-Request-Id`
-- Health endpoint for readiness checks in containerized deployments
+- Unified actions API under `/v1/actions` with authenticated discovery, action contract retrieval, and typed execution.
+- Managed files API under `/v1/files` for upload, metadata retrieval, listing, content streaming, and deletion.
+- Typed request and response model with standardized envelopes and stable error taxonomy.
+- YAML DSL build engine (loader, validator, builder) with immutable runtime action registry.
+- Runtime OpenAPI generation aligned with registered actions and route contracts.
+- Built-in safe file and utility actions, including hashing, MIME detection, verification, move, delete, encryption, and analysis flows.
+- User-spec extensibility for custom action modules with validated startup loading.
+- Observability primitives including `/health`, `/metrics`, request IDs, structured middleware signals, and Prometheus metrics.
+- Deploy runtime bundle with `deploy/star` lifecycle orchestration for configure, up, demo, status, logs, and down flows.
 
 ### Security
 
-- Bearer token authentication with Docker secret loading and API token strength validation
-- ASGI request integrity enforcement for malformed paths and headers, conflicting transport headers, unsupported content types, and oversized bodies
-- Process-local rate limiting and per-request timeout enforcement for protected execution traffic
-- Filesystem sandbox enforcement with allowed subdirectory controls, traversal rejection, absolute path blocking, and backslash rejection
-- Symlink-safe file access with `O_NOFOLLOW`, regular-file validation, and reduced TOCTOU exposure in file operations
-- Extension-preserving move policy and conflict-aware destination validation for sandboxed file lifecycle operations
-- Composite file verification with MIME checks, extension allowlists, optional MIME allowlists, and optional checksum validation
-- Optional baseline response security headers with fingerprinting header removal
-- Rootless container runtime with a non-root user and minimal production dependency set
+- Bearer token authentication with Docker secret loading and API token strength validation.
+- Request-integrity middleware enforcing malformed path/header rejection, duplicate `Authorization` rejection, content-type policy, body-size controls, and transport-header consistency checks.
+- Rate limiting and request timeout middleware for bounded execution under abuse conditions.
+- DSL security controls that reject unsafe YAML patterns, invalid identifiers, malformed declarations, and blocked binaries.
+- Runtime execution hardening with deterministic argv rendering, no shell execution path, binary path rejection, blocked-binary policy, and action-level allowlists.
+- Managed file security model using UUID references instead of raw user-provided file paths.
+- Path traversal and unsafe path primitive protections, including absolute path, backslash, control-char, and symlink protections, plus safe file-open checks (`O_NOFOLLOW` where available).
+- Output sanitization with control-sequence stripping, sensitive path redaction, and bounded stdout/stderr handling.
+- Optional security headers and fingerprinting header removal controls.
+- Security applicability guidance mapped to OWASP GenAI/LLM and MITRE ATLAS in project security documentation.
 
 ### DevSecOps
 
-- GitHub Actions quality pipeline for formatting, linting, type checking, tests, Bandit, pip-audit, and Docker build validation
-- Dedicated security workflow for Semgrep analysis and Trivy filesystem and image scanning
-- Release workflow for strict semantic version tags, GHCR image publishing, pre-publish container scanning, and GitHub release assets
-- Documentation publishing workflow for OpenAPI export, schema validation, Swagger UI site generation, and `gh-pages` publication
-- Makefile-driven local workflow for dependency setup, CI execution, container builds, and deep security checks
-- Pre-commit hooks for whitespace hygiene, YAML validation, formatting, linting, typing, security scanning, Dockerfile linting, and test execution
-- Deterministic pytest suite with smoke, unit, integration, and security-focused coverage for middleware, routes, OpenAPI, settings, and file actions
+- GitHub Actions workflow suite for quality, security analysis, release automation, and documentation publication.
+- Quality gate automation with formatting, linting, typing, tests, and Docker build validation.
+- Security automation with Semgrep, Bandit, pip-audit, Trivy, Hadolint, ShellCheck, shfmt, and actionlint across local and CI paths.
+- Release workflow with strict semver tag validation, GHCR publishing, pre-publish image scanning, OpenAPI export, deploy bundle packaging, and checksum generation.
+- Release assets automation for OpenAPI artifacts, deploy bundle archives (`star-deploy` tar/zip), and `SHA256SUMS`.
+- Makefile-first local DevSecOps workflow aligned with CI jobs and pre-commit hooks.
+- Expanded shell and workflow quality gates through shell formatting validation, shell linting, and GitHub Actions linting.
 
 ### Documentation
 
-- Comprehensive README covering architecture, security model, configuration, API usage, observability, and deployment
-- Architecture reference describing application layers, middleware order, action dispatch, filesystem controls, and OpenAPI design
-- Threat model documenting trust boundaries, attack surfaces, mitigations, and residual risks
-- Testing guide covering unit, integration, smoke, and security-focused validation strategy
-- CI and release guide describing workflows, Makefile targets, dependency sets, and release automation
-- Development and contributing guides for local setup, tooling, workflow conventions, and project participation
-- Security policy with private disclosure guidance and PGP key reference
-- Scripts reference for shared-volume initialization, local port forwarding, OpenAPI export, and static docs publication
+- README refocused for deploy-first onboarding and practical usage with the STAR runtime package.
+- Dedicated architecture, threat model, AI security, testing, CI/release, development, and contributing guides.
+- Security policy and disclosure process with PGP support for sensitive reports.
+- Scripts reference covering OpenAPI export, docs-site generation, local forwarding, and helper tooling.
+- Versioned OpenAPI documentation publishing pipeline and hosted docs integration.
+- Demo-oriented deploy documentation and assets for faster local adoption and verification.
 
 ### Infrastructure
 
-- Hardened Python 3.12 slim container image with OS package updates and runtime-only dependency installation
-- Deterministic non-root UID and GID configuration for shared-volume compatibility
-- Docker Compose deployment model with external network attachment, Docker secret mounting, and shared volume integration
-- Container healthcheck using the internal `/health` endpoint for runtime readiness
-- Environment-driven runtime configuration for sandbox boundaries, request limits, logging, docs exposure, and version metadata
-- Separated runtime, testing, linting, security, and development dependency sets
-- Helper scripts for OpenAPI export, versioned documentation site generation, shared-volume initialization, and localhost-only service forwarding
+- Hardened Python 3.12-slim container baseline with rootless runtime execution.
+- Deterministic UID and GID handling and shared-volume ownership initialization.
+- Docker Compose runtime model with external network attachment, secret injection, and healthcheck integration.
+- Environment-driven configuration for storage boundaries, auth, limits, observability, docs exposure, and app versioning.
+- Dependency set separation across runtime, testing, linting, security, and development requirements.
+- GHCR image naming and release metadata aligned with STAR identity.
+- GitHub Pages OpenAPI site publishing under the STAR docs path.
+
+### Release
+
+- Published the first official STAR release as `v0.1.0`.
+- Established a clean STAR release baseline and changelog history for public versioning.
+- Automated release publication for GHCR images plus GitHub release artifacts.
+- Published OpenAPI assets and deploy bundle assets (`star-deploy-vX.Y.Z.tar.gz`, `star-deploy-vX.Y.Z.zip`, `star-deploy.tar.gz`, `star-deploy.zip`) with `SHA256SUMS`.
+- Finalized STAR release references, docs links, and workflows for ongoing semantic version releases.
 
 ---
 

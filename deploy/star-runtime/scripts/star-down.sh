@@ -18,7 +18,7 @@ TOKEN_RESTORE_STATUS="not checked"
 
 # Print CLI usage and examples for shutdown behavior.
 usage() {
-    cat <<'EOF'
+    cat << 'EOF'
 Usage:
   ./star down [options]
 
@@ -82,7 +82,7 @@ parse_args() {
                 SILENT_MODE=true
                 shift
                 ;;
-            -h|--help)
+            -h | --help)
                 usage
                 exit 0
                 ;;
@@ -201,7 +201,7 @@ remove_network_if_requested() {
         return 0
     fi
 
-    if ! docker network inspect "${STAR_SHARED_NETWORK}" >/dev/null 2>&1; then
+    if ! docker network inspect "${STAR_SHARED_NETWORK}" > /dev/null 2>&1; then
         NETWORK_STATUS="already absent"
         say_info "${SILENT_MODE}" "Docker network already absent: ${STAR_SHARED_NETWORK}"
         return 0
@@ -217,7 +217,7 @@ remove_network_if_requested() {
     NETWORK_STATUS="removal attempted"
     say_info "${SILENT_MODE}" "Removing Docker network if unused: ${STAR_SHARED_NETWORK}"
 
-    if docker network rm "${STAR_SHARED_NETWORK}" >/dev/null 2>&1; then
+    if docker network rm "${STAR_SHARED_NETWORK}" > /dev/null 2>&1; then
         NETWORK_STATUS="removed"
         say_success "${SILENT_MODE}" "Docker network removed: ${STAR_SHARED_NETWORK}"
     else
@@ -247,7 +247,7 @@ restore_token_permissions() {
         return 0
     fi
 
-    if chmod 600 "${STAR_SECRET_FILE}" 2>/dev/null; then
+    if chmod 600 "${STAR_SECRET_FILE}" 2> /dev/null; then
         TOKEN_RESTORE_STATUS="restored to 600"
         say_success "${SILENT_MODE}" "STAR API token permissions restored to 600."
     else

@@ -20,6 +20,7 @@ docker-compose.*.dev.yml
 # openapi generation output
 docs/api-docs/output/
 site/
+.star-docs/
 
 # Audio/Media
 *.wav

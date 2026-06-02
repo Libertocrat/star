@@ -14,7 +14,7 @@ if [[ -z "${STAR_COMMON_DIR:-}" ]]; then
 fi
 
 # Source demo-common helpers only once.
-if ! command -v reset_demo_state >/dev/null 2>&1; then
+if ! command -v reset_demo_state > /dev/null 2>&1; then
     # shellcheck source=deploy/star-runtime/scripts/demos/demo-common.sh
     source "${STAR_SCRIPTS_DIR}/demos/demo-common.sh"
 fi
@@ -60,7 +60,7 @@ run_demo_files() {
 
     printf '\nResult:\n'
     printf '  %-27s %s\n' "returned_count" "${listed_count}"
-    if (( ${#listed_items[@]} == 0 )); then
+    if ((${#listed_items[@]} == 0)); then
         printf '  %-27s %s\n' "items" "(none)"
     else
         printf '  %-27s\n' "items"
@@ -103,7 +103,7 @@ run_demo_actions() {
     printf '\nResult:\n'
     printf '  %-27s %s\n' "module_count" "${module_count}"
     printf '  %-27s %s\n' "action_count" "${action_count}"
-    if (( ${#selected_modules[@]} > 0 )); then
+    if ((${#selected_modules[@]} > 0)); then
         printf '  %-27s\n' "registered_modules"
         for row in "${selected_modules[@]}"; do
             printf '    %s\n' "${row}"
@@ -120,7 +120,7 @@ run_demo_actions() {
     mapfile -t crypto_actions < <(jq -r '[.data.modules[]?.actions[]? | {id:.action_id,summary:(.summary // ""),tags:(.tags // [])}] | unique_by(.id) | .[]? | @base64' <<< "${STAR_API_LAST_BODY}")
 
     printf '\nActions found:\n'
-    if (( ${#crypto_actions[@]} == 0 )); then
+    if ((${#crypto_actions[@]} == 0)); then
         printf '  None\n'
     else
         #printf '  %-27s\n' "crypto_actions"
@@ -133,7 +133,7 @@ run_demo_actions() {
                 printf '    %-12s %s\n' "summary" "${action_summary}"
             fi
             #if is_non_empty "${action_tags}"; then
-                #printf '      %-12s %s\n' "tags" "${action_tags}"
+            #printf '      %-12s %s\n' "tags" "${action_tags}"
             #fi
         done
     fi
@@ -162,7 +162,7 @@ run_demo_actions() {
     printf '  %-27s %s\n' "summary" "$(jq -r '.data.summary // ""' <<< "${STAR_API_LAST_BODY}")"
     printf '  %-27s %s\n' "tags" "${tags_joined}"
 
-    if (( ${#arg_rows[@]} == 0 )); then
+    if ((${#arg_rows[@]} == 0)); then
         printf '  %-27s %s\n' "args" "(none)"
     else
         printf '  %-27s\n' "args"
@@ -171,7 +171,7 @@ run_demo_actions() {
         done
     fi
 
-    if (( ${#output_rows[@]} == 0 )); then
+    if ((${#output_rows[@]} == 0)); then
         printf '  %-27s %s\n' "outputs" "(none)"
     else
         printf '  %-27s\n' "outputs"

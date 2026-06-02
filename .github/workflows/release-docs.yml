@@ -54,6 +54,8 @@ jobs:
       # Export & validate OpenAPI
       # -------------------------
       - name: Export OpenAPI schema
+        env:
+          STAR_DOCS_ROOT_DIR: ${{ runner.temp }}/star-docs
         run: |
           export RELEASE_VERSION=${GITHUB_REF_NAME}
           python scripts/export_openapi.py

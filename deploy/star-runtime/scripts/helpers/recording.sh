@@ -12,13 +12,13 @@ recording_value_is_truthy() {
     local raw_value="${1-}"
     local normalized="${raw_value}"
 
-    if declare -F trim >/dev/null 2>&1; then
+    if declare -F trim > /dev/null 2>&1; then
         normalized="$(trim "${normalized}")"
     fi
     normalized="${normalized,,}"
 
     case "${normalized}" in
-        1|true|yes|y|on)
+        1 | true | yes | y | on)
             return 0
             ;;
         *)
@@ -37,7 +37,7 @@ recording_pause_ms() {
     local raw_pause="${STAR_REC_PAUSE_MS:-}"
     local normalized="${raw_pause}"
 
-    if declare -F trim >/dev/null 2>&1; then
+    if declare -F trim > /dev/null 2>&1; then
         normalized="$(trim "${normalized}")"
     fi
 
@@ -55,7 +55,7 @@ recording_sleep_ms() {
     local pause_ms="${raw_pause}"
     local seconds
 
-    if declare -F trim >/dev/null 2>&1; then
+    if declare -F trim > /dev/null 2>&1; then
         pause_ms="$(trim "${pause_ms}")"
     fi
 
@@ -63,7 +63,7 @@ recording_sleep_ms() {
         pause_ms="$(recording_pause_ms)"
     fi
 
-    if (( pause_ms == 0 )); then
+    if ((pause_ms == 0)); then
         return 0
     fi
 

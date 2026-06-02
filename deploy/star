@@ -75,11 +75,11 @@ die() {
 
 command_exists() {
     local cmd="${1:?command is required}"
-    command -v "${cmd}" >/dev/null 2>&1
+    command -v "${cmd}" > /dev/null 2>&1
 }
 
 usage() {
-    cat <<'EOF'
+    cat << 'EOF'
 Usage:
   ./star [options]
   ./star <command> [command options]
@@ -127,7 +127,7 @@ EOF
 }
 
 status_usage() {
-    cat <<'EOF'
+    cat << 'EOF'
 Usage:
   ./star status
 
@@ -137,7 +137,7 @@ EOF
 }
 
 logs_usage() {
-    cat <<'EOF'
+    cat << 'EOF'
 Usage:
   ./star logs [options]
 
@@ -188,7 +188,7 @@ validate_deployment_package() {
         fi
     done
 
-    if (( ${#missing[@]} == 0 )); then
+    if ((${#missing[@]} == 0)); then
         return 0
     fi
 
@@ -241,7 +241,7 @@ print_banner() {
     fi
 
     printf '%b' "${STAR_ROOT_COLOR_PRIMARY}"
-    cat <<'EOF'
+    cat << 'EOF'
   ____   ______   ___    ____
  / ___| |_   _|  / _ \  |  _ \
  \___ \   | |   / /_\ \ | |_) |
@@ -253,7 +253,7 @@ EOF
     printf '%b' "${STAR_ROOT_COLOR_RESET}"
 
     printf '%b' "${STAR_ROOT_COLOR_SECONDARY}"
-    cat <<'EOF'
+    cat << 'EOF'
  Safe actions. No raw shell.
  --------------------------------
  github.com/libertocrat/star
@@ -319,7 +319,7 @@ has_token_file() {
 token_is_valid() {
     local token=''
 
-    if ! token="$(read_token 2>/dev/null)"; then
+    if ! token="$(read_token 2> /dev/null)"; then
         return 1
     fi
 
@@ -337,19 +337,19 @@ runtime_appears_running() {
         return 1
     fi
 
-    if ! docker info >/dev/null 2>&1; then
+    if ! docker info > /dev/null 2>&1; then
         return 1
     fi
 
-    if ! docker compose version >/dev/null 2>&1; then
+    if ! docker compose version > /dev/null 2>&1; then
         return 1
     fi
 
-    if ! running_services="$(docker compose --env-file "${STAR_RUNTIME_DIR}/.env" -f "${STAR_RUNTIME_DIR}/docker-compose.yml" ps --status running --services 2>/dev/null)"; then
+    if ! running_services="$(docker compose --env-file "${STAR_RUNTIME_DIR}/.env" -f "${STAR_RUNTIME_DIR}/docker-compose.yml" ps --status running --services 2> /dev/null)"; then
         return 1
     fi
 
-    grep -qx 'star-core' <<<"${running_services}"
+    grep -qx 'star-core' <<< "${running_services}"
 }
 
 health_is_reachable() {
@@ -357,7 +357,7 @@ health_is_reachable() {
         return 1
     fi
 
-    curl -fsS "$(health_url)" >/dev/null 2>&1
+    curl -fsS "$(health_url)" > /dev/null 2>&1
 }
 
 docs_are_enabled() {
@@ -365,7 +365,7 @@ docs_are_enabled() {
     docs_flag="${docs_flag,,}"
 
     case "${docs_flag}" in
-        true|1|yes|y)
+        true | 1 | yes | y)
             return 0
             ;;
         *)
@@ -379,7 +379,7 @@ docs_are_reachable() {
         return 1
     fi
 
-    curl -fsS "$(docs_url)" >/dev/null 2>&1
+    curl -fsS "$(docs_url)" > /dev/null 2>&1
 }
 
 ensure_existing_auto_configuration_is_valid() {
@@ -468,7 +468,7 @@ run_status_command() {
 
     if [[ $# -gt 0 ]]; then
         case "${1}" in
-            -h|--help)
+            -h | --help)
                 status_usage
                 return 0
                 ;;
@@ -520,7 +520,7 @@ run_status_command() {
     if ! command_exists docker; then
         status_error "Docker" "CLI not found"
         inspect_failed=true
-    elif ! docker info >/dev/null 2>&1; then
+    elif ! docker info > /dev/null 2>&1; then
         status_error "Docker" "daemon unreachable"
         inspect_failed=true
     else
@@ -529,7 +529,7 @@ run_status_command() {
     fi
 
     if [[ "${docker_ready}" == "true" ]]; then
-        if docker compose version >/dev/null 2>&1; then
+        if docker compose version > /dev/null 2>&1; then
             compose_ready=true
             status_ok "Docker Compose" "available"
         else
@@ -541,10 +541,10 @@ run_status_command() {
     fi
 
     if [[ "${env_loaded}" == "true" && "${docker_ready}" == "true" && "${compose_ready}" == "true" ]]; then
-        if ! running_services="$(compose_runtime ps --status running --services 2>/dev/null)"; then
+        if ! running_services="$(compose_runtime ps --status running --services 2> /dev/null)"; then
             status_error "Service" "failed to inspect"
             inspect_failed=true
-        elif grep -qx 'star-core' <<<"${running_services}"; then
+        elif grep -qx 'star-core' <<< "${running_services}"; then
             service_running=true
             status_ok "Service" "running"
         else
@@ -604,7 +604,7 @@ run_logs_command() {
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            -f|--follow)
+            -f | --follow)
                 follow_mode=true
                 shift
                 ;;
@@ -621,7 +621,7 @@ run_logs_command() {
                 tail_lines="${1#*=}"
                 shift
                 ;;
-            -h|--help)
+            -h | --help)
                 logs_usage
                 return 0
                 ;;
@@ -652,11 +652,11 @@ run_logs_command() {
         die "Docker CLI is required but was not found in PATH."
     fi
 
-    if ! docker info >/dev/null 2>&1; then
+    if ! docker info > /dev/null 2>&1; then
         die "Docker daemon is not reachable. Start Docker and try again."
     fi
 
-    if ! docker compose version >/dev/null 2>&1; then
+    if ! docker compose version > /dev/null 2>&1; then
         die "Docker Compose v2 is required. Ensure 'docker compose' is available."
     fi
 
@@ -831,7 +831,7 @@ parse_global_flags() {
                 ROOT_PRODUCTION_MODE=true
                 shift
                 ;;
-            -h|--help)
+            -h | --help)
                 print_banner
                 usage
                 exit 0
@@ -900,10 +900,10 @@ main() {
     fi
 
     case "$1" in
-        configure|up|down|demo|status|logs|help)
+        configure | up | down | demo | status | logs | help)
             dispatch_subcommand "$@"
             ;;
-        -h|--help)
+        -h | --help)
             print_banner
             usage
             ;;

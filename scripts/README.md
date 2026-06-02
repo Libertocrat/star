@@ -94,11 +94,15 @@ Builds the STAR application and writes the generated OpenAPI schema to `docs/api
 - `RELEASE_VERSION`: optional environment variable
   - Accepted formats: `vX.Y.Z` or `X.Y.Z`
   - Default: `0.1.0`
+- `STAR_DOCS_ROOT_DIR`: optional environment variable for STAR storage initialization during export
+  - Must be an absolute path
+  - Default: `<repo>/.star-docs` (resolved from current working directory)
 
 ### Behavior
 
 - The script strips a leading `v` before storing the version in settings
 - The generated settings set `star_enable_docs=True` explicitly so export behavior stays stable regardless of runtime defaults
+- The script initializes STAR storage directories under `STAR_DOCS_ROOT_DIR` to satisfy app startup requirements during schema export
 - The output directory is created automatically if needed
 - The JSON file is written with indentation and a trailing newline
 
@@ -111,6 +115,8 @@ Builds the STAR application and writes the generated OpenAPI schema to `docs/api
 
 ```bash
 export RELEASE_VERSION=v0.1.0
+# Optional for CI or restricted environments
+# export STAR_DOCS_ROOT_DIR=/tmp/star-docs
 python scripts/export_openapi.py
 ```
 

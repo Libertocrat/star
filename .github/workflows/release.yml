@@ -43,6 +43,7 @@ jobs:
         run: |
           if [[ ! "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "Invalid tag format. Expected vX.Y.Z"
+            echo "Received: ${GITHUB_REF_NAME}"
             exit 1
           fi
 
@@ -140,8 +141,13 @@ jobs:
           done
 
       # -------------------------
-      # Release Assets (OpenAPI)
+      # Release Assets (Deploy Bundle + OpenAPI)
       # -------------------------
+      - name: Install release asset tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zip
+
       - name: Setup Python for OpenAPI export
         uses: actions/setup-python@v5
         with:
@@ -163,15 +169,104 @@ jobs:
           python -m pip install -e .
 
       - name: Export OpenAPI schema
+        env:
+          STAR_DOCS_ROOT_DIR: ${{ runner.temp }}/star-docs
         run: |
           export RELEASE_VERSION=${GITHUB_REF_NAME}
           python scripts/export_openapi.py
 
-      - name: Create versioned OpenAPI copy
-        env:
-          RELEASE_TAG: ${{ github.ref_name }}
+      - name: Prepare OpenAPI release assets
+        shell: bash
         run: |
-          cp docs/api-docs/output/openapi.json "openapi-${RELEASE_TAG}.json"
+          set -Eeuo pipefail
+
+          rm -rf dist
+          mkdir -p dist
+
+          cp "docs/api-docs/output/openapi.json" "dist/openapi.json"
+          cp "dist/openapi.json" "dist/openapi-${GITHUB_REF_NAME}.json"
+
+      - name: Build deploy bundle assets
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          bundle_name="star-deploy"
+          versioned_bundle_name="${bundle_name}-${GITHUB_REF_NAME}"
+
+          mkdir -p "dist/${bundle_name}"
+          cp -a deploy/. "dist/${bundle_name}/"
+
+          # Verify no sensitive .env files are accidentally included in the bundle
+          if [[ -f "dist/${bundle_name}/star-runtime/.env" ]]; then
+            echo "Refusing to package star-runtime/.env"
+            exit 1
+          fi
+
+          # Verify no sensitive API token files are accidentally included in the bundle
+          if [[ -f "dist/${bundle_name}/star-runtime/secrets/star_api_token.txt" ]]; then
+            echo "Refusing to package star-runtime/secrets/star_api_token.txt"
+            exit 1
+          fi
+
+          # Ensure scripts have executable permissions in the bundle
+          chmod +x "dist/${bundle_name}/star"
+
+          if [[ -d "dist/${bundle_name}/star-runtime/scripts" ]]; then
+            find "dist/${bundle_name}/star-runtime/scripts" \
+              -type f \
+              -name "*.sh" \
+              -exec chmod +x {} \;
+          fi
+
+          tar -C dist -czf "dist/${versioned_bundle_name}.tar.gz" "${bundle_name}"
+          cp "dist/${versioned_bundle_name}.tar.gz" "dist/${bundle_name}.tar.gz"
+
+          (
+            cd dist
+            zip -qr "${versioned_bundle_name}.zip" "${bundle_name}"
+            cp "${versioned_bundle_name}.zip" "${bundle_name}.zip"
+          )
+
+      - name: Generate release checksums
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          (
+            cd dist
+            sha256sum \
+              openapi.json \
+              "openapi-${GITHUB_REF_NAME}.json" \
+              "star-deploy-${GITHUB_REF_NAME}.tar.gz" \
+              "star-deploy-${GITHUB_REF_NAME}.zip" \
+              star-deploy.tar.gz \
+              star-deploy.zip \
+              > SHA256SUMS
+          )
+
+      - name: Validate release assets
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          test -f "dist/star-deploy-${GITHUB_REF_NAME}.tar.gz"
+          test -f "dist/star-deploy-${GITHUB_REF_NAME}.zip"
+          test -f "dist/star-deploy.tar.gz"
+          test -f "dist/star-deploy.zip"
+          test -f "dist/SHA256SUMS"
+
+          tar_listing="$(mktemp)"
+          tar -tzf "dist/star-deploy-${GITHUB_REF_NAME}.tar.gz" > "${tar_listing}"
+
+          grep -qx 'star-deploy/star' "${tar_listing}"
+          grep -qx 'star-deploy/README.md' "${tar_listing}"
+          grep -q '^star-deploy/star-runtime/' "${tar_listing}"
+
+          (
+            cd dist
+            sha256sum -c SHA256SUMS
+          )
 
       # -------------------------
       # GitHub Release
@@ -182,8 +277,14 @@ jobs:
           tag_name: ${{ github.ref_name }}
           name: Release ${{ github.ref_name }}
           generate_release_notes: true
+          fail_on_unmatched_files: true
           files: |
-            docs/api-docs/output/openapi.json
-            openapi-${{ github.ref_name }}.json
+            dist/openapi.json
+            dist/openapi-${{ github.ref_name }}.json
+            dist/star-deploy-${{ github.ref_name }}.tar.gz
+            dist/star-deploy-${{ github.ref_name }}.zip
+            dist/star-deploy.tar.gz
+            dist/star-deploy.zip
+            dist/SHA256SUMS
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

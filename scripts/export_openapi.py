@@ -19,6 +19,28 @@ from star.core.config import Settings
 OPENAPI_OUTPUT_PATH = Path("docs/api-docs/output/openapi.json")
 
 
+def get_docs_root_dir() -> str:
+    """Return a writable STAR root directory for docs/schema generation.
+
+    The application factory creates storage directories during startup.
+    For CI/documentation export we must avoid privileged paths like
+    `/var/lib/star` and use a writable temporary location instead.
+
+    Returns:
+        Absolute path to a writable docs root directory.
+
+    Raises:
+        ValueError: If `STAR_DOCS_ROOT_DIR` is not an absolute path.
+    """
+
+    default_root = str((Path.cwd() / ".star-docs").resolve())
+    raw = os.getenv("STAR_DOCS_ROOT_DIR", default_root).strip()
+    path = Path(raw)
+    if not path.is_absolute():
+        raise ValueError("STAR_DOCS_ROOT_DIR must be an absolute path")
+    return str(path.resolve(strict=False))
+
+
 def get_release_version() -> str:
     """Return the normalized release version for documentation assets.
 
@@ -52,7 +74,7 @@ def build_docs_settings() -> Settings:
     return Settings(
         star_app_version=get_release_version(),
         star_api_token="docs-token",  # noqa: S106 -- fixed token for documentation purposes only
-        star_root_dir="/var/lib/star",
+        star_root_dir=get_docs_root_dir(),
         star_enable_docs=True,
         star_max_file_bytes=1048576,
         star_max_yml_bytes=100 * 1024,
