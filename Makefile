@@ -1,4 +1,4 @@
-.PHONY: help deps deps-local fmt lint lint-shell lint-actions typecheck test \
+.PHONY: help deps deps-local fmt fmt-shell lint lint-shell lint-shell-format lint-actions typecheck test \
 	bandit pip-audit hadolint semgrep trivy \
 	quality ci-security deep-security ci full \
 	build
@@ -9,7 +9,7 @@ PIP ?= pip
 SRC_DIRS = src tests scripts
 SHELL_FILES := $(shell find . \
 	-type f \
-	-name '*.sh' \
+	\( -name '*.sh' -o -name 'star' \) \
 	-not -path './.git/*' \
 	-not -path './.venv/*' \
 	-not -path './venv/*' \
@@ -54,9 +54,11 @@ help:
 	@echo "make deps-local     - Install local CLI tools (pipx + semgrep)"
 	@echo ""
 	@echo "== DX =="
-	@echo "make fmt            - Fix formatting and lint issues (black + ruff + EOF/Whitespaces)"
+	@echo "make fmt            - Fix formatting and lint issues (shfmt + black + ruff + EOF/Whitespaces)"
+	@echo "make fmt-shell      - Format shell scripts with shfmt"
 	@echo ""
 	@echo "== Quality =="
+	@echo "make lint-shell     - Validate shell formatting and run ShellCheck"
 	@echo "make quality        - Lint + typecheck + tests"
 	@echo ""
 	@echo "== Build =="
@@ -88,7 +90,7 @@ deps-local:
 # Quality
 # -----------------------------
 
-fmt:
+fmt: fmt-shell
 	@echo "Running formatting fixes..."
 	black $(SRC_DIRS)
 	ruff check --fix $(SRC_DIRS)
@@ -96,16 +98,32 @@ fmt:
 	pre-commit run end-of-file-fixer --all-files || true
 	@echo "Formatting complete."
 
+fmt-shell:
+	@echo "Formatting shell scripts with shfmt..."
+	@if [ -z "$(SHELL_FILES)" ]; then \
+		echo "No shell scripts found."; \
+	else \
+		shfmt -w -i 4 -ci -sr $(SHELL_FILES); \
+	fi
+
 lint: lint-shell lint-actions
 	black --check $(SRC_DIRS)
 	ruff check $(SRC_DIRS)
 
-lint-shell:
+lint-shell: lint-shell-format
 	@echo "Running ShellCheck..."
 	@if [ -z "$(SHELL_FILES)" ]; then \
 		echo "No shell scripts found."; \
 	else \
 		shellcheck -x $(SHELL_FILES); \
+	fi
+
+lint-shell-format:
+	@echo "Validating shell formatting with shfmt..."
+	@if [ -z "$(SHELL_FILES)" ]; then \
+		echo "No shell scripts found."; \
+	else \
+		shfmt -d -i 4 -ci -sr $(SHELL_FILES); \
 	fi
 
 lint-actions:

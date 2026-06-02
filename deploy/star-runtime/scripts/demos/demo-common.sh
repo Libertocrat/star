@@ -14,16 +14,16 @@ if [[ -z "${STAR_COMMON_DIR:-}" ]]; then
 fi
 
 # Source API helpers only once.
-if ! command -v star_api_init >/dev/null 2>&1; then
+if ! command -v star_api_init > /dev/null 2>&1; then
     # shellcheck source=deploy/star-runtime/scripts/helpers/star-api.sh
     source "${STAR_SCRIPTS_DIR}/helpers/star-api.sh"
 fi
 
 # Demo-local state reused across all flow scripts.
-if ! declare -p CREATED_FILE_IDS >/dev/null 2>&1; then
+if ! declare -p CREATED_FILE_IDS > /dev/null 2>&1; then
     declare -ga CREATED_FILE_IDS=()
 fi
-if ! declare -p CREATED_FILE_ROLES >/dev/null 2>&1; then
+if ! declare -p CREATED_FILE_ROLES > /dev/null 2>&1; then
     declare -gA CREATED_FILE_ROLES=()
 fi
 LAST_UPLOADED_FILE_ID="${LAST_UPLOADED_FILE_ID:-}"
@@ -49,7 +49,7 @@ reset_demo_state() {
 
 # Print one blank line before each step except the first one in a demo run.
 demo_step() {
-    if (( STAR_STEP_COUNTER > 0 )); then
+    if ((STAR_STEP_COUNTER > 0)); then
         printf '\n'
     fi
     step "$@"
@@ -85,7 +85,7 @@ track_created_file() {
         return 1
     fi
 
-    if (( ${#CREATED_FILE_IDS[@]} > 0 )); then
+    if ((${#CREATED_FILE_IDS[@]} > 0)); then
         for existing_id in "${CREATED_FILE_IDS[@]}"; do
             if [[ "${existing_id}" == "${file_id}" ]]; then
                 return 0
@@ -113,13 +113,13 @@ print_stdout_excerpt() {
 
     while IFS= read -r line; do
         total_lines=$((total_lines + 1))
-        if (( printed_lines < max_lines )); then
+        if ((printed_lines < max_lines)); then
             printf '  %s\n' "${line}"
             printed_lines=$((printed_lines + 1))
         fi
     done <<< "${stdout_text}"
 
-    if (( total_lines > max_lines )); then
+    if ((total_lines > max_lines)); then
         printf '  ... (%d more lines)\n' "$((total_lines - max_lines))"
     fi
 }
@@ -159,7 +159,7 @@ print_action_file_outputs() {
     local output_name
 
     mapfile -t output_names < <(jq -r '.data.outputs // {} | to_entries[]? | select(.value != null) | .key' <<< "${DEMO_LAST_ACTION_BODY}")
-    if (( ${#output_names[@]} == 0 )); then
+    if ((${#output_names[@]} == 0)); then
         return 0
     fi
 
@@ -186,7 +186,7 @@ print_action_result() {
         has_stdout=true
     fi
 
-    if jq -e '.data.outputs // {} | to_entries[]? | select(.value != null)' >/dev/null 2>&1 <<< "${DEMO_LAST_ACTION_BODY}"; then
+    if jq -e '.data.outputs // {} | to_entries[]? | select(.value != null)' > /dev/null 2>&1 <<< "${DEMO_LAST_ACTION_BODY}"; then
         has_file_outputs=true
     fi
 
@@ -270,7 +270,7 @@ cleanup_created_files() {
     local file_id
     local role_label
 
-    if (( ${#CREATED_FILE_IDS[@]} == 0 )); then
+    if ((${#CREATED_FILE_IDS[@]} == 0)); then
         return 0
     fi
 
@@ -287,7 +287,7 @@ cleanup_created_files() {
 
     for file_id in "${CREATED_FILE_IDS[@]}"; do
         role_label="${CREATED_FILE_ROLES["${file_id}"]-demo output}"
-        if star_api_delete_file "${file_id}" "true" && [[ "${STAR_API_LAST_STATUS}" =~ ^2[0-9]{2}$ ]] && jq -e '.success == true' >/dev/null 2>&1 <<< "${STAR_API_LAST_BODY}"; then
+        if star_api_delete_file "${file_id}" "true" && [[ "${STAR_API_LAST_STATUS}" =~ ^2[0-9]{2}$ ]] && jq -e '.success == true' > /dev/null 2>&1 <<< "${STAR_API_LAST_BODY}"; then
             deleted_count=$((deleted_count + 1))
             printf '  %-27s %s (%s)\n' "deleted" "${file_id}" "${role_label}"
         else

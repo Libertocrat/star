@@ -135,7 +135,7 @@ if token="$(generate_token)"; then
     token_len="${#token}"
     info "Generated temporary token=${token}"
     info "Generated token length=${token_len}"
-    if (( token_len >= 32 )); then
+    if ((token_len >= 32)); then
         record_success "Generated token length check"
     else
         record_failure "Generated token length check"
@@ -177,13 +177,13 @@ else
 fi
 
 if command_exists docker; then
-    if docker info >/dev/null 2>&1; then
+    if docker info > /dev/null 2>&1; then
         record_dependency_ok "Docker daemon is reachable"
     else
         record_dependency_warn "Docker daemon is not reachable"
     fi
 
-    if docker compose version >/dev/null 2>&1; then
+    if docker compose version > /dev/null 2>&1; then
         record_dependency_ok "Docker Compose v2 is available"
     else
         record_dependency_error "Docker Compose v2 is missing"
@@ -222,13 +222,13 @@ else
     record_dependency_warn "ss is missing; port checks may be less accurate"
 fi
 
-if ( require_command bash "bash" ) >/dev/null 2>&1; then
+if (require_command bash "bash") > /dev/null 2>&1; then
     record_success "require_command should accept bash"
 else
     record_failure "require_command should accept bash"
 fi
 
-if ( require_command definitely-not-a-real-command "fake command" ) >/dev/null 2>&1; then
+if (require_command definitely-not-a-real-command "fake command") > /dev/null 2>&1; then
     record_failure "require_command should reject missing command"
 else
     record_success "require_command should reject missing command"
@@ -241,7 +241,7 @@ DRY_RUN=true
 compose ps
 unset DRY_RUN
 
-if (( FAILURES > 0 )); then
+if ((FAILURES > 0)); then
     error "Smoke checks failed: ${FAILURES} critical check(s)."
     exit 1
 fi

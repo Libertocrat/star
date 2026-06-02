@@ -42,7 +42,7 @@ star_api_print_request() {
 
     case "${body_type}" in
         json)
-            if compact_json="$(jq -c . <<< "${body_value}" 2>/dev/null)"; then
+            if compact_json="$(jq -c . <<< "${body_value}" 2> /dev/null)"; then
                 printf ' \\\n'
                 printf '    -H "Content-Type: application/json" \\\n'
                 printf "    --data-raw '%s'\n" "${compact_json}"
@@ -83,7 +83,7 @@ _star_api_capture_response() {
         STAR_API_LAST_STATUS="000"
         STAR_API_LAST_BODY=""
         if [[ -f "${response_file}" ]]; then
-            STAR_API_LAST_BODY="$(<"${response_file}")"
+            STAR_API_LAST_BODY="$(< "${response_file}")"
         fi
         error "HTTP request failed before a valid response was received."
         trap - RETURN
@@ -94,7 +94,7 @@ _star_api_capture_response() {
     STAR_API_LAST_STATUS="${status}"
     STAR_API_LAST_BODY=""
     if [[ -f "${response_file}" ]]; then
-        STAR_API_LAST_BODY="$(<"${response_file}")"
+        STAR_API_LAST_BODY="$(< "${response_file}")"
     fi
 
     trap - RETURN
@@ -163,7 +163,7 @@ star_api_require_success() {
     local star_message="No STAR error message available."
 
     if [[ ! "${STAR_API_LAST_STATUS}" =~ ^2[0-9]{2}$ ]]; then
-        if jq -e . >/dev/null 2>&1 <<< "${STAR_API_LAST_BODY}"; then
+        if jq -e . > /dev/null 2>&1 <<< "${STAR_API_LAST_BODY}"; then
             star_code="$(jq -r '.error.code // "UNKNOWN_ERROR"' <<< "${STAR_API_LAST_BODY}")"
             star_message="$(jq -r '.error.message // "No STAR error message available."' <<< "${STAR_API_LAST_BODY}")"
         fi
@@ -177,9 +177,9 @@ star_api_require_success() {
         return 1
     fi
 
-    if ! jq -e '.success == true' >/dev/null 2>&1 <<< "${STAR_API_LAST_BODY}"; then
-        star_code="$(jq -r '.error.code // "UNKNOWN_ERROR"' <<< "${STAR_API_LAST_BODY}" 2>/dev/null || printf 'UNKNOWN_ERROR')"
-        star_message="$(jq -r '.error.message // "No STAR error message available."' <<< "${STAR_API_LAST_BODY}" 2>/dev/null || printf 'No STAR error message available.')"
+    if ! jq -e '.success == true' > /dev/null 2>&1 <<< "${STAR_API_LAST_BODY}"; then
+        star_code="$(jq -r '.error.code // "UNKNOWN_ERROR"' <<< "${STAR_API_LAST_BODY}" 2> /dev/null || printf 'UNKNOWN_ERROR')"
+        star_message="$(jq -r '.error.message // "No STAR error message available."' <<< "${STAR_API_LAST_BODY}" 2> /dev/null || printf 'No STAR error message available.')"
         error "${context} failed."
         printf 'Request failed:\n' >&2
         printf '  HTTP status: %s\n' "${STAR_API_LAST_STATUS}" >&2
@@ -205,7 +205,7 @@ star_api_print_json_if_verbose() {
     fi
 
     printf 'Full response JSON:\n'
-    if jq . >/dev/null 2>&1 <<< "${STAR_API_LAST_BODY}"; then
+    if jq . > /dev/null 2>&1 <<< "${STAR_API_LAST_BODY}"; then
         jq . <<< "${STAR_API_LAST_BODY}"
     else
         printf '%s\n' "${STAR_API_LAST_BODY}"

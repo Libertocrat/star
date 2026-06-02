@@ -29,7 +29,7 @@ collect_missing_demo_dependencies() {
     fi
 
     DEMO_MISSING_DEPS=("${missing[@]}")
-    (( ${#DEMO_MISSING_DEPS[@]} == 0 ))
+    ((${#DEMO_MISSING_DEPS[@]} == 0))
 }
 
 # Return success only when apt and sudo are available.
@@ -41,7 +41,7 @@ can_install_with_apt() {
 install_demo_dependencies_with_apt() {
     local -a packages=("$@")
 
-    if (( ${#packages[@]} == 0 )); then
+    if ((${#packages[@]} == 0)); then
         return 0
     fi
 
@@ -65,7 +65,7 @@ install_demo_dependencies_with_apt() {
 print_manual_dependency_instructions() {
     local -a packages=("$@")
 
-    if (( ${#packages[@]} == 0 )); then
+    if ((${#packages[@]} == 0)); then
         packages=(curl jq)
     fi
 

@@ -26,7 +26,7 @@ DEMO_ENCRYPTION_PASSWORD="demo-password-used-only-for-star-encryption-demo"
 
 # Print CLI usage and examples for the demo runner.
 usage() {
-    cat <<'EOF'
+    cat << 'EOF'
 Usage:
   ./star demo [options]
 
@@ -77,11 +77,11 @@ parse_args() {
                 AUTO_MODE=true
                 shift
                 ;;
-            -v|--verbose)
+            -v | --verbose)
                 VERBOSE_MODE=true
                 shift
                 ;;
-            -h|--help)
+            -h | --help)
                 usage
                 exit 0
                 ;;
@@ -110,27 +110,27 @@ normalize_demo_selector() {
     normalized="${normalized,,}"
 
     case "${normalized}" in
-        1|files)
+        1 | files)
             printf 'files\n'
             return 0
             ;;
-        2|actions)
+        2 | actions)
             printf 'actions\n'
             return 0
             ;;
-        3|random)
+        3 | random)
             printf 'random\n'
             return 0
             ;;
-        4|inspect)
+        4 | inspect)
             printf 'inspect\n'
             return 0
             ;;
-        5|search)
+        5 | search)
             printf 'search\n'
             return 0
             ;;
-        6|encrypt)
+        6 | encrypt)
             printf 'encrypt\n'
             return 0
             ;;
@@ -151,7 +151,7 @@ ensure_env_file_present() {
 
 # Return success when STAR responds at the configured health endpoint.
 runtime_is_healthy() {
-    curl -fsS "$(health_url)" >/dev/null 2>&1
+    curl -fsS "$(health_url)" > /dev/null 2>&1
 }
 
 # Ensure STAR runtime is reachable, starting it when allowed.
@@ -224,7 +224,7 @@ ensure_demo_asset_present() {
 # Print the menu shown whenever --demo is not provided.
 print_demo_menu() {
     section "STAR Demo Menu"
-    cat <<'EOF'
+    cat << 'EOF'
 Available demos:
   [1] Files API walkthrough
   [2] Actions API walkthrough
@@ -298,7 +298,7 @@ run_one_demo_session() {
     cleanup_created_files
 
     section "Demo Complete"
-    if (( demo_status == 0 )); then
+    if ((demo_status == 0)); then
         success "Selected demo finished successfully."
         return 0
     fi

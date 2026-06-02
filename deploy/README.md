@@ -4,6 +4,29 @@ Safe actions. No raw shell.
 
 This package contains the deployable STAR runtime control surface.
 
+## Download from Releases
+
+The runtime package is published as GitHub Release assets:
+
+- `star-deploy-vX.Y.Z.tar.gz`
+- `star-deploy-vX.Y.Z.zip`
+- `star-deploy.tar.gz`
+- `star-deploy.zip`
+- `SHA256SUMS`
+
+Latest stable download URL:
+
+```bash
+curl -fsSL https://github.com/Libertocrat/star/releases/latest/download/star-deploy.tar.gz -o star-deploy.tar.gz
+```
+
+Optional checksum verification:
+
+```bash
+curl -fsSL https://github.com/Libertocrat/star/releases/latest/download/SHA256SUMS -o SHA256SUMS
+sha256sum -c SHA256SUMS --ignore-missing
+```
+
 ## What is included
 
 - `./star` - the top-level lifecycle command for configure, startup, demos, status, logs, and shutdown

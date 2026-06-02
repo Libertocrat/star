@@ -286,7 +286,7 @@ run_with_spinner() {
     "$@" &
     spinner_pid=$!
 
-    while kill -0 "${spinner_pid}" 2>/dev/null; do
+    while kill -0 "${spinner_pid}" 2> /dev/null; do
         printf '\r%b[%s]%b %s' \
             "${STAR_COLOR_SPINNER}" \
             "${spinner_chars:spinner_index:1}" \
@@ -332,7 +332,7 @@ path_relative_to_pwd() {
     local relative_path
 
     if command_exists realpath; then
-        relative_path="$(realpath --relative-to="${PWD}" "${input_path}" 2>/dev/null || true)"
+        relative_path="$(realpath --relative-to="${PWD}" "${input_path}" 2> /dev/null || true)"
         if is_non_empty "${relative_path}"; then
             printf '%s\n' "${relative_path}"
             return 0
@@ -364,8 +364,8 @@ prompt_default() {
     local input=''
 
     printf '%b[ ?> ]%b %s [%s]: ' \
-    "${STAR_COLOR_PROMPT}" "${STAR_COLOR_RESET}" \
-    "${prompt_text}" "${default_value}" >&2
+        "${STAR_COLOR_PROMPT}" "${STAR_COLOR_RESET}" \
+        "${prompt_text}" "${default_value}" >&2
 
     read -r input || input=""
 
@@ -394,12 +394,12 @@ confirm() {
     while true; do
         if [[ "${default_upper}" == "Y" ]]; then
             printf '%b[ ?> ]%b %s [Y/n]: ' \
-            "${STAR_COLOR_PROMPT}" "${STAR_COLOR_RESET}" \
-            "${prompt_text}" >&2
+                "${STAR_COLOR_PROMPT}" "${STAR_COLOR_RESET}" \
+                "${prompt_text}" >&2
         else
             printf '%b[ ?> ]%b %s [y/N]: ' \
-            "${STAR_COLOR_PROMPT}" "${STAR_COLOR_RESET}" \
-            "${prompt_text}" >&2
+                "${STAR_COLOR_PROMPT}" "${STAR_COLOR_RESET}" \
+                "${prompt_text}" >&2
         fi
 
         read -r input || input=""
@@ -412,10 +412,10 @@ confirm() {
         fi
 
         case "${normalized}" in
-            y|yes)
+            y | yes)
                 return 0
                 ;;
-            n|no)
+            n | no)
                 return 1
                 ;;
             *)
@@ -432,7 +432,7 @@ confirm() {
 # Return success if a command exists in PATH.
 command_exists() {
     local cmd="${1:?command is required}"
-    command -v "${cmd}" >/dev/null 2>&1
+    command -v "${cmd}" > /dev/null 2>&1
 }
 
 # Require a command to exist, otherwise terminate with an error.
@@ -449,7 +449,7 @@ require_command() {
 require_docker() {
     require_command docker "Docker CLI"
 
-    if ! docker info >/dev/null 2>&1; then
+    if ! docker info > /dev/null 2>&1; then
         die "Docker daemon is not reachable. Start Docker and try again."
     fi
 }
@@ -458,7 +458,7 @@ require_docker() {
 require_docker_compose() {
     require_command docker "Docker CLI"
 
-    if ! docker compose version >/dev/null 2>&1; then
+    if ! docker compose version > /dev/null 2>&1; then
         die "Docker Compose v2 is required. Ensure 'docker compose' is available."
     fi
 }
@@ -491,7 +491,7 @@ is_bool() {
     value="${value,,}"
 
     case "${value}" in
-        true|false|yes|no|y|n|1|0)
+        true | false | yes | no | y | n | 1 | 0)
             return 0
             ;;
         *)
@@ -509,7 +509,7 @@ is_port() {
         return 1
     fi
 
-    (( value >= 1 && value <= 65535 ))
+    ((value >= 1 && value <= 65535))
 }
 
 # Validate supported bind addresses (localhost, common defaults, basic IPv4).
@@ -520,7 +520,7 @@ is_bind_address() {
     value="$(trim "${1-}")"
 
     case "${value}" in
-        127.0.0.1|localhost|0.0.0.0)
+        127.0.0.1 | localhost | 0.0.0.0)
             return 0
             ;;
     esac
@@ -531,7 +531,7 @@ is_bind_address() {
 
     IFS='.' read -r -a ipv4_parts <<< "${value}"
     for octet in "${ipv4_parts[@]}"; do
-        if (( octet < 0 || octet > 255 )); then
+        if ((octet < 0 || octet > 255)); then
             return 1
         fi
     done
@@ -571,11 +571,11 @@ load_env() {
 
     # shellcheck disable=SC1090
     if ! source "${STAR_ENV_FILE}"; then
-        (( had_allexport == 0 )) && set +a
+        ((had_allexport == 0)) && set +a
         die "Failed to load env file: $(path_relative_to_pwd "${STAR_ENV_FILE}")"
     fi
 
-    (( had_allexport == 0 )) && set +a
+    ((had_allexport == 0)) && set +a
 }
 
 # -----------------------------------------------------------------------------
@@ -597,7 +597,7 @@ compose_quiet_if_silent() {
         return $?
     fi
 
-    if compose_output="$({ compose "$@" >/dev/null; } 2>&1)"; then
+    if compose_output="$({ compose "$@" > /dev/null; } 2>&1)"; then
         return 0
     fi
 
@@ -619,7 +619,7 @@ public_host() {
     local bind_address="${STAR_HOST_BIND_ADDRESS:-}"
 
     case "${bind_address}" in
-        ''|127.0.0.1|0.0.0.0)
+        '' | 127.0.0.1 | 0.0.0.0)
             printf '%s\n' 'localhost'
             ;;
         *)
@@ -658,16 +658,16 @@ validate_token_strength() {
     local classes=0
 
     token="$(trim "${1-}")"
-    if (( ${#token} < 32 )); then
+    if ((${#token} < 32)); then
         return 1
     fi
 
-    [[ "${token}" =~ [a-z] ]] && (( classes += 1 ))
-    [[ "${token}" =~ [A-Z] ]] && (( classes += 1 ))
-    [[ "${token}" =~ [0-9] ]] && (( classes += 1 ))
-    [[ "${token}" =~ [^[:alnum:]] ]] && (( classes += 1 ))
+    [[ "${token}" =~ [a-z] ]] && ((classes += 1))
+    [[ "${token}" =~ [A-Z] ]] && ((classes += 1))
+    [[ "${token}" =~ [0-9] ]] && ((classes += 1))
+    [[ "${token}" =~ [^[:alnum:]] ]] && ((classes += 1))
 
-    (( classes >= 2 ))
+    ((classes >= 2))
 }
 
 # Generate a fallback token as 32 random bytes encoded in lowercase hex.
@@ -692,7 +692,7 @@ generate_token() {
     local token=''
 
     if command_exists openssl; then
-        token="$(openssl rand -hex 32 2>/dev/null || true)"
+        token="$(openssl rand -hex 32 2> /dev/null || true)"
     fi
 
     if ! validate_token_strength "${token}"; then
@@ -715,7 +715,7 @@ read_token() {
         return 1
     fi
 
-    token="$(<"${STAR_SECRET_FILE}")"
+    token="$(< "${STAR_SECRET_FILE}")"
     token="$(trim "${token}")"
 
     if [[ -z "${token}" ]]; then
@@ -740,7 +740,7 @@ ensure_token_file() {
             return 1
         }
 
-        if ! ( umask 177 && printf '%s\n' "${token}" > "${STAR_SECRET_FILE}" ); then
+        if ! (umask 177 && printf '%s\n' "${token}" > "${STAR_SECRET_FILE}"); then
             error "Failed to write token file: $(path_relative_to_pwd "${STAR_SECRET_FILE}")"
             return 1
         fi
@@ -753,7 +753,7 @@ ensure_token_file() {
         fi
     fi
 
-    chmod 600 "${STAR_SECRET_FILE}" 2>/dev/null || true
+    chmod 600 "${STAR_SECRET_FILE}" 2> /dev/null || true
     return 0
 }
 
@@ -770,13 +770,13 @@ is_port_free() {
     fi
 
     if command_exists ss; then
-        if ss -ltn "( sport = :${port} )" 2>/dev/null | grep -q "${port}"; then
+        if ss -ltn "( sport = :${port} )" 2> /dev/null | grep -q "${port}"; then
             return 1
         fi
     fi
 
-    if command_exists docker && docker info >/dev/null 2>&1; then
-        if docker ps --format '{{.Ports}}' 2>/dev/null | grep -q ":${port}->"; then
+    if command_exists docker && docker info > /dev/null 2>&1; then
+        if docker ps --format '{{.Ports}}' 2> /dev/null | grep -q ":${port}->"; then
             return 1
         fi
     fi
@@ -795,7 +795,7 @@ find_free_port() {
         return 1
     fi
 
-    if (( start > end )); then
+    if ((start > end)); then
         return 1
     fi
 
@@ -804,7 +804,7 @@ find_free_port() {
         return 0
     fi
 
-    for (( candidate = start; candidate <= end; candidate++ )); do
+    for ((candidate = start; candidate <= end; candidate++)); do
         if is_port_free "${candidate}"; then
             printf '%s\n' "${candidate}"
             return 0

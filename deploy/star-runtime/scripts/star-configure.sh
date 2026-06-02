@@ -61,7 +61,7 @@ SHOW_TOKEN_OUTPUT=false
 
 # Print CLI usage and examples.
 usage() {
-    cat <<'EOF'
+    cat << 'EOF'
 Usage:
   ./star configure [options]
 
@@ -105,7 +105,7 @@ parse_args() {
                 SHOW_TOKEN_FLAG=true
                 shift
                 ;;
-            -h|--help)
+            -h | --help)
                 usage
                 exit 0
                 ;;
@@ -243,7 +243,7 @@ resolve_host_port() {
         fi
 
         suggested_port=""
-        if (( preferred_port <= 8099 )); then
+        if ((preferred_port <= 8099)); then
             suggested_port="$(find_free_port "${preferred_port}" "${preferred_port}" "8099" || true)"
         fi
 
@@ -398,11 +398,11 @@ validate_existing_env_host_port() {
 write_token_file() {
     local token="$1"
 
-    if ! ( umask 177 && printf '%s\n' "${token}" > "${SECRET_FILE}" ); then
+    if ! (umask 177 && printf '%s\n' "${token}" > "${SECRET_FILE}"); then
         return 1
     fi
 
-    chmod 600 "${SECRET_FILE}" 2>/dev/null || true
+    chmod 600 "${SECRET_FILE}" 2> /dev/null || true
     return 0
 }
 
@@ -415,7 +415,7 @@ read_local_token() {
         return 1
     fi
 
-    token="$(<"${SECRET_FILE}")"
+    token="$(< "${SECRET_FILE}")"
     token="$(trim "${token}")"
     if [[ -z "${token}" ]]; then
         error "Token file is empty: $(path_relative_to_pwd "${SECRET_FILE}")"
@@ -496,7 +496,7 @@ resolve_token_output_policy() {
 
 # Generate the runtime .env file from scratch.
 write_env_file() {
-    cat > "${ENV_FILE}" <<EOF
+    cat > "${ENV_FILE}" << EOF
 # =============================================================================
 # Secure Templated Actions Runtime (STAR) - Generated Runtime Configuration
 #

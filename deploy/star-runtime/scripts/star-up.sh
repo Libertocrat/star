@@ -13,7 +13,7 @@ PRODUCTION_MODE=false
 
 # Print CLI usage and examples.
 usage() {
-    cat <<'EOF'
+    cat << 'EOF'
 Usage:
   ./star up [options]
 
@@ -63,7 +63,7 @@ parse_args() {
                 SILENT_MODE=true
                 shift
                 ;;
-            -h|--help)
+            -h | --help)
                 usage
                 exit 0
                 ;;
@@ -133,11 +133,11 @@ validate_runtime_env() {
         die "STAR_ROOT_DIR must be an absolute container path. Current value: ${STAR_ROOT_DIR}"
     fi
 
-    if ! is_int "${STAR_CONTAINER_UID}" || (( STAR_CONTAINER_UID < 0 )); then
+    if ! is_int "${STAR_CONTAINER_UID}" || ((STAR_CONTAINER_UID < 0)); then
         die "STAR_CONTAINER_UID must be a non-negative integer. Current value: ${STAR_CONTAINER_UID}"
     fi
 
-    if ! is_int "${STAR_CONTAINER_GID}" || (( STAR_CONTAINER_GID < 0 )); then
+    if ! is_int "${STAR_CONTAINER_GID}" || ((STAR_CONTAINER_GID < 0)); then
         die "STAR_CONTAINER_GID must be a non-negative integer. Current value: ${STAR_CONTAINER_GID}"
     fi
 }
@@ -161,10 +161,10 @@ validate_existing_token_file() {
 
 # Return success if it is safe to ask the user for sudo escalation.
 can_prompt_for_sudo() {
-    [[ "${PRODUCTION_MODE}" == "true" ]] && \
-    [[ "${SILENT_MODE}" != "true" ]] && \
-    [[ -t 0 ]] && \
-    command_exists sudo
+    [[ "${PRODUCTION_MODE}" == "true" ]] &&
+        [[ "${SILENT_MODE}" != "true" ]] &&
+        [[ -t 0 ]] &&
+        command_exists sudo
 }
 
 # Ask before running the minimum sudo commands needed for hardened permissions.
@@ -229,7 +229,7 @@ set_secret_file_permissions_default() {
         return 0
     fi
 
-    if ! chmod 644 "${STAR_SECRET_FILE}" 2>/dev/null; then
+    if ! chmod 644 "${STAR_SECRET_FILE}" 2> /dev/null; then
         error "Failed to set STAR API token permissions to 644 for default startup."
         error "Run: chmod 644 ${secret_path_display}"
         return 1
@@ -291,7 +291,7 @@ set_secret_file_permissions_production() {
     fi
 
     if [[ "${needs_chown}" == "true" ]]; then
-        if ! chown "${host_uid}:${expected_gid}" "${STAR_SECRET_FILE}" 2>/dev/null; then
+        if ! chown "${host_uid}:${expected_gid}" "${STAR_SECRET_FILE}" 2> /dev/null; then
             apply_secret_permissions_with_sudo_prompt "${host_uid}" "${expected_gid}" "${secret_path_display}"
             return $?
         fi
@@ -299,7 +299,7 @@ set_secret_file_permissions_production() {
     fi
 
     if [[ "${needs_chmod}" == "true" ]]; then
-        if ! chmod 640 "${STAR_SECRET_FILE}" 2>/dev/null; then
+        if ! chmod 640 "${STAR_SECRET_FILE}" 2> /dev/null; then
             error "Failed to set STAR API token permissions to 640."
             error "Run: sudo chmod 640 ${secret_path_display}"
             return 1
@@ -332,7 +332,7 @@ check_user_specs_dir() {
 
 # Ensure the external Docker network exists before compose startup.
 ensure_docker_network() {
-    if docker network inspect "${STAR_SHARED_NETWORK}" >/dev/null 2>&1; then
+    if docker network inspect "${STAR_SHARED_NETWORK}" > /dev/null 2>&1; then
         say_success "${SILENT_MODE}" "Docker network exists: ${STAR_SHARED_NETWORK}"
         return 0
     fi
@@ -342,7 +342,7 @@ ensure_docker_network() {
     if [[ "${DRY_RUN:-false}" == "true" ]]; then
         run docker network create "${STAR_SHARED_NETWORK}"
     else
-        run docker network create "${STAR_SHARED_NETWORK}" >/dev/null
+        run docker network create "${STAR_SHARED_NETWORK}" > /dev/null
     fi
 
     say_success "${SILENT_MODE}" "Docker network ready: ${STAR_SHARED_NETWORK}"
@@ -358,8 +358,8 @@ wait_for_health() {
     url="$(health_url)"
     say_info "${SILENT_MODE}" "Waiting for STAR health endpoint: ${url}"
 
-    while (( elapsed < timeout_seconds )); do
-        if curl -fsS "${url}" >/dev/null 2>&1; then
+    while ((elapsed < timeout_seconds)); do
+        if curl -fsS "${url}" > /dev/null 2>&1; then
             say_success "${SILENT_MODE}" "STAR health endpoint is ready."
             return 0
         fi

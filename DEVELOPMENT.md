@@ -37,7 +37,7 @@ pip install -r requirements/dev.txt
 make deps-local
 
 sudo apt update
-sudo apt install -y shellcheck golang-go
+sudo apt install -y shfmt shellcheck golang-go
 go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
 export PATH="$(go env GOPATH)/bin:$PATH"
 
@@ -108,6 +108,7 @@ Additional CLI tools are required for some workflows:
   - `hadolint` for Dockerfile linting
   - `jq` for parsing Trivy JSON reports
   - `trivy` for filesystem and image scanning
+  - `shfmt` for shell script formatting
   - `shellcheck` for shell script linting
   - `go` and `actionlint` for GitHub Actions workflow linting
 - `Makefile` managed:
@@ -198,20 +199,23 @@ Verify installation:
 hadolint --version
 ```
 
-#### Installing ShellCheck
+#### Installing shfmt and ShellCheck
 
-`shellcheck` is used to lint shell scripts through `make lint-shell` and is part of the `make ci` local quality gate.
+`shfmt` is used to format shell scripts through `make fmt-shell` and to validate shell formatting through `make lint-shell-format`.
+
+`shellcheck` is used to lint shell scripts through `make lint-shell` after shell formatting validation.
 
 Installation:
 
 ```bash
 sudo apt update
-sudo apt install -y shellcheck
+sudo apt install -y shfmt shellcheck
 ```
 
 Verify installation:
 
 ```bash
+shfmt --version
 shellcheck --version
 ```
 
@@ -300,7 +304,7 @@ Make sure the CLI tools outlined in section [2.1 Installing Required CLI Tools](
 Confirm they exist:
 
 ```bash
-command -v hadolint jq semgrep trivy shellcheck actionlint
+command -v hadolint jq semgrep trivy shfmt shellcheck actionlint
 ```
 
 ### Python version
@@ -426,8 +430,10 @@ Important targets are:
 | --- | --- |
 | `make deps` | install Python dependencies from `requirements/dev.txt` |
 | `make deps-local` | install local CLI tooling with `pipx` and `semgrep` |
-| `make fmt` | apply formatting fixes |
-| `make lint-shell` | run ShellCheck for shell scripts |
+| `make fmt` | apply formatting fixes, including shell formatting with `shfmt` |
+| `make fmt-shell` | format shell scripts with `shfmt` |
+| `make lint-shell` | validate shell formatting and run ShellCheck for shell scripts |
+| `make lint-shell-format` | validate shell formatting with `shfmt` |
 | `make lint-actions` | validate GitHub Actions workflows with actionlint |
 | `make quality` | run linting, type checking, and tests |
 | `make ci` | run the local CI quality gate |
@@ -439,7 +445,10 @@ Current target behavior:
 
 - `make deps` upgrades `pip` and installs `requirements/dev.txt`
 - `make deps-local` installs `pipx`, installs `semgrep` with `pipx`, and reminds the developer to install Trivy system-wide
-- `make fmt` runs `black`, `ruff check --fix`, `trailing-whitespace`, and `end-of-file-fixer`
+- `make fmt-shell` runs `shfmt -w -i 4 -ci -sr` on detected shell scripts
+- `make fmt` runs `fmt-shell`, `black`, `ruff check --fix`, `trailing-whitespace`, and `end-of-file-fixer`
+- `make lint-shell-format` runs `shfmt -d -i 4 -ci -sr` on detected shell scripts
+- `make lint-shell` runs `lint-shell-format` followed by `shellcheck -x`
 - `make lint` runs `lint-shell`, `lint-actions`, `black --check`, and `ruff check`
 - `make quality` runs `lint`, `typecheck`, and `test`
 - `make ci` runs `quality` and `ci-security`
@@ -469,6 +478,8 @@ The current hook set includes:
 - YAML validation
 - Black formatting
 - Ruff linting with `--fix`
+- shfmt shell formatting
+- ShellCheck shell linting
 - MyPy type checking for `src/` and `tests/`
 - Bandit security scanning for `src/`
 - Hadolint for `Dockerfile`
@@ -493,6 +504,7 @@ Direct commands are useful for fast local iteration.
 Formatting:
 
 ```bash
+shfmt -w -i 4 -ci -sr $(SHELL_FILES)
 black src tests scripts
 ```
 
@@ -505,6 +517,7 @@ ruff check --fix src tests scripts
 Shell scripts:
 
 ```bash
+shfmt -d -i 4 -ci -sr $(SHELL_FILES)
 shellcheck -x $(SHELL_FILES)
 ```
 
@@ -617,6 +630,7 @@ make ci
 This runs:
 
 - linting
+- shell script formatting validation through shfmt
 - shell script linting through ShellCheck
 - workflow linting through actionlint
 - type checking
@@ -636,7 +650,7 @@ This adds:
 - Trivy filesystem scan
 - Trivy image scan
 
-Note that `make ci` and `make full` require the relevant local tools to be installed. In particular, `hadolint`, `jq`, `semgrep`, `trivy`, `shellcheck`, and `actionlint` are not installed by `requirements/dev.txt`.
+Note that `make ci` and `make full` require the relevant local tools to be installed. In particular, `hadolint`, `jq`, `semgrep`, `trivy`, `shfmt`, `shellcheck`, and `actionlint` are not installed by `requirements/dev.txt`.
 
 ## 12. Troubleshooting
 
@@ -661,7 +675,7 @@ pip freeze
 ### Verify required local CLI tools
 
 ```bash
-command -v hadolint jq semgrep trivy shellcheck actionlint
+command -v hadolint jq semgrep trivy shfmt shellcheck actionlint
 ```
 
 ### actionlint not found in PATH

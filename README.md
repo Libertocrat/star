@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/assets/star_logo.png" width="400" alt="STAR Logo">
+  <img src="docs/assets/star-logo.png" width="400" alt="STAR Logo">
 </p>
 
 <p align="center">
@@ -62,19 +62,28 @@
 
 ## Quick Start
 
-The fastest current path is to download the deployment files from the repository tarball, extract them, and launch STAR from there. Run this to set up and start STAR:
+The fastest current path is to download the deploy bundle from the latest GitHub release, extract it, and launch STAR from there. Run this to set up and start STAR:
 
 ```bash
-tmpdir="$(mktemp -d)" && \
-curl -fsSL https://github.com/Libertocrat/star/archive/refs/heads/main.tar.gz -o "$tmpdir/star.tar.gz" && \
-tar -xzf "$tmpdir/star.tar.gz" -C "$tmpdir" && \
-cp -a "$tmpdir"/star-main/deploy/star "$tmpdir"/star-main/deploy/star-runtime . && \
-chmod +x ./star ./star-runtime/scripts/*.sh && \
-rm -rf "$tmpdir" && \
-./star
+curl -fsSL https://github.com/Libertocrat/star/releases/latest/download/star-deploy.tar.gz -o star-deploy.tar.gz && \
+tar -xzf star-deploy.tar.gz && \
+cd star-deploy
 ```
 
-That command leaves `./star` available as the top-level STAR lifecycle command.
+That leaves `./star` available as the top-level STAR lifecycle command.
+
+### Fast Deploy
+
+```bash
+./star --auto
+./star status
+```
+
+This is the fastest path to a configured local runtime and a quick health check.
+
+<p align="center">
+  <img src="docs/assets/star-autodeploy.gif" width="1200" alt="STAR fast deploy with ./star --auto">
+</p>
 
 > [!IMPORTANT]
 > STAR is designed to be managed from the top-level `./star` command.
@@ -95,18 +104,7 @@ Requirements for the deploy flow are Docker and Docker Compose v2. Built-in demo
 
 ## See STAR in Action
 
-The `./star` orchestrator is the primary lifecycle interface for package users. Start with the three most adoption-friendly flows below.
-
-### Fast Deploy
-
-```bash
-./star --auto
-./star status
-```
-
-This is the fastest path to a configured local runtime and a quick health check.
-
-<!-- GIF placeholder: Fast deploy tutorial. Show ./star --auto configuring STAR, starting the Docker runtime, then ./star status showing a healthy service. Keep the terminal readable and make it feel like a one-command deploy story. -->
+The `./star` orchestrator is the primary lifecycle interface for package users. After deploying with `./star --auto` or `./star`, you may explore its capabilities using the `demo` command. Below is a live example.
 
 ### Interactive Demo (File Encryption)
 
@@ -116,20 +114,9 @@ This is the fastest path to a configured local runtime and a quick health check.
 
 This guided demo shows STAR handling a file through safe, predefined encryption and decryption actions instead of raw shell-driven workflow logic.
 
-<!-- GIF placeholder: Encrypt/decrypt tutorial. Show STAR uploading a demo file, encrypting it, decrypting it, and returning managed outputs. Emphasize safe actions and managed files, not raw shell. -->
-
-### API Exploration
-
-```bash
-./star status
-```
-
-Use `./star status` to reveal the local docs URL, then open `/docs` to explore `/v1/actions` and `/v1/files` interactively.
-
-> [!NOTE]
-> Local/default deployments, including `./star --auto`, enable interactive docs for exploration. Production-oriented deployments, using `--production`, may show docs as disabled.
-
-<!-- GIF placeholder: Swagger exploration tutorial. Show ./star status revealing the local docs URL, open Swagger UI, browse /v1/actions and /v1/files, execute a simple request, and return to the terminal. Mention in the flow that production-oriented configuration disables docs by default. -->
+<p align="center">
+  <img src="docs/assets/star-demo-encrypt.gif" width="1200" alt="STAR managed file encryption demo">
+</p>
 
 Other built-in demos, accessed by running `./star demo`, include:
 

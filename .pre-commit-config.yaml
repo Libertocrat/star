@@ -25,12 +25,19 @@ repos:
 
   - repo: local
     hooks:
+      - id: shfmt
+        name: shfmt (shell scripts)
+        entry: shfmt -w -i 4 -ci -sr
+        language: system
+        types: [shell]
+        exclude: ^(\.venv/|venv/|node_modules/|private/|\.git/)
+
       - id: shellcheck
         name: shellcheck (shell scripts)
         entry: shellcheck -x
         language: system
-        files: \.sh$
-        exclude: ^(\.venv/|venv/|node_modules/|\.git/)
+        types: [shell]
+        exclude: ^(\.venv/|venv/|node_modules/|private/|\.git/)
 
   - repo: local
     hooks:
