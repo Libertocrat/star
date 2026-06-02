@@ -256,9 +256,12 @@ jobs:
           test -f "dist/star-deploy.zip"
           test -f "dist/SHA256SUMS"
 
-          tar -tzf "dist/star-deploy-${GITHUB_REF_NAME}.tar.gz" | grep -q '^star-deploy/star$'
-          tar -tzf "dist/star-deploy-${GITHUB_REF_NAME}.tar.gz" | grep -q '^star-deploy/README.md$'
-          tar -tzf "dist/star-deploy-${GITHUB_REF_NAME}.tar.gz" | grep -q '^star-deploy/star-runtime/'
+          tar_listing="$(mktemp)"
+          tar -tzf "dist/star-deploy-${GITHUB_REF_NAME}.tar.gz" > "${tar_listing}"
+
+          grep -qx 'star-deploy/star' "${tar_listing}"
+          grep -qx 'star-deploy/README.md' "${tar_listing}"
+          grep -q '^star-deploy/star-runtime/' "${tar_listing}"
 
           (
             cd dist
