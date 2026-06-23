@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] - 2026-06-22
+
+### Security
+
+- Updated `pydantic-settings` to `2.14.2` to remediate `GHSA-4xgf-cpjx-pc3j`.
+- Updated `python-multipart` to `0.0.31` to remediate `CVE-2026-53540`.
+- Refreshed the Debian runtime packages to OpenSSL `3.5.6-1~deb13u2`, remediating `CVE-2026-45447` in `libssl3t64`, `openssl`, and `openssl-provider-legacy`.
+
 ## [0.1.0] - 2026-06-01
 
 ### Project
@@ -77,4 +85,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[0.1.1]: https://github.com/Libertocrat/star/releases/tag/v0.1.1
 [0.1.0]: https://github.com/Libertocrat/star/releases/tag/v0.1.0

@@ -34,9 +34,6 @@ site/
 backups/
 plugins/
 
-# Private directories (may contain notes, credentials, etc.)
-private/
-
 # Ignore Jupyter hidden checkpoints
 .ipynb_checkpoints/
 
@@ -71,10 +68,6 @@ Thumbs.db
 # Local env overrides
 .env.local
 .env.*.local
-
-# AI agent docs and context
-ai-docs/
-copilot/
 
 ###--- PYTHON PROJECTS IGNORED FILES ---###
 
