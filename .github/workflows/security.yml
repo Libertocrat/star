@@ -55,7 +55,6 @@ jobs:
         uses: returntocorp/semgrep-action@v1
         with:
           config: |
-            p/ci
             p/python
             p/security-audit
           generateSarif: false

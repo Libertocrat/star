@@ -24,8 +24,15 @@ REQ_SECURITY = requirements/security.txt
 BANDIT_TARGETS = src/
 BANDIT_FLAGS = --recursive --severity-level medium --confidence-level medium
 PIP_AUDIT_FLAGS = -r $(REQ_RUNTIME)
-SEMGREP_FLAGS = --error --config p/ci --config p/python --config p/security-audit --exclude .venv .
 SEMGREP_VERSION := 1.155.0
+SEMGREP_MUTABLE_ACTION_TAG_RULE := yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag
+SEMGREP_FLAGS = --error \
+	--config p/ci \
+	--config p/python \
+	--config p/security-audit \
+	--exclude-rule $(SEMGREP_MUTABLE_ACTION_TAG_RULE) \
+	--exclude .venv \
+	.
 TRIVY_FS_FLAGS = fs \
 	--scanners secret,misconfig \
 	--severity HIGH,CRITICAL \

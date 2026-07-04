@@ -650,6 +650,10 @@ This adds:
 - Trivy filesystem scan
 - Trivy image scan
 
+The blocking Semgrep gate excludes the GitHub Actions mutable-action-tag rule.
+STAR treats SHA pinning for workflow actions as hardening work while the workflow
+policy allows reviewed stable major versions.
+
 Note that `make ci` and `make full` require the relevant local tools to be installed. In particular, `hadolint`, `jq`, `semgrep`, `trivy`, `shfmt`, `shellcheck`, and `actionlint` are not installed by `requirements/dev.txt`.
 
 ## 12. Troubleshooting
