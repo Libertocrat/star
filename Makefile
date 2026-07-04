@@ -1,4 +1,4 @@
-.PHONY: help deps deps-local fmt fmt-shell lint lint-shell lint-shell-format lint-actions typecheck test \
+.PHONY: help deps deps-local semgrep-install fmt fmt-shell lint lint-shell lint-shell-format lint-actions typecheck test \
 	bandit pip-audit hadolint semgrep trivy \
 	quality ci-security deep-security ci full \
 	build
@@ -25,6 +25,7 @@ BANDIT_TARGETS = src/
 BANDIT_FLAGS = --recursive --severity-level medium --confidence-level medium
 PIP_AUDIT_FLAGS = -r $(REQ_RUNTIME)
 SEMGREP_VERSION := 1.155.0
+SEMGREP_PACKAGE := semgrep==$(SEMGREP_VERSION)
 SEMGREP_MUTABLE_ACTION_TAG_RULE := yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag
 SEMGREP_FLAGS = --error \
 	--config p/ci \
@@ -89,9 +90,12 @@ deps:
 
 deps-local:
 	$(PIP) install -U pipx
-	pipx install --force "semgrep==$(SEMGREP_VERSION)"
+	pipx install --force "$(SEMGREP_PACKAGE)"
 	pipx ensurepath || true
 	@echo "Ensure Trivy is installed system-wide (apt install trivy)"
+
+semgrep-install:
+	$(PIP) install "$(SEMGREP_PACKAGE)"
 
 # -----------------------------
 # Quality

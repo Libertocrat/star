@@ -242,16 +242,17 @@ The workflow installs Python 3.12, caches pip downloads, creates a virtual envir
 - `requirements/runtime.txt`
 - `requirements/security.txt`
 
-It then runs three security stages. Semgrep is invoked through the GitHub Action, while the Trivy stages remain Makefile-driven through `make trivy-fs` and `make trivy-image`.
+It then runs three security stages. Semgrep and Trivy remain Makefile-driven through `make semgrep`, `make trivy-fs`, and `make trivy-image`.
 
 ### Semgrep SAST
 
-In GitHub Actions, Semgrep is executed with `returntocorp/semgrep-action@v1` using these rule sets:
+Semgrep is executed through `make semgrep` using these rule sets:
 
+- `p/ci`
 - `p/python`
 - `p/security-audit`
 
-The local `make semgrep` target also runs `p/ci`, but excludes `yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag`.
+The blocking Semgrep gate excludes `yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag`.
 STAR treats mutable GitHub Actions major tags as hardening work rather than a release-blocking Semgrep finding because the workflow policy currently allows reviewed stable major versions.
 
 ### Trivy filesystem scan
