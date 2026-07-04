@@ -51,13 +51,17 @@ jobs:
       # -------------------------
       # SAST (Semgrep)
       # -------------------------
+      - name: Install Semgrep CLI
+        shell: bash
+        run: |
+          source .venv/bin/activate
+          make semgrep-install
+
       - name: Run Semgrep
-        uses: returntocorp/semgrep-action@v1
-        with:
-          config: |
-            p/python
-            p/security-audit
-          generateSarif: false
+        shell: bash
+        run: |
+          source .venv/bin/activate
+          make semgrep
 
       # -------------------------
       # Vulnerability Scanning (Trivy)
