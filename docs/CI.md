@@ -242,15 +242,17 @@ The workflow installs Python 3.12, caches pip downloads, creates a virtual envir
 - `requirements/runtime.txt`
 - `requirements/security.txt`
 
-It then runs three security stages. Semgrep is invoked directly through the GitHub Action, while the Trivy stages remain Makefile-driven through `make trivy-fs` and `make trivy-image`.
+It then runs three security stages. Semgrep is invoked through the GitHub Action, while the Trivy stages remain Makefile-driven through `make trivy-fs` and `make trivy-image`.
 
 ### Semgrep SAST
 
-Semgrep is executed with `returntocorp/semgrep-action@v1` using these rule sets:
+In GitHub Actions, Semgrep is executed with `returntocorp/semgrep-action@v1` using these rule sets:
 
-- `p/ci`
 - `p/python`
 - `p/security-audit`
+
+The local `make semgrep` target also runs `p/ci`, but excludes `yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag`.
+STAR treats mutable GitHub Actions major tags as hardening work rather than a release-blocking Semgrep finding because the workflow policy currently allows reviewed stable major versions.
 
 ### Trivy filesystem scan
 
@@ -388,13 +390,14 @@ The workflow performs these stages:
 The Python helper scripts do the actual documentation build work:
 
 - `scripts/export_openapi.py` builds the FastAPI app with documentation settings, initializes the DSL-backed runtime registry, and writes `docs/api-docs/output/openapi.json`
-- `scripts/build_docs_site.py` creates `site/api-docs/<version>/`, copies Swagger UI assets, writes `index.html`, copies `openapi.json`, and creates redirect pages
+- `scripts/build_docs_site.py` creates `site/api-docs/<version>/`, copies Swagger UI assets, writes metadata-aware `index.html` and redirect pages, copies `openapi.json`, and publishes shared social preview and favicon assets under `site/assets/`
 
 The published site contains:
 
 - versioned API documentation under `api-docs/<version>/`
 - the exported OpenAPI schema
 - a Swagger UI based interface
+- shared social preview and light/dark favicon assets
 
 The workflow publishes without deleting previous versions. It copies the generated site into `gh-pages` and commits only when there are changes.
 

@@ -141,11 +141,18 @@ Builds a versioned Swagger UI site under `site/api-docs/` for publication to Git
 - `RELEASE_VERSION`: required environment variable used as the version folder
 - `docs/api-docs/template/swagger.html`: HTML template copied to the versioned site as `index.html`
 - `docs/api-docs/output/openapi.json`: schema file produced by `scripts/export_openapi.py`
+- `docs/assets/star-gh-social-preview.png`: social preview image copied to `site/assets/`
+- `docs/assets/libertocrat-favicon-light-32.png`: light-mode favicon copied to `site/assets/`
+- `docs/assets/libertocrat-favicon-dark-32.png`: dark-mode favicon copied to `site/assets/`
 - `node_modules/swagger-ui-dist`: Swagger UI distribution copied into the site
+- `DOCS_PUBLIC_BASE_URL`: optional public base URL used for canonical, Open Graph, Twitter, and favicon URLs
+  - Default: `https://libertocrat.github.io/star`
 
 ### Behavior
 
 - The script preserves existing content in `site/api-docs/` by copying new files into the selected version directory
+- The script injects title, description, canonical, Open Graph, Twitter card, and light/dark favicon metadata into generated pages
+- Shared social preview and favicon assets are copied to `site/assets/`
 - `site/api-docs/index.html` redirects to the latest version directory
 - `site/index.html` redirects to `./api-docs/`
 
@@ -171,5 +178,8 @@ Output:
 - `site/api-docs/<RELEASE_VERSION>/openapi.json`
 - `site/api-docs/index.html`
 - `site/index.html`
+- `site/assets/star-gh-social-preview.png`
+- `site/assets/libertocrat-favicon-light-32.png`
+- `site/assets/libertocrat-favicon-dark-32.png`
 
 ---
