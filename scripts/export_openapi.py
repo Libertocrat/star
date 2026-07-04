@@ -60,12 +60,12 @@ def get_release_version() -> str:
     return normalized
 
 
-# Minimal valid settings for schema generation; values won't affect the schema but must
-# satisfy validation. The runtime keeps docs disabled by default for security, so
-# we set `star_enable_docs=True` explicitly here to generate the published schema
-# without changing the normal application default.
 def build_docs_settings() -> Settings:
     """Create a minimal settings object for documentation generation.
+
+    The selected values satisfy application validation without changing the
+    generated schema. Documentation export enables docs explicitly so runtime
+    defaults can stay restrictive.
 
     Returns:
         Valid application settings suitable for OpenAPI export.

@@ -11,6 +11,7 @@ This script:
 from __future__ import annotations
 
 import os
+import re
 import shutil
 from html import escape
 from pathlib import Path
@@ -39,6 +40,25 @@ SITE_DESCRIPTION = (
 SOCIAL_PREVIEW_ALT = "STAR - Secure Templated Actions Runtime"
 
 METADATA_PLACEHOLDER = "{{STAR_DOCS_METADATA}}"
+
+
+def get_release_version() -> str:
+    """Return the validated release version used for the docs site path.
+
+    Returns:
+        Release version exactly as provided by the environment.
+
+    Raises:
+        KeyError: If `RELEASE_VERSION` is not set.
+        ValueError: If `RELEASE_VERSION` is not a semantic version.
+    """
+
+    version = os.environ["RELEASE_VERSION"].strip()
+    if not re.fullmatch(r"v?\d+\.\d+\.\d+", version):
+        raise ValueError(
+            "RELEASE_VERSION must be in format vX.Y.Z or X.Y.Z " "(for example: v1.2.3)"
+        )
+    return version
 
 
 def public_url(path: str) -> str:
@@ -154,7 +174,7 @@ def render_swagger_template(*, template_path: Path, page_url: str) -> str:
 def main() -> None:
     """Build the static Swagger UI site for the requested release version."""
 
-    version = os.environ["RELEASE_VERSION"]
+    version = get_release_version()
 
     site_root = SITE_ROOT
     api_docs_root = site_root / "api-docs"

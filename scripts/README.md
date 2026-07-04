@@ -139,6 +139,7 @@ Builds a versioned Swagger UI site under `site/api-docs/` for publication to Git
 ### Inputs
 
 - `RELEASE_VERSION`: required environment variable used as the version folder
+  - Accepted formats: `vX.Y.Z` or `X.Y.Z`
 - `docs/api-docs/template/swagger.html`: HTML template copied to the versioned site as `index.html`
 - `docs/api-docs/output/openapi.json`: schema file produced by `scripts/export_openapi.py`
 - `docs/assets/star-gh-social-preview.png`: social preview image copied to `site/assets/`
@@ -158,7 +159,7 @@ Builds a versioned Swagger UI site under `site/api-docs/` for publication to Git
 
 ### Requirements
 
-- `RELEASE_VERSION` must be set in the environment
+- `RELEASE_VERSION` must be set in the environment with format `vX.Y.Z` or `X.Y.Z`
 - Swagger UI assets must already be installed under `node_modules`
 - The OpenAPI export must already exist before this script runs
 

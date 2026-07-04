@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Documentation
 
 - Enhanced the versioned OpenAPI docs site with metadata-aware Swagger pages, social preview imagery, and light/dark favicons for GitHub Pages publication.
+- Hardened the versioned OpenAPI docs builder to validate release versions before writing generated site outputs.
 
 ## [0.1.1] - 2026-06-22
 
