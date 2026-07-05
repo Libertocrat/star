@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Adjusted the Semgrep gate so mutable GitHub Actions major-tag findings remain advisory hardening work instead of blocking local and CI security scans.
 
+### Fixed
+
+- Ensured Files API endpoints use the FastAPI app runtime settings snapshot when resolving managed storage.
+
 ### Documentation
 
 - Enhanced the versioned OpenAPI docs site with metadata-aware Swagger pages, social preview imagery, and light/dark favicons for GitHub Pages publication.

@@ -74,7 +74,7 @@ async def upload_file_handler(
         StarError: If validation or persistence fails.
     """
 
-    cfg = settings or get_settings()
+    cfg = settings if settings is not None else get_settings()
     file_id = uuid.uuid4()
     tmp_path = get_tmp_dir(cfg) / f"upload_{file_id}.tmp"
     blob_path = get_blob_path(file_id, cfg)

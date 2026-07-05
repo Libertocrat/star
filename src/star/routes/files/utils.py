@@ -47,7 +47,7 @@ def safe_load_metadata(
             - INTERNAL_ERROR: If an unexpected system error occurs.
     """
 
-    cfg = settings or get_settings()
+    cfg = settings if settings is not None else get_settings()
 
     try:
         metadata = load_file_metadata(file_id, cfg)

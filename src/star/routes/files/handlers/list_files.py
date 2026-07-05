@@ -47,7 +47,7 @@ async def list_files_handler(
         StarError: If input validation or listing workflow fails.
     """
 
-    cfg = settings or get_settings()
+    cfg = settings if settings is not None else get_settings()
 
     if limit <= 0 or limit > 100:
         logger.warning("file.list.invalid_request", extra={"reason": "invalid_limit"})
