@@ -97,7 +97,7 @@ def get_data_root(settings: Settings | None = None) -> Path:
         Absolute expanded path to the configured data root.
     """
 
-    cfg = settings or get_settings()
+    cfg = settings if settings is not None else get_settings()
     root = Path(cfg.star_root_dir).resolve()
     return root.joinpath("data")
 
@@ -189,7 +189,7 @@ def ensure_storage_dirs(settings: Settings | None = None) -> None:
         settings: Optional pre-loaded runtime settings.
     """
 
-    cfg = settings or get_settings()
+    cfg = settings if settings is not None else get_settings()
     root = Path(cfg.star_root_dir)
     root.mkdir(parents=True, exist_ok=True)
 
@@ -296,7 +296,7 @@ def create_placeholder_file_metadata(
         Persisted placeholder metadata in `pending` state.
     """
 
-    cfg = settings or get_settings()
+    cfg = settings if settings is not None else get_settings()
     ensure_storage_dirs(cfg)
 
     file_id = uuid.uuid4()

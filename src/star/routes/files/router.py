@@ -72,13 +72,15 @@ post_description = (
 )
 async def post_file(
     file: Annotated[UploadFile, File(...)],
-    request: Annotated[UploadFileRequest, Depends(parse_post_file_request)],
+    upload_request: Annotated[UploadFileRequest, Depends(parse_post_file_request)],
+    request: Request,
 ) -> JSONResponse | ResponseEnvelope[UploadFileData]:
     """Upload a file, validate it, and persist blob + metadata.
 
     Args:
         file: Multipart uploaded file stream.
-        request: Typed request schema for form fields.
+        upload_request: Typed request schema for form fields.
+        request: Incoming HTTP request.
 
     Returns:
         A success response envelope with file metadata, or a JSON error response
@@ -86,10 +88,10 @@ async def post_file(
     """
 
     verify_checksum: VerifyChecksumParams | None = None
-    if request.checksum:
+    if upload_request.checksum:
         try:
             verify_checksum = VerifyChecksumParams(
-                expected=request.checksum,
+                expected=upload_request.checksum,
                 algorithm="sha256",
             )
         except ValidationError as exc:
@@ -101,7 +103,12 @@ async def post_file(
             return JSONResponse(status_code=400, content=payload.model_dump())
 
     try:
-        metadata = await upload_file_handler(file, verify_checksum=verify_checksum)
+        settings = getattr(request.app.state, "settings", None)
+        metadata = await upload_file_handler(
+            file,
+            verify_checksum=verify_checksum,
+            settings=settings,
+        )
         return ResponseEnvelope.success_response(UploadFileData(file=metadata))
     except StarError as exc:
         payload = ResponseEnvelope.failure(
@@ -141,18 +148,23 @@ get_metadata_description = (
     description=get_metadata_description,
     response_model=ResponseEnvelope[UploadFileData],
 )
-async def get_file(id: UUID) -> JSONResponse | ResponseEnvelope[UploadFileData]:
+async def get_file(
+    id: UUID,
+    request: Request,
+) -> JSONResponse | ResponseEnvelope[UploadFileData]:
     """Retrieve file metadata by UUID.
 
     Args:
         id: File UUID.
+        request: Incoming HTTP request.
 
     Returns:
         Success envelope with typed file metadata or a structured STAR error response.
     """
 
     try:
-        metadata = await get_file_metadata_handler(file_id=id)
+        settings = getattr(request.app.state, "settings", None)
+        metadata = await get_file_metadata_handler(file_id=id, settings=settings)
         return ResponseEnvelope.success_response(UploadFileData(file=metadata))
     except StarError as exc:
         payload = ResponseEnvelope.failure(
@@ -177,6 +189,7 @@ list_files_description = (
     response_model=ResponseEnvelope[FileListData],
 )
 async def list_files(
+    request: Request,
     limit: int = 20,
     cursor: str | None = None,
     sort: str = "created_at",
@@ -188,6 +201,7 @@ async def list_files(
     """List persisted files using cursor pagination."""
 
     try:
+        settings = getattr(request.app.state, "settings", None)
         result = await list_files_handler(
             limit=limit,
             cursor=cursor,
@@ -196,6 +210,7 @@ async def list_files(
             status=status,
             mime_type=mime_type,
             extension=extension,
+            settings=settings,
         )
         return ResponseEnvelope.success_response(result)
     except StarError as exc:
@@ -294,11 +309,15 @@ delete_description = (
     description=delete_description,
     response_model=ResponseEnvelope[DeleteFileData],
 )
-async def delete_file(id: UUID) -> JSONResponse | ResponseEnvelope[DeleteFileData]:
+async def delete_file(
+    id: UUID,
+    request: Request,
+) -> JSONResponse | ResponseEnvelope[DeleteFileData]:
     """Delete file blob + metadata by UUID."""
 
     try:
-        result = await delete_file_handler(file_id=id)
+        settings = getattr(request.app.state, "settings", None)
+        result = await delete_file_handler(file_id=id, settings=settings)
         return ResponseEnvelope.success_response(DeleteFileData(file=result))
     except StarError as exc:
         payload = ResponseEnvelope.failure(

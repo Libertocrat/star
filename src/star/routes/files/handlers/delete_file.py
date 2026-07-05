@@ -34,7 +34,7 @@ async def delete_file_handler(
         StarError: If metadata/blob validation or deletion fails.
     """
 
-    cfg = settings or get_settings()
+    cfg = settings if settings is not None else get_settings()
     metadata = safe_load_metadata(file_id, cfg)
 
     if metadata is None:
