@@ -29,8 +29,8 @@ from star.actions.models.security import BinaryPolicy
 from star.actions.runtime import file_manager
 from star.actions.runtime.renderer import render_command
 from star.core.config import Settings
+from star.core.schemas.files import FileMetadata
 from star.core.utils.file_storage import get_blob_path, load_file_metadata
-from star.routes.files.schemas import FileMetadata
 
 
 def _make_metadata(file_id, *, size_bytes: int = 10) -> FileMetadata:

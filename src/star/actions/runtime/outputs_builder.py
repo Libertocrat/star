@@ -18,7 +18,7 @@ from star.actions.runtime.file_manager import (
     finalize_command_output_file,
 )
 from star.core.config import Settings
-from star.routes.files.schemas import FileMetadata
+from star.core.schemas.files import FileMetadata
 
 
 def build_outputs(

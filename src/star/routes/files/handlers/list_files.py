@@ -6,6 +6,7 @@ import uuid
 
 from star.core.config import Settings, get_settings
 from star.core.errors import FILE_NOT_FOUND, INTERNAL_ERROR, INVALID_REQUEST, StarError
+from star.core.schemas.files import FileMetadata
 from star.core.utils.file_listing import (
     apply_filters,
     apply_pagination,
@@ -13,7 +14,7 @@ from star.core.utils.file_listing import (
     decode_cursor,
 )
 from star.core.utils.file_storage import get_meta_path, logger
-from star.routes.files.schemas import FileListData, FileMetadata, Pagination
+from star.routes.files.schemas import FileListData, Pagination
 from star.routes.files.utils import safe_load_metadata
 
 

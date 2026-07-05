@@ -7,7 +7,7 @@ import json
 from datetime import datetime
 from uuid import UUID
 
-from star.routes.files.schemas import FileMetadata
+from star.core.schemas.files import FileMetadata
 
 
 def encode_cursor(metadata: FileMetadata) -> str:

@@ -9,8 +9,8 @@ from pydantic import ValidationError
 
 from star.core.config import Settings, get_settings
 from star.core.errors import FILE_NOT_FOUND, INTERNAL_ERROR, INVALID_REQUEST, StarError
+from star.core.schemas.files import FileMetadata
 from star.core.utils.file_storage import load_file_metadata, logger
-from star.routes.files.schemas import FileMetadata
 
 
 def safe_load_metadata(

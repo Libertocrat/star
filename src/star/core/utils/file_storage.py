@@ -20,8 +20,8 @@ from uuid import UUID
 import magic
 
 from star.core.config import Settings, get_settings
+from star.core.schemas.files import FileMetadata
 from star.core.security.mime_map import EXTENSION_MIME_MAP
-from star.routes.files.schemas import FileMetadata
 
 logger = logging.getLogger("star.core.file_storage")
 _MAGIC = magic.Magic(mime=True)

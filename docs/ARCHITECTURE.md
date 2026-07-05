@@ -65,7 +65,7 @@ The main implementation lives under `src/star`.
 | `src/star/actions/presentation` | Public action catalog, request/response contract generation, and OpenAPI-facing serializers. |
 | `src/star/actions/specs` | Built-in YAML action modules that define the shipped action catalog. |
 | `src/star/middleware` | Authentication, request integrity, request ID, observability, rate limiting, timeout, and optional security headers. |
-| `src/star/core` | Settings, errors, OpenAPI generation, storage utilities, security helpers, and shared response schemas. |
+| `src/star/core` | Settings, errors, OpenAPI generation, storage utilities, security helpers, and shared response/file schemas. |
 | `src/star/routes` | Thin HTTP handlers for `/v1/actions`, `/v1/files`, `/health`, and `/metrics`. |
 | `tests` | Smoke, unit, and integration tests covering startup, settings, middleware, action build/runtime layers, file APIs, and OpenAPI behavior. |
 | `scripts` | Helper scripts for OpenAPI export, docs site generation, and local port forwarding. |
@@ -262,6 +262,8 @@ STAR supports two related file surfaces:
 - `DELETE /v1/files/{id}` deletes a managed file
 
 The file API is UUID-based. Clients do not provide raw filesystem paths to retrieve stored content. Uploaded files are persisted as immutable blobs with metadata sidecars under storage rooted at `STAR_ROOT_DIR`.
+
+`FileMetadata` is owned by `src/star/core/schemas/files.py` because the same validated model crosses persistence, storage, action-runtime, and public response boundaries. File route schemas re-export that model for compatibility, but reusable core helpers and action runtime code import it from `core`.
 
 Action outputs can also be materialized into STAR-managed storage. Declared `file + command` outputs use runtime placeholders created before subprocess execution and finalized into managed file records after successful output handling. Sanitized stdout can also be materialized into the reserved `outputs.stdout_file` entry when the client requests `stdout_as_file=true` and the selected action allows it.
 
