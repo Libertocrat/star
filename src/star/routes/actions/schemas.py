@@ -7,7 +7,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from star.routes.files.schemas import FileMetadata
+from star.core.schemas.files import FileMetadata
 
 
 class ExecuteActionRequest(BaseModel):

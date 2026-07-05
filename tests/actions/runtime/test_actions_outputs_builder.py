@@ -27,6 +27,7 @@ from star.actions.models.security import BinaryPolicy
 from star.actions.runtime import file_manager
 from star.actions.runtime.outputs_builder import _cleanup_known_outputs, build_outputs
 from star.core.config import Settings
+from star.core.schemas.files import FileMetadata
 from star.core.utils.file_storage import (
     EMPTY_SHA256,
     compute_sha256_for_file,
@@ -35,7 +36,6 @@ from star.core.utils.file_storage import (
     get_meta_path,
     load_file_metadata,
 )
-from star.routes.files.schemas import FileMetadata
 
 
 def _make_settings(tmp_path: Path) -> Settings:

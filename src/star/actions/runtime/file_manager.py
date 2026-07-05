@@ -10,6 +10,7 @@ from typing import Mapping
 
 from star.actions.models.core import ActionSpec, OutputSource, OutputType
 from star.core.config import Settings
+from star.core.schemas.files import FileMetadata
 from star.core.utils.file_storage import (
     EMPTY_SHA256,
     compute_sha256_for_file,
@@ -21,7 +22,6 @@ from star.core.utils.file_storage import (
     get_blob_path,
     save_file_metadata,
 )
-from star.routes.files.schemas import FileMetadata
 
 logger = logging.getLogger("star.actions.runtime.file_manager")
 

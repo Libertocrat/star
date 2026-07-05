@@ -35,8 +35,8 @@ from star.actions.runtime.file_manager import (
     resolve_output_blob_path,
 )
 from star.core.config import Settings
+from star.core.schemas.files import FileMetadata
 from star.core.utils.file_storage import get_blob_path, load_file_metadata
-from star.routes.files.schemas import FileMetadata
 
 
 def render_command(

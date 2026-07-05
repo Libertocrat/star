@@ -1,44 +1,18 @@
-"""Pydantic schemas for STAR file upload responses and persisted metadata.
+"""Pydantic schemas for STAR file upload responses.
 
-This module defines strongly validated contracts used by file ingestion and
-the `POST /v1/files` response payload.
+This module defines strongly validated HTTP contracts for the STAR-managed
+file API. Shared file metadata is owned by `star.core.schemas.files` and
+re-exported here for route-contract compatibility.
 """
 
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-
-class FileMetadata(BaseModel):
-    """Typed metadata persisted for each stored file.
-
-    Attributes:
-        id: Stable UUID assigned by STAR for the uploaded file.
-        original_filename: Client-supplied filename after basename normalization.
-        stored_filename: Internal blob filename persisted by STAR.
-        mime_type: Server-detected MIME type in `type/subtype` form.
-        extension: Normalized lowercase extension including leading dot.
-        size_bytes: Persisted file size in bytes.
-        sha256: Lowercase SHA-256 digest as 64 hex characters.
-        created_at: UTC timestamp when the record was created.
-        updated_at: UTC timestamp when the record was last updated.
-        status: Lifecycle state of the file metadata.
-    """
-
-    id: UUID
-    original_filename: str = Field(..., min_length=1)
-    stored_filename: str = Field(..., min_length=1)
-    mime_type: str = Field(..., pattern=r"^[a-z0-9.+-]+/[a-z0-9.+-]+$")
-    extension: str = Field(..., pattern=r"^\.[a-z0-9]+$")
-    size_bytes: int = Field(..., ge=0)
-    sha256: str = Field(..., min_length=64, max_length=64, pattern=r"^[a-f0-9]{64}$")
-    created_at: datetime
-    updated_at: datetime
-    status: Literal["pending", "unverified", "ready"] = "ready"
+from star.core.schemas.files import FileMetadata
 
 
 class UploadFileData(BaseModel):

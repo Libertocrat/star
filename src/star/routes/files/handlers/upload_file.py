@@ -22,6 +22,7 @@ from star.core.errors import (
     UNSUPPORTED_MEDIA_TYPE,
     StarError,
 )
+from star.core.schemas.files import FileMetadata
 from star.core.utils.file_storage import (
     FileExtensionMissingError,
     MimeMappingNotDefinedError,
@@ -34,7 +35,6 @@ from star.core.utils.file_storage import (
     save_file_metadata,
 )
 from star.routes.files.schemas import (
-    FileMetadata,
     UploadFileRequest,
     VerifyChecksumParams,
 )

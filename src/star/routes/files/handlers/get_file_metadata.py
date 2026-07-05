@@ -5,8 +5,8 @@ from __future__ import annotations
 import uuid
 
 from star.core.config import Settings, get_settings
+from star.core.schemas.files import FileMetadata
 from star.core.utils.file_storage import logger
-from star.routes.files.schemas import FileMetadata
 from star.routes.files.utils import safe_load_metadata
 
 
