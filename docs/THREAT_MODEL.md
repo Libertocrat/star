@@ -190,7 +190,7 @@ Authentication coverage is as follows:
 - `validate_modules()` rejects unsupported DSL versions, duplicate module identities, invalid identifiers, blocked binaries, and malformed action declarations.
 - `build_actions()` compiles only validated modules into immutable runtime `ActionSpec` objects.
 - The registry is an explicit in-memory allowlist built from validated DSL specs.
-- `execute_command()` rejects binary paths, blocked binaries, and non-allowlisted binaries before subprocess execution.
+- `execute_command()` rejects binary paths, blocked binaries, and non-allowlisted binaries before subprocess execution, applies configured runtime timeouts, and cleans the owned process group on timeout or cancellation where supported.
 
 ### Filesystem mitigations
 
@@ -212,6 +212,7 @@ Authentication coverage is as follows:
 - `RequestIntegrityMiddleware` enforces request body size limits using `star_max_file_bytes`.
 - `RateLimitMiddleware` applies a process-local token bucket using `star_rate_limit_rps`.
 - `TimeoutMiddleware` aborts long running requests using `star_timeout_ms`.
+- Action subprocess execution also uses `star_timeout_ms` so process cleanup does not depend only on the outer HTTP timeout.
 - Upload and content-processing paths enforce size-aware behavior before persisting or returning data.
 
 ### Request smuggling mitigations

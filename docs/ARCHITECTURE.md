@@ -212,7 +212,7 @@ This is the allowlist boundary. If a spec is invalid, the registry is not built 
 2. Validate request params and execution options, including `stdout_as_file` policy checks.
 3. Render the final argv list with `render_command()`.
 4. Resolve `file_id` args and output placeholders through the managed file layer.
-5. Re-check binary policy and execute the argv with `asyncio.create_subprocess_exec()` in `execute_command()`.
+5. Re-check binary policy and execute the argv with `asyncio.create_subprocess_exec()` in `execute_command()`, using the configured runtime timeout and POSIX process-group cleanup where supported.
 6. Process stdout and stderr through the output pipeline, including sanitization, declared command-output handling, and optional `stdout_file` materialization from sanitized stdout.
 
 ```mermaid
