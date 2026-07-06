@@ -75,7 +75,11 @@ def render_command(
         resolved_arg_values: dict[str, list[str]] = {}
         for name, arg_def in spec.arg_defs.items():
             try:
-                resolved_arg_values[name] = _resolve_arg(arg_def, resolved[name])
+                resolved_arg_values[name] = _resolve_arg(
+                    arg_def,
+                    resolved[name],
+                    settings=settings,
+                )
             except ActionInvalidArgError as exc:
                 raise ActionInvalidArgError(
                     f"Param '{name}' is invalid: {exc}"
@@ -288,12 +292,17 @@ def _validate_rendered_const_token(value: str) -> None:
         )
 
 
-def _resolve_arg(arg_def: ArgDef, value: Any) -> list[str]:
+def _resolve_arg(
+    arg_def: ArgDef,
+    value: Any,
+    settings: Settings | None = None,
+) -> list[str]:
     """Resolve and validate one argument into argv-safe tokens.
 
     Args:
         arg_def: Runtime argument definition.
         value: User-provided value.
+        settings: Optional pre-loaded runtime settings.
 
     Returns:
         List of string tokens to be appended to argv.
@@ -314,7 +323,11 @@ def _resolve_arg(arg_def: ArgDef, value: Any) -> list[str]:
 
     if arg_def.type == ParamType.FILE_ID:
         file_uuid = _coerce_file_id("value", value)
-        blob_path, metadata = _resolve_file_id_to_path(file_uuid, arg_def)
+        blob_path, metadata = _resolve_file_id_to_path(
+            file_uuid,
+            arg_def,
+            settings=settings,
+        )
         _validate_file_constraints("value", metadata, constraints)
         return [blob_path]
 
@@ -336,7 +349,9 @@ def _resolve_arg(arg_def: ArgDef, value: Any) -> list[str]:
         elif arg_def.items == ParamType.FILE_ID:
             for item in value:
                 file_uuid = _coerce_file_id("value", item)
-                resolved_values.append(_resolve_single_file_id(file_uuid))
+                resolved_values.append(
+                    _resolve_single_file_id(file_uuid, settings=settings)
+                )
             return resolved_values
 
         items_type = (
@@ -347,11 +362,15 @@ def _resolve_arg(arg_def: ArgDef, value: Any) -> list[str]:
     raise ActionInvalidArgError(f"unsupported argument type '{arg_def.type.value}'")
 
 
-def _resolve_single_file_id(file_id: UUID4) -> str:
+def _resolve_single_file_id(
+    file_id: UUID4,
+    settings: Settings | None = None,
+) -> str:
     """Resolve a single file_id into a safe filesystem path.
 
     Args:
         file_id: UUID of the file.
+        settings: Optional pre-loaded runtime settings.
 
     Returns:
         Absolute path to the file blob.
@@ -363,6 +382,7 @@ def _resolve_single_file_id(file_id: UUID4) -> str:
     blob_path, _ = _resolve_file_id_to_path(
         cast(UUID, file_id),
         ArgDef(type=ParamType.FILE_ID, required=True, description="file_id"),
+        settings=settings,
     )
     return blob_path
 
@@ -370,12 +390,14 @@ def _resolve_single_file_id(file_id: UUID4) -> str:
 def _resolve_file_id_to_path(
     file_id: UUID,
     arg_def: ArgDef,
+    settings: Settings | None = None,
 ) -> tuple[str, FileMetadata]:
     """Resolve a `file_id` argument into blob path and loaded metadata.
 
     Args:
         file_id: File UUID to resolve.
         arg_def: Runtime argument definition for the file parameter.
+        settings: Optional pre-loaded runtime settings.
 
     Returns:
         Tuple of `(blob_path_str, metadata)`.
@@ -386,14 +408,14 @@ def _resolve_file_id_to_path(
 
     _ = arg_def
 
-    metadata = load_file_metadata(file_id)
+    metadata = load_file_metadata(file_id, settings)
     if metadata is None:
         raise ActionInvalidArgError(f"File '{file_id}' was not found")
 
     if metadata.status != "ready":
         raise ActionInvalidArgError(f"File '{file_id}' is not ready for use")
 
-    blob_path = get_blob_path(file_id)
+    blob_path = get_blob_path(file_id, settings)
     if not blob_path.exists():
         raise ActionInvalidArgError(f"File blob for '{file_id}' was not found")
 

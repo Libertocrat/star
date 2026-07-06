@@ -37,11 +37,11 @@ def _make_metadata(file_id, *, size_bytes: int = 10) -> FileMetadata:
     """Build a valid file metadata object for renderer tests.
 
     Args:
-            file_id: File UUID associated with metadata.
-            size_bytes: Reported file size in bytes.
+        file_id: File UUID associated with metadata.
+        size_bytes: Reported file size in bytes.
 
     Returns:
-            Validated `FileMetadata` instance.
+        Validated `FileMetadata` instance.
     """
 
     now = datetime.now(tz=UTC)
@@ -160,7 +160,7 @@ def _make_spec(
 
 
 # ============================================================================
-# MERGE / DEFAULTS
+# Defaults
 # ============================================================================
 
 
@@ -207,7 +207,7 @@ def test_render_command__params_override_defaults():
 
 
 # ============================================================================
-# NONE VALIDATION
+# None Validation
 # ============================================================================
 
 
@@ -251,7 +251,7 @@ def test_render_command__rejects_none_in_params():
 
 
 # ============================================================================
-# STRING VALIDATION
+# String Validation
 # ============================================================================
 
 
@@ -410,7 +410,7 @@ def test_render_command__enforces_string_allowed_values():
 
 
 # ============================================================================
-# NUMERIC VALIDATION
+# Numeric Validation
 # ============================================================================
 
 
@@ -504,7 +504,7 @@ def test_render_command__accepts_valid_float_value():
 
 
 # ============================================================================
-# FILE_ID RESOLUTION
+# File ID Resolution
 # ============================================================================
 
 
@@ -524,11 +524,11 @@ def test_render_command__resolves_file_id_to_blob_path(
 
     monkeypatch.setattr(
         "star.actions.runtime.renderer.load_file_metadata",
-        lambda _: _make_metadata(file_id, size_bytes=2),
+        lambda _, settings=None: _make_metadata(file_id, size_bytes=2),
     )
     monkeypatch.setattr(
         "star.actions.runtime.renderer.get_blob_path",
-        lambda _: blob_path,
+        lambda _, settings=None: blob_path,
     )
 
     spec = _make_spec(
@@ -544,6 +544,39 @@ def test_render_command__resolves_file_id_to_blob_path(
     assert render_command(spec, {"file": file_id}) == ["cat", str(blob_path)]
 
 
+def test_render_command__resolves_file_id_with_explicit_settings(tmp_path: Path):
+    """
+    GIVEN a managed file persisted under an injected storage root
+    WHEN render_command resolves a file_id argument with explicit settings
+    THEN argv uses the blob path from that settings snapshot
+    """
+
+    cfg = _make_settings(tmp_path)
+    metadata = file_manager.create_ready_file_from_bytes(
+        original_filename="input.txt",
+        content=b"ok",
+        extension=".txt",
+        mime_type="text/plain",
+        settings=cfg,
+    )
+    blob_path = get_blob_path(metadata.id, cfg)
+
+    spec = _make_spec(
+        arg_defs={
+            "file": ArgDef(type=ParamType.FILE_ID, required=True, description="file")
+        },
+        command_template=(
+            {"kind": "binary", "value": "cat"},
+            {"kind": "arg", "name": "file"},
+        ),
+    )
+
+    assert render_command(spec, {"file": metadata.id}, settings=cfg) == [
+        "cat",
+        str(blob_path),
+    ]
+
+
 def test_render_command__fails_when_file_metadata_is_missing(monkeypatch):
     """
     GIVEN a file_id argument
@@ -555,11 +588,11 @@ def test_render_command__fails_when_file_metadata_is_missing(monkeypatch):
 
     monkeypatch.setattr(
         "star.actions.runtime.renderer.load_file_metadata",
-        lambda _: None,
+        lambda _, settings=None: None,
     )
     monkeypatch.setattr(
         "star.actions.runtime.renderer.get_blob_path",
-        lambda _: Path("/unused"),
+        lambda _, settings=None: Path("/unused"),
     )
 
     spec = _make_spec(
@@ -585,11 +618,11 @@ def test_renderer__rejects_non_ready_file_input(monkeypatch, tmp_path: Path):
 
     monkeypatch.setattr(
         "star.actions.runtime.renderer.load_file_metadata",
-        lambda _: _make_metadata_with_status(file_id, status="pending"),
+        lambda _, settings=None: _make_metadata_with_status(file_id, status="pending"),
     )
     monkeypatch.setattr(
         "star.actions.runtime.renderer.get_blob_path",
-        lambda _: blob_path,
+        lambda _, settings=None: blob_path,
     )
 
     spec = _make_spec(
@@ -618,11 +651,11 @@ def test_render_command__fails_when_blob_path_is_missing(monkeypatch, tmp_path: 
 
     monkeypatch.setattr(
         "star.actions.runtime.renderer.load_file_metadata",
-        lambda _: _make_metadata(file_id, size_bytes=10),
+        lambda _, settings=None: _make_metadata(file_id, size_bytes=10),
     )
     monkeypatch.setattr(
         "star.actions.runtime.renderer.get_blob_path",
-        lambda _: missing_blob_path,
+        lambda _, settings=None: missing_blob_path,
     )
 
     spec = _make_spec(
@@ -651,11 +684,11 @@ def test_render_command__fails_when_file_size_exceeds_max_size(
 
     monkeypatch.setattr(
         "star.actions.runtime.renderer.load_file_metadata",
-        lambda _: _make_metadata(file_id, size_bytes=999),
+        lambda _, settings=None: _make_metadata(file_id, size_bytes=999),
     )
     monkeypatch.setattr(
         "star.actions.runtime.renderer.get_blob_path",
-        lambda _: blob_path,
+        lambda _, settings=None: blob_path,
     )
 
     spec = _make_spec(
@@ -693,11 +726,11 @@ def test_render_command__fails_when_file_extension_not_allowed(
 
     monkeypatch.setattr(
         "star.actions.runtime.renderer.load_file_metadata",
-        lambda _: _make_metadata(file_id, size_bytes=10),
+        lambda _, settings=None: _make_metadata(file_id, size_bytes=10),
     )
     monkeypatch.setattr(
         "star.actions.runtime.renderer.get_blob_path",
-        lambda _: blob_path,
+        lambda _, settings=None: blob_path,
     )
 
     spec = _make_spec(
@@ -731,11 +764,11 @@ def test_render_command__fails_when_file_mime_type_not_allowed(
 
     monkeypatch.setattr(
         "star.actions.runtime.renderer.load_file_metadata",
-        lambda _: _make_metadata(file_id, size_bytes=10),
+        lambda _, settings=None: _make_metadata(file_id, size_bytes=10),
     )
     monkeypatch.setattr(
         "star.actions.runtime.renderer.get_blob_path",
-        lambda _: blob_path,
+        lambda _, settings=None: blob_path,
     )
 
     spec = _make_spec(
@@ -855,11 +888,11 @@ def test_render_command_list_file_id_resolves_paths(monkeypatch, tmp_path: Path)
 
     monkeypatch.setattr(
         "star.actions.runtime.renderer.load_file_metadata",
-        lambda file_id: _make_metadata(file_id),
+        lambda file_id, settings=None: _make_metadata(file_id),
     )
     monkeypatch.setattr(
         "star.actions.runtime.renderer.get_blob_path",
-        lambda file_id: blobs[file_id],
+        lambda file_id, settings=None: blobs[file_id],
     )
 
     spec = _make_spec(
@@ -878,6 +911,57 @@ def test_render_command_list_file_id_resolves_paths(monkeypatch, tmp_path: Path)
     )
 
     assert render_command(spec, {"files": [first_id, second_id]}) == [
+        "cat",
+        str(first_blob),
+        str(second_blob),
+    ]
+
+
+def test_render_command_list_file_id_uses_explicit_settings(tmp_path: Path):
+    """
+    GIVEN managed files persisted under an injected storage root
+    WHEN render_command resolves a list[file_id] argument with explicit settings
+    THEN argv uses ordered blob paths from that settings snapshot
+    """
+
+    cfg = _make_settings(tmp_path)
+    first_metadata = file_manager.create_ready_file_from_bytes(
+        original_filename="first.txt",
+        content=b"a",
+        extension=".txt",
+        mime_type="text/plain",
+        settings=cfg,
+    )
+    second_metadata = file_manager.create_ready_file_from_bytes(
+        original_filename="second.txt",
+        content=b"b",
+        extension=".txt",
+        mime_type="text/plain",
+        settings=cfg,
+    )
+    first_blob = get_blob_path(first_metadata.id, cfg)
+    second_blob = get_blob_path(second_metadata.id, cfg)
+
+    spec = _make_spec(
+        arg_defs={
+            "files": ArgDef(
+                type=ParamType.LIST,
+                items=ParamType.FILE_ID,
+                required=True,
+                description="files",
+            )
+        },
+        command_template=(
+            {"kind": "binary", "value": "cat"},
+            {"kind": "arg", "name": "files"},
+        ),
+    )
+
+    assert render_command(
+        spec,
+        {"files": [first_metadata.id, second_metadata.id]},
+        settings=cfg,
+    ) == [
         "cat",
         str(first_blob),
         str(second_blob),
@@ -946,11 +1030,11 @@ def test_render_command_list_missing_file(monkeypatch):
 
     monkeypatch.setattr(
         "star.actions.runtime.renderer.load_file_metadata",
-        lambda _: None,
+        lambda _, settings=None: None,
     )
     monkeypatch.setattr(
         "star.actions.runtime.renderer.get_blob_path",
-        lambda _: Path("/unused"),
+        lambda _, settings=None: Path("/unused"),
     )
 
     spec = _make_spec(
@@ -990,7 +1074,7 @@ def test_render_command__fails_when_file_id_is_invalid_uuid():
 
 
 # ============================================================================
-# FLAGS
+# Flags
 # ============================================================================
 
 
@@ -1056,7 +1140,7 @@ def test_render_command__default_true_flag_is_included():
 
 
 # ============================================================================
-# COMMAND TEMPLATE
+# Command Template
 # ============================================================================
 
 
@@ -1204,7 +1288,7 @@ def test_render_command__supports_multiple_args_and_flags():
 
 
 # ============================================================================
-# OUTPUT FILE HANDLING
+# Output File Handling
 # ============================================================================
 
 
@@ -1285,7 +1369,7 @@ def test_renderer__file_command_injects_blob_path(tmp_path, monkeypatch):
 
 def test_renderer__file_stdout_does_not_create_metadata(tmp_path, monkeypatch):
     """
-    GIVEN file+stdout
+    GIVEN a file output sourced from stdout
     WHEN render_command runs
     THEN no metadata is created
     """
@@ -1315,7 +1399,7 @@ def test_renderer__file_stdout_does_not_create_metadata(tmp_path, monkeypatch):
 
 def test_renderer__file_stdout_does_not_modify_argv(tmp_path, monkeypatch):
     """
-    GIVEN file+stdout
+    GIVEN a file output sourced from stdout
     WHEN render_command runs
     THEN argv unchanged
     """
@@ -1344,7 +1428,7 @@ def test_renderer__file_stdout_does_not_modify_argv(tmp_path, monkeypatch):
 
 
 # ============================================================================
-# EDGE CASES
+# Edge Cases
 # ============================================================================
 
 
