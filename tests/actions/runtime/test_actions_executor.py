@@ -6,6 +6,9 @@ error wrapping, and runtime execution metadata.
 
 from __future__ import annotations
 
+import asyncio
+import signal
+
 import pytest
 from pydantic import BaseModel
 
@@ -18,7 +21,64 @@ from star.actions.exceptions import (
 )
 from star.actions.models.core import ActionSpec
 from star.actions.models.security import BinaryPolicy
+from star.actions.runtime import executor as executor_module
 from star.actions.runtime.executor import execute_command
+
+
+class _FakeAsyncProcess:
+    """Controllable async subprocess stand-in for cleanup tests.
+
+    Attributes:
+        pid: Synthetic process identifier used by process-group signaling.
+        returncode: Process exit status set by the test-controlled signal path.
+        communicated: Whether stdout and stderr were drained.
+        exit_event: Event that releases `wait()`.
+        communicate_event: Event that releases `communicate()`.
+    """
+
+    pid = 4242
+
+    def __init__(self) -> None:
+        """Initialize pending fake process state."""
+
+        self.returncode: int | None = None
+        self.communicated = False
+        self.exit_event = asyncio.Event()
+        self.communicate_event = asyncio.Event()
+
+    async def communicate(self) -> tuple[bytes, bytes]:
+        """Wait for test-controlled drain release and return output bytes.
+
+        Returns:
+            Tuple containing stdout and stderr bytes.
+        """
+
+        await self.communicate_event.wait()
+        self.communicated = True
+        return b"", b""
+
+    async def wait(self) -> int:
+        """Wait for test-controlled process exit and return the status code.
+
+        Returns:
+            Process return code.
+        """
+
+        if self.returncode is None:
+            await self.exit_event.wait()
+        return 0 if self.returncode is None else self.returncode
+
+    def send_signal(self, sig: signal.Signals) -> None:
+        """Receive direct-process signals on non-POSIX fallback paths.
+
+        Args:
+            sig: Signal delivered by the executor.
+        """
+
+        if sig == signal.SIGKILL:
+            self.returncode = -int(sig)
+            self.exit_event.set()
+            self.communicate_event.set()
 
 
 def _make_spec(
@@ -64,7 +124,7 @@ def _make_spec(
 
 
 # ============================================================================
-# PRECONDITIONS
+# Preconditions
 # ============================================================================
 
 
@@ -121,7 +181,7 @@ async def test_execute_command__rejects_invalid_timeout(
 
 
 # ============================================================================
-# POLICY VALIDATION
+# Policy Validation
 # ============================================================================
 
 
@@ -168,7 +228,7 @@ async def test_execute_command__path_like_binary_raises():
 
 
 # ============================================================================
-# SUCCESSFUL EXECUTION
+# Successful Execution
 # ============================================================================
 
 
@@ -201,7 +261,7 @@ async def test_execute_command__command_with_arguments():
 
 
 # ============================================================================
-# NON-ZERO EXIT
+# Non-Zero Exit
 # ============================================================================
 
 
@@ -223,7 +283,7 @@ async def test_execute_command__non_zero_exit_returns_result():
 
 
 # ============================================================================
-# TIMEOUT HANDLING
+# Timeout Handling
 # ============================================================================
 
 
@@ -251,8 +311,87 @@ async def test_execute_command__timeout_error_message():
         await execute_command(["sleep", "1"], _make_spec(), timeout=0.01)
 
 
+@pytest.mark.asyncio
+async def test_execute_command__timeout_terminates_process_group(monkeypatch):
+    """
+    GIVEN a subprocess that ignores graceful termination
+    WHEN execute_command times out
+    THEN the owned process group is terminated, killed, and drained
+    """
+
+    fake_proc = _FakeAsyncProcess()
+    signals_sent: list[signal.Signals] = []
+
+    async def _fake_spawn(*_args, **kwargs):
+        """Return a controlled subprocess and assert POSIX session isolation."""
+        assert kwargs["start_new_session"] is True
+        return fake_proc
+
+    def _fake_killpg(pid: int, sig: signal.Signals) -> None:
+        """Capture process-group signals and release the fake on SIGKILL."""
+        assert pid == fake_proc.pid
+        signals_sent.append(sig)
+        if sig == signal.SIGKILL:
+            fake_proc.returncode = -int(sig)
+            fake_proc.exit_event.set()
+            fake_proc.communicate_event.set()
+
+    monkeypatch.setattr(executor_module, "_SUPPORTS_PROCESS_GROUPS", True)
+    monkeypatch.setattr(executor_module, "_TERMINATION_GRACE_SECONDS", 0.001)
+    monkeypatch.setattr(executor_module.asyncio, "create_subprocess_exec", _fake_spawn)
+    monkeypatch.setattr(executor_module.os, "killpg", _fake_killpg)
+
+    with pytest.raises(ActionExecutionTimeoutError, match="timed out"):
+        await execute_command(["sleep", "1"], _make_spec(), timeout=0.001)
+
+    assert signals_sent == [signal.SIGTERM, signal.SIGKILL]
+    assert fake_proc.communicated is True
+
+
+@pytest.mark.asyncio
+async def test_execute_command__cancellation_terminates_process_group(monkeypatch):
+    """
+    GIVEN a running subprocess
+    WHEN execute_command is cancelled
+    THEN cleanup completes before CancelledError propagates
+    """
+
+    fake_proc = _FakeAsyncProcess()
+    signals_sent: list[signal.Signals] = []
+
+    async def _fake_spawn(*_args, **kwargs):
+        """Return a controlled subprocess and assert POSIX session isolation."""
+        assert kwargs["start_new_session"] is True
+        return fake_proc
+
+    def _fake_killpg(pid: int, sig: signal.Signals) -> None:
+        """Capture process-group signals and release the fake on SIGKILL."""
+        assert pid == fake_proc.pid
+        signals_sent.append(sig)
+        if sig == signal.SIGKILL:
+            fake_proc.returncode = -int(sig)
+            fake_proc.exit_event.set()
+            fake_proc.communicate_event.set()
+
+    monkeypatch.setattr(executor_module, "_SUPPORTS_PROCESS_GROUPS", True)
+    monkeypatch.setattr(executor_module, "_TERMINATION_GRACE_SECONDS", 0.001)
+    monkeypatch.setattr(executor_module.asyncio, "create_subprocess_exec", _fake_spawn)
+    monkeypatch.setattr(executor_module.os, "killpg", _fake_killpg)
+
+    task = asyncio.create_task(execute_command(["sleep", "1"], _make_spec()))
+    await asyncio.sleep(0)
+
+    task.cancel()
+
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    assert signals_sent == [signal.SIGTERM, signal.SIGKILL]
+    assert fake_proc.communicated is True
+
+
 # ============================================================================
-# SPAWN FAILURES
+# Spawn Failures
 # ============================================================================
 
 
@@ -269,7 +408,7 @@ async def test_execute_command__binary_not_found():
 
 
 # ============================================================================
-# EXECUTION METADATA
+# Execution Metadata
 # ============================================================================
 
 
@@ -303,7 +442,7 @@ async def test_execute_command__pid_is_set():
 
 
 # ============================================================================
-# STDOUT / STDERR CONTRACT
+# Stdout / Stderr Contract
 # ============================================================================
 
 
@@ -338,7 +477,7 @@ async def test_execute_command__stderr_is_bytes():
 
 
 # ============================================================================
-# EDGE CASES
+# Edge Cases
 # ============================================================================
 
 
@@ -367,7 +506,7 @@ async def test_execute_command__wraps_unexpected_errors(monkeypatch):
 
 
 # ============================================================================
-# PARAMETRIZED VALID EXECUTIONS
+# Parametrized Valid Executions
 # ============================================================================
 
 

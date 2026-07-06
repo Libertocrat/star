@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Ensured Files API endpoints use the FastAPI app runtime settings snapshot when resolving managed storage.
 - Ensured action `file_id` arguments resolve managed files with the runtime settings snapshot.
+- Ensured action subprocess execution uses configured runtime timeouts and cleans owned process groups on timeout or cancellation.
 
 ### Documentation
 

@@ -8,6 +8,9 @@ DSL, mutate argv, sanitize output, or perform telemetry side effects.
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import os
+import signal
 import time
 
 from star.actions.exceptions import (
@@ -24,6 +27,9 @@ from star.actions.security.policy import (
     is_binary_blocked,
     is_simple_binary_name,
 )
+
+_TERMINATION_GRACE_SECONDS = 0.2
+_SUPPORTS_PROCESS_GROUPS = os.name == "posix"
 
 
 async def execute_command(
@@ -74,25 +80,36 @@ async def execute_command(
     start = time.perf_counter()
     pid: int | None = None
 
+    proc: asyncio.subprocess.Process | None = None
+    communicate_task: asyncio.Task[tuple[bytes, bytes]] | None = None
+
     try:
-        proc = await asyncio.create_subprocess_exec(
-            *argv,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
+        if _SUPPORTS_PROCESS_GROUPS:
+            proc = await asyncio.create_subprocess_exec(
+                *argv,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                start_new_session=True,
+            )
+        else:
+            proc = await asyncio.create_subprocess_exec(
+                *argv,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
         pid = proc.pid
+        communicate_task = asyncio.create_task(proc.communicate())
 
         if timeout is None:
-            stdout, stderr = await proc.communicate()
+            stdout, stderr = await asyncio.shield(communicate_task)
         else:
             try:
                 stdout, stderr = await asyncio.wait_for(
-                    proc.communicate(),
+                    asyncio.shield(communicate_task),
                     timeout=timeout,
                 )
             except asyncio.TimeoutError as exc:
-                proc.kill()
-                await proc.communicate()
+                await asyncio.shield(_terminate_process(proc, communicate_task))
                 raise ActionExecutionTimeoutError(
                     f"Command execution timed out after {timeout} seconds"
                 ) from exc
@@ -118,9 +135,70 @@ async def execute_command(
         ActionBinaryPathForbiddenError,
     ):
         raise
+    except asyncio.CancelledError:
+        if proc is not None and communicate_task is not None:
+            await asyncio.shield(_terminate_process(proc, communicate_task))
+        raise
     except (FileNotFoundError, PermissionError, OSError) as exc:
         raise ActionRuntimeExecError(f"Failed to execute command: {argv[0]}") from exc
     except Exception as exc:
         raise ActionRuntimeExecError(
             f"Unexpected failure during command execution: {argv[0]}"
         ) from exc
+
+
+async def _terminate_process(
+    proc: asyncio.subprocess.Process,
+    communicate_task: asyncio.Task[tuple[bytes, bytes]],
+) -> None:
+    """Terminate and reap a subprocess owned by one action invocation.
+
+    Args:
+        proc: Async subprocess process to terminate.
+        communicate_task: Task draining stdout and stderr for the process.
+    """
+
+    if proc.returncode is None:
+        _request_process_termination(proc)
+        try:
+            await asyncio.wait_for(proc.wait(), timeout=_TERMINATION_GRACE_SECONDS)
+        except asyncio.TimeoutError:
+            _force_process_kill(proc)
+            await proc.wait()
+
+    if not communicate_task.done():
+        with contextlib.suppress(asyncio.CancelledError, Exception):
+            await communicate_task
+    else:
+        with contextlib.suppress(asyncio.CancelledError, Exception):
+            communicate_task.result()
+
+
+def _request_process_termination(proc: asyncio.subprocess.Process) -> None:
+    """Request graceful termination for the owned process.
+
+    Args:
+        proc: Process receiving the termination request.
+    """
+
+    with contextlib.suppress(ProcessLookupError):
+        if _SUPPORTS_PROCESS_GROUPS:
+            os.killpg(proc.pid, signal.SIGTERM)
+            return
+
+        proc.terminate()
+
+
+def _force_process_kill(proc: asyncio.subprocess.Process) -> None:
+    """Force-kill the owned process after graceful termination fails.
+
+    Args:
+        proc: Process receiving the kill request.
+    """
+
+    with contextlib.suppress(ProcessLookupError):
+        if _SUPPORTS_PROCESS_GROUPS:
+            os.killpg(proc.pid, signal.SIGKILL)
+            return
+
+        proc.kill()

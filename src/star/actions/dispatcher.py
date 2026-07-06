@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from typing import Any
 
@@ -45,9 +46,17 @@ async def dispatch_action(
     validated = action_spec.params_model.model_validate(params)
     params_dict = validated.model_dump(mode="python")
     rendered = render_command(action_spec, params_dict, settings=settings)
+    timeout = settings.star_timeout_ms / 1000.0 if settings is not None else None
     try:
-        execution = await runtime_executor.execute_command(rendered.argv, action_spec)
+        execution = await runtime_executor.execute_command(
+            rendered.argv,
+            action_spec,
+            timeout=timeout,
+        )
     except ActionRuntimeExecError:
+        cleanup_output_placeholders(rendered.output_files, settings=settings)
+        raise
+    except asyncio.CancelledError:
         cleanup_output_placeholders(rendered.output_files, settings=settings)
         raise
 
