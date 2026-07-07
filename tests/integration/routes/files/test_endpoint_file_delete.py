@@ -1,6 +1,6 @@
 """Integration tests for the /v1/files/{id} delete endpoint.
 
-These tests validate hard-delete semantics for STAR-managed files and
+These tests validate metadata-first deletion semantics for STAR-managed files and
 standardized STAR error-envelope mappings.
 """
 
@@ -12,7 +12,13 @@ from uuid import UUID, uuid4
 
 from fastapi.testclient import TestClient
 
-from star.core.errors import FILE_NOT_FOUND, INVALID_REQUEST, UNAUTHORIZED
+from star.core.errors import (
+    FILE_NOT_FOUND,
+    INTERNAL_ERROR,
+    INVALID_REQUEST,
+    UNAUTHORIZED,
+)
+from star.routes.files.handlers import delete_file as delete_file_handler_module
 
 # ============================================================================
 # Helpers
@@ -53,7 +59,7 @@ def _blob_path_for(tmp_path: Path, file_id: UUID) -> Path:
 
 
 # ============================================================================
-# Happy path
+# Happy Path
 # ============================================================================
 
 
@@ -117,7 +123,7 @@ def test_files_delete_returns_not_found_when_metadata_missing(
     assert body["error"]["code"] == FILE_NOT_FOUND.code
 
 
-def test_files_delete_returns_not_found_when_blob_missing(
+def test_files_delete_cleans_metadata_when_blob_missing(
     create_upload_app,
     auth_headers,
     tmp_path,
@@ -125,7 +131,7 @@ def test_files_delete_returns_not_found_when_blob_missing(
     """
     GIVEN valid metadata but missing blob artifact
     WHEN DELETE /v1/files/{id} is called
-    THEN it returns FILE_NOT_FOUND
+    THEN it returns success and removes metadata
     """
 
     app = create_upload_app()
@@ -134,15 +140,110 @@ def test_files_delete_returns_not_found_when_blob_missing(
         file_id = _upload_file_and_get_id(client, auth_headers)
 
         blob_path = _blob_path_for(tmp_path, file_id)
+        meta_path = _meta_path_for(tmp_path, file_id)
         blob_path.unlink()
 
         response = client.delete(f"/v1/files/{file_id}", headers=auth_headers)
 
-    assert response.status_code == FILE_NOT_FOUND.http_status
+    assert response.status_code == 200
+
+    body = response.json()
+    assert body["success"] is True
+    assert body["error"] is None
+    assert body["data"]["file"]["id"] == str(file_id)
+    assert body["data"]["file"]["deleted"] is True
+
+    assert not blob_path.exists()
+    assert not meta_path.exists()
+
+
+def test_files_delete_preserves_artifacts_when_metadata_delete_fails(
+    create_upload_app,
+    auth_headers,
+    tmp_path,
+    monkeypatch,
+):
+    """
+    GIVEN a stored file whose metadata cannot be deleted
+    WHEN DELETE /v1/files/{id} is called
+    THEN it returns INTERNAL_ERROR and preserves both artifacts for retry
+    """
+
+    def _fail_delete_metadata(_file_id: UUID, _settings: object = None) -> None:
+        """Raise an OS error before metadata is removed."""
+
+        raise OSError("metadata delete failed")
+
+    monkeypatch.setattr(
+        delete_file_handler_module,
+        "delete_metadata_file",
+        _fail_delete_metadata,
+    )
+
+    app = create_upload_app()
+
+    with TestClient(app) as client:
+        file_id = _upload_file_and_get_id(client, auth_headers)
+
+        blob_path = _blob_path_for(tmp_path, file_id)
+        meta_path = _meta_path_for(tmp_path, file_id)
+
+        response = client.delete(f"/v1/files/{file_id}", headers=auth_headers)
+
+    assert response.status_code == INTERNAL_ERROR.http_status
 
     body = response.json()
     assert body["success"] is False
-    assert body["error"]["code"] == FILE_NOT_FOUND.code
+    assert body["data"] is None
+    assert body["error"]["code"] == INTERNAL_ERROR.code
+
+    assert blob_path.exists()
+    assert meta_path.exists()
+
+
+def test_files_delete_succeeds_when_blob_cleanup_fails_after_metadata_delete(
+    create_upload_app,
+    auth_headers,
+    tmp_path,
+    monkeypatch,
+):
+    """
+    GIVEN a stored file whose blob cleanup fails after metadata deletion
+    WHEN DELETE /v1/files/{id} is called
+    THEN it returns success and leaves only an internal blob residue
+    """
+
+    def _fail_delete_blob(_file_id: UUID, _settings: object = None) -> None:
+        """Raise an OS error without removing the blob."""
+
+        raise OSError("blob delete failed")
+
+    monkeypatch.setattr(
+        delete_file_handler_module,
+        "delete_blob_file",
+        _fail_delete_blob,
+    )
+
+    app = create_upload_app()
+
+    with TestClient(app) as client:
+        file_id = _upload_file_and_get_id(client, auth_headers)
+
+        blob_path = _blob_path_for(tmp_path, file_id)
+        meta_path = _meta_path_for(tmp_path, file_id)
+
+        response = client.delete(f"/v1/files/{file_id}", headers=auth_headers)
+
+    assert response.status_code == 200
+
+    body = response.json()
+    assert body["success"] is True
+    assert body["error"] is None
+    assert body["data"]["file"]["id"] == str(file_id)
+    assert body["data"]["file"]["deleted"] is True
+
+    assert blob_path.exists()
+    assert not meta_path.exists()
 
 
 def test_files_delete_returns_invalid_request_for_corrupted_metadata_json(
@@ -202,7 +303,7 @@ def test_files_delete_returns_invalid_request_for_invalid_metadata_schema(
 
 
 # ============================================================================
-# Authorization and path validation
+# Authorization And Path Validation
 # ============================================================================
 
 
