@@ -17,7 +17,7 @@ from star.actions.exceptions import ActionSpecsParseError
 from star.actions.schemas.dsl import ArgCmd, BinaryCmd, FlagCmd, OutputCmd
 
 # ============================================================================
-# validate_modules: happy path
+# Validate Modules Happy Path
 # ============================================================================
 
 
@@ -33,7 +33,7 @@ def test_validate_modules_accepts_valid_module(make_valid_module):
 
 
 # ============================================================================
-# module-level validation
+# Module-Level Validation
 # ============================================================================
 
 
@@ -337,7 +337,7 @@ def test_validate_modules_rejects_module_tags_with_non_string_item(make_valid_mo
 
 
 # ============================================================================
-# action-level validation
+# Action-Level Validation
 # ============================================================================
 
 
@@ -373,7 +373,7 @@ def test_validate_modules_rejects_invalid_action_names(
 
 
 # ============================================================================
-# action tags
+# Action Tags
 # ============================================================================
 
 
@@ -542,7 +542,7 @@ def test_validate_modules_rejects_binary_not_declared_in_module(
 
 
 # ============================================================================
-# outputs validation
+# Outputs Validation
 # ============================================================================
 
 
@@ -840,7 +840,7 @@ def test_validator__rejects_undeclared_output_reference(make_valid_module):
 
 
 # ============================================================================
-# command elements
+# Command Elements
 # ============================================================================
 
 
@@ -881,6 +881,102 @@ def test_validate_modules_rejects_invalid_command_literals(
     module.actions["ping"].command = [BinaryCmd(binary="echo"), literal]
 
     with pytest.raises(ActionSpecsParseError, match=error_message):
+        validate_modules([module])
+
+
+@pytest.mark.parametrize(
+    "literal",
+    [
+        "/etc/passwd",
+        r"C:\Windows\System32",
+        "C:/Windows/System32",
+        r"\\server\share",
+        r"relative\path",
+        "../secrets.txt",
+        "safe/../secrets.txt",
+    ],
+    ids=[
+        "posix_absolute",
+        "windows_drive_backslash",
+        "windows_drive_slash",
+        "unc_path",
+        "backslash_path",
+        "parent_traversal",
+        "embedded_parent_traversal",
+    ],
+)
+def test_validate_modules_rejects_command_literal_host_paths(
+    make_valid_module,
+    literal: str,
+):
+    """
+    GIVEN a command containing a host-path-like literal token
+    WHEN validate_modules is called
+    THEN ActionSpecsParseError is raised at startup
+    """
+    module = make_valid_module()
+    module.actions["ping"].command = [BinaryCmd(binary="echo"), literal]
+
+    with pytest.raises(ActionSpecsParseError, match="host paths"):
+        validate_modules([module])
+
+
+def test_validate_modules_allows_core_uuid_command_literal_exception(
+    make_module_payload,
+    make_action_payload,
+    make_module_spec,
+):
+    """
+    GIVEN the reviewed core UUID action using the kernel UUID path
+    WHEN validate_modules is called
+    THEN the command literal exception is accepted
+    """
+    action = make_action_payload(
+        command=[{"binary": "cat"}, "/proc/sys/kernel/random/uuid"],
+    )
+    module = make_module_spec(
+        make_module_payload(
+            module_name="random",
+            binaries=["cat"],
+            actions={"gen_uuid": action},
+        )
+    ).with_runtime_namespace((), "core")
+
+    validate_modules([module])
+
+
+@pytest.mark.parametrize(
+    ("source", "action_name"),
+    [
+        ("user", "gen_uuid"),
+        ("core", "read_uuid"),
+    ],
+    ids=["user_source", "wrong_action"],
+)
+def test_validate_modules_rejects_unreviewed_uuid_path_literal(
+    make_module_payload,
+    make_action_payload,
+    make_module_spec,
+    source: str,
+    action_name: str,
+):
+    """
+    GIVEN the kernel UUID path outside the exact core allowlist entry
+    WHEN validate_modules is called
+    THEN ActionSpecsParseError is raised at startup
+    """
+    action = make_action_payload(
+        command=[{"binary": "cat"}, "/proc/sys/kernel/random/uuid"],
+    )
+    module = make_module_spec(
+        make_module_payload(
+            module_name="random",
+            binaries=["cat"],
+            actions={action_name: action},
+        )
+    ).with_runtime_namespace((), source)
+
+    with pytest.raises(ActionSpecsParseError, match="host paths"):
         validate_modules([module])
 
 
@@ -1035,7 +1131,7 @@ def test_validate_modules_rejects_command_literal_placeholder_with_unsupported_a
 
 
 # ============================================================================
-# references
+# References
 # ============================================================================
 
 
@@ -1072,7 +1168,7 @@ def test_validate_modules_rejects_undefined_flag_reference(make_valid_module):
 
 
 # ============================================================================
-# unused definitions
+# Unused Definitions
 # ============================================================================
 
 
@@ -1135,7 +1231,7 @@ def test_validate_modules_rejects_unused_flag(
 
 
 # ============================================================================
-# naming rules
+# Naming Rules
 # ============================================================================
 
 
@@ -1254,7 +1350,7 @@ def test_validate_modules_rejects_arg_flag_name_collisions(
 
 
 # ============================================================================
-# argument validation
+# Argument Validation
 # ============================================================================
 
 
@@ -1465,7 +1561,7 @@ def test_validate_modules_rejects_non_integer_float_default_for_int(
 
 
 # ============================================================================
-# file_id validation
+# File ID Validation
 # ============================================================================
 
 
@@ -1500,7 +1596,7 @@ def test_validate_modules_rejects_invalid_file_id_default(
 
 
 # ============================================================================
-# constraints: happy paths
+# Constraints Happy Paths
 # ============================================================================
 
 
@@ -1593,7 +1689,7 @@ def test_validate_modules_accepts_valid_file_constraints(
 
 
 # ============================================================================
-# constraints: rejection cases
+# Constraints Rejection Cases
 # ============================================================================
 
 
@@ -1832,7 +1928,7 @@ def test_validate_modules_rejects_invalid_list_constraints(
 
 
 # ============================================================================
-# flags
+# Flags
 # ============================================================================
 
 
@@ -1871,4 +1967,52 @@ def test_validate_modules_rejects_invalid_flag_values(
     module = make_module_spec(make_module_payload(actions={"ping": action}))
 
     with pytest.raises(ActionSpecsParseError, match=error_message):
+        validate_modules([module])
+
+
+@pytest.mark.parametrize(
+    "flag_value",
+    [
+        "/etc/passwd",
+        r"C:\Windows\System32",
+        "C:/Windows/System32",
+        r"\\server\share",
+        r"relative\path",
+        "../secrets.txt",
+        "safe/../secrets.txt",
+    ],
+    ids=[
+        "posix_absolute",
+        "windows_drive_backslash",
+        "windows_drive_slash",
+        "unc_path",
+        "backslash_path",
+        "parent_traversal",
+        "embedded_parent_traversal",
+    ],
+)
+def test_validate_modules_rejects_flag_value_host_paths(
+    make_module_payload,
+    make_action_payload,
+    make_module_spec,
+    flag_value: str,
+):
+    """
+    GIVEN a flag whose literal value contains host-path syntax
+    WHEN validate_modules is called
+    THEN ActionSpecsParseError is raised at startup
+    """
+    action = make_action_payload(
+        flags={
+            "verbose": {
+                "value": flag_value,
+                "default": False,
+                "description": "verbose flag",
+            }
+        },
+        command=[{"binary": "echo"}, {"flag": "verbose"}],
+    )
+    module = make_module_spec(make_module_payload(actions={"ping": action}))
+
+    with pytest.raises(ActionSpecsParseError, match="host paths"):
         validate_modules([module])

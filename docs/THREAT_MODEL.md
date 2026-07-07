@@ -187,7 +187,7 @@ Authentication coverage is as follows:
 ### DSL build and execution mitigations
 
 - YAML specs are discovered deterministically and checked for file size, extension, UTF-8 safety, NUL bytes, disallowed control characters, and dangerous YAML patterns.
-- `validate_modules()` rejects unsupported DSL versions, duplicate module identities, invalid identifiers, blocked binaries, and malformed action declarations.
+- `validate_modules()` rejects unsupported DSL versions, duplicate module identities, invalid identifiers, blocked binaries, malformed action declarations, and host-path-like command literals except for narrow reviewed core exceptions.
 - `build_actions()` compiles only validated modules into immutable runtime `ActionSpec` objects.
 - The registry is an explicit in-memory allowlist built from validated DSL specs.
 - `execute_command()` rejects binary paths, blocked binaries, and non-allowlisted binaries before subprocess execution, applies configured runtime timeouts, and cleans the owned process group on timeout or cancellation where supported.
