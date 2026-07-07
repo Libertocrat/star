@@ -21,7 +21,7 @@ async def delete_file_handler(
     file_id: uuid.UUID,
     settings: Settings | None = None,
 ) -> DeleteFileResult:
-    """Delete a previously uploaded file and its metadata.
+    """Delete a file metadata record and clean its blob best-effort.
 
     Args:
         file_id: Target file UUID.
@@ -31,7 +31,7 @@ async def delete_file_handler(
         Typed delete result with deleted flag.
 
     Raises:
-        StarError: If metadata/blob validation or deletion fails.
+        StarError: If metadata validation or metadata deletion fails.
     """
 
     cfg = settings if settings is not None else get_settings()
@@ -94,17 +94,15 @@ async def delete_file_handler(
             details={"file_id": str(file_id)},
         )
 
-    if not blob_path.exists():
+    blob_exists = blob_path.exists()
+
+    if not blob_exists:
         logger.warning(
-            "file.delete.blob_not_found",
+            "file.delete.blob_missing_before_cleanup",
             extra={"file_id": str(file_id), "blob_path": str(blob_path)},
         )
-        raise StarError(
-            FILE_NOT_FOUND,
-            details={"file_id": str(file_id)},
-        )
 
-    if not blob_path.is_file():
+    if blob_exists and not blob_path.is_file():
         logger.warning(
             "file.delete.invalid_metadata",
             extra={"file_id": str(file_id)},
@@ -114,27 +112,6 @@ async def delete_file_handler(
             "Stored file path is not a regular file.",
             details={"file_id": str(file_id)},
         )
-
-    try:
-        delete_blob_file(file_id, cfg)
-    except FileNotFoundError as exc:
-        logger.warning(
-            "file.delete.blob_not_found",
-            extra={"file_id": str(file_id), "blob_path": str(blob_path)},
-        )
-        raise StarError(
-            FILE_NOT_FOUND,
-            details={"file_id": str(file_id)},
-        ) from exc
-    except OSError as exc:
-        logger.exception(
-            "file.delete.blob_delete_failed",
-            extra={"file_id": str(file_id), "blob_path": str(blob_path)},
-        )
-        raise StarError(
-            INTERNAL_ERROR,
-            "Failed to delete file blob.",
-        ) from exc
 
     try:
         delete_metadata_file(file_id, cfg)
@@ -156,6 +133,19 @@ async def delete_file_handler(
             INTERNAL_ERROR,
             "Failed to delete file metadata.",
         ) from exc
+
+    try:
+        delete_blob_file(file_id, cfg)
+    except FileNotFoundError:
+        logger.warning(
+            "file.delete.blob_cleanup_missing",
+            extra={"file_id": str(file_id), "blob_path": str(blob_path)},
+        )
+    except OSError:
+        logger.exception(
+            "file.delete.blob_cleanup_failed",
+            extra={"file_id": str(file_id), "blob_path": str(blob_path)},
+        )
 
     logger.info(
         "file.delete.succeeded",

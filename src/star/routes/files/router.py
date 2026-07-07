@@ -294,12 +294,12 @@ async def get_file_content(id: UUID, request: Request):
 
 
 delete_description = (
-    "**Hard-delete a previously uploaded file managed by STAR.**\n\n"
-    "This endpoint resolves the file through STAR metadata and removes both "
-    "storage artifacts in strict order:\n"
-    "- blob (`files/blobs/file_<uuid>.bin`)\n"
-    "- metadata (`files/meta/file_<uuid>.json`)\n\n"
-    "Deletion is only allowed when file metadata is in `ready` state."
+    "**Delete a previously uploaded file managed by STAR.**\n\n"
+    "This endpoint resolves the file through STAR metadata, removes the "
+    "public metadata record first, and then cleans the blob artifact "
+    "best-effort. If valid metadata exists but the blob is already missing, "
+    "the request is treated as successful cleanup. Deletion is only allowed "
+    "when file metadata is in `ready` state."
 )
 
 
@@ -313,7 +313,7 @@ async def delete_file(
     id: UUID,
     request: Request,
 ) -> JSONResponse | ResponseEnvelope[DeleteFileData]:
-    """Delete file blob + metadata by UUID."""
+    """Delete file metadata and clean its blob by UUID."""
 
     try:
         settings = getattr(request.app.state, "settings", None)

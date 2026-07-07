@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Ensured action `file_id` arguments resolve managed files with the runtime settings snapshot.
 - Ensured action subprocess execution uses configured runtime timeouts and cleans owned process groups on timeout or cancellation.
 - Rejected host-path-like DSL command literals by default while preserving reviewed core exceptions.
+- Made file deletion metadata-first and idempotent for valid records whose blobs are already missing.
 
 ### Documentation
 
