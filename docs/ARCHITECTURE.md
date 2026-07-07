@@ -198,7 +198,7 @@ At startup, `build_registry_from_specs()` performs the following steps:
 
 1. `load_module_specs()` discovers YAML-based Action DSL specifications from the configured spec directories.
 2. Loader safety checks reject invalid file sizes, invalid extensions, NUL bytes, disallowed control characters, and dangerous YAML patterns.
-3. `validate_modules()` enforces semantic DSL rules such as module uniqueness, supported DSL version, binary declarations, identifier format, and action structure.
+3. `validate_modules()` enforces semantic DSL rules such as module uniqueness, supported DSL version, binary declarations, identifier format, action structure, and command literal path policy.
 4. `build_actions()` compiles validated modules into immutable runtime `ActionSpec` objects with generated `params_model` classes, command templates, defaults, output declarations, stdout file policy, and binary execution policy.
 5. `ActionRegistry` stores the final action mapping and precomputes presentation summaries.
 

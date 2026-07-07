@@ -26,7 +26,9 @@ from star.actions.engine_config import (
     IDENTIFIER_NAME_PATTERN,
     MIME_LIKE_PATTERN,
     RESERVED_OUTPUT_NAMES,
+    REVIEWED_COMMAND_LITERAL_PATH_ALLOWLIST,
     TAG_NAME_PATTERN,
+    WINDOWS_DRIVE_PATH_PATTERN,
 )
 from star.actions.exceptions import ActionSpecsParseError
 from star.actions.models.core import ParamType
@@ -311,11 +313,11 @@ def _validate_action(
     _validate_output_names(module.module, action_name, action)
     _validate_output_definitions(module.module, action_name, action)
     _validate_binary_rules(module, action_name, action)
-    _validate_command_elements(module.module, action_name, action)
+    _validate_command_elements(module, action_name, action)
     _validate_command_references(module.module, action_name, action)
     _validate_unused_definitions(module.module, action_name, action)
     _validate_args(module.module, action_name, action)
-    _validate_flags(module.module, action_name, action)
+    _validate_flags(module, action_name, action)
 
 
 def _validate_command_exists(
@@ -565,14 +567,14 @@ def _validate_binary_rules(
 
 
 def _validate_command_elements(
-    module_name: str,
+    module: ModuleSpec,
     action_name: str,
     action: ActionSpecInput,
 ) -> None:
     """Validate the types and literal values of command elements.
 
     Args:
-        module_name: Parent module name.
+        module: Parent module specification.
         action_name: Action name.
         action: Action specification.
 
@@ -586,7 +588,7 @@ def _validate_command_elements(
     for element in action.command:
         if isinstance(element, str):
             _validate_command_literal(
-                module_name,
+                module,
                 action_name,
                 element,
                 args,
@@ -597,14 +599,14 @@ def _validate_command_elements(
             continue
 
         _raise_action_error(
-            module_name,
+            module.module,
             action_name,
             "command contains an unsupported element type",
         )
 
 
 def _validate_command_literal(
-    module_name: str,
+    module: ModuleSpec,
     action_name: str,
     literal: str,
     args: dict[str, ArgSpec],
@@ -612,7 +614,7 @@ def _validate_command_literal(
     """Validate one inline string literal inside a command template.
 
     Args:
-        module_name: Parent module name.
+        module: Parent module specification.
         action_name: Action name.
         literal: Literal command token.
         args: Action argument definitions indexed by arg name.
@@ -624,30 +626,37 @@ def _validate_command_literal(
 
     if literal == "":
         _raise_action_error(
-            module_name,
+            module.module,
             action_name,
             "command literal must not be empty",
         )
 
     if literal.strip() == "":
         _raise_action_error(
-            module_name,
+            module.module,
             action_name,
             "command literal must not be whitespace-only",
         )
 
     if "\x00" in literal:
         _raise_action_error(
-            module_name,
+            module.module,
             action_name,
             "command literal must not contain NULL bytes",
         )
 
     if _contains_control_characters(literal):
         _raise_action_error(
-            module_name,
+            module.module,
             action_name,
             "command literal must not contain control characters",
+        )
+
+    if _is_disallowed_path_literal(module, action_name, literal):
+        _raise_action_error(
+            module.module,
+            action_name,
+            "command literal must not contain host paths",
         )
 
     if "{" not in literal and "}" not in literal:
@@ -657,7 +666,7 @@ def _validate_command_literal(
         placeholders = _extract_command_literal_placeholders(literal)
     except ValueError as exc:
         _raise_action_error(
-            module_name,
+            module.module,
             action_name,
             f"command literal has invalid placeholder syntax ({exc})",
         )
@@ -666,7 +675,7 @@ def _validate_command_literal(
         arg_spec = args.get(placeholder_name)
         if arg_spec is None:
             _raise_action_error(
-                module_name,
+                module.module,
                 action_name,
                 (
                     "command literal placeholder "
@@ -677,7 +686,7 @@ def _validate_command_literal(
 
         if arg_spec.type not in CONST_TEMPLATE_ALLOWED_ARG_TYPES:
             _raise_action_error(
-                module_name,
+                module.module,
                 action_name,
                 (
                     "command literal placeholder "
@@ -686,6 +695,57 @@ def _validate_command_literal(
                     f"'{arg_spec.type.value}'"
                 ),
             )
+
+
+def _is_disallowed_path_literal(
+    module: ModuleSpec,
+    action_name: str,
+    literal: str,
+) -> bool:
+    """Return whether a DSL literal is a disallowed host path.
+
+    Args:
+        module: Parent module specification.
+        action_name: Action name.
+        literal: Literal argv token declared by the DSL.
+
+    Returns:
+        True when the literal looks like a host path and is not explicitly
+        allowlisted for a reviewed core action.
+    """
+
+    if (
+        module.source,
+        module.module,
+        action_name,
+        literal,
+    ) in REVIEWED_COMMAND_LITERAL_PATH_ALLOWLIST:
+        return False
+
+    return _looks_like_host_path_literal(literal)
+
+
+def _looks_like_host_path_literal(literal: str) -> bool:
+    """Return whether a literal has host-path syntax.
+
+    Args:
+        literal: Literal argv token declared by the DSL.
+
+    Returns:
+        True when the literal contains absolute, Windows, UNC, backslash, or
+        traversal-like path syntax.
+    """
+
+    if literal.startswith("/"):
+        return True
+
+    if "\\" in literal:
+        return True
+
+    if WINDOWS_DRIVE_PATH_PATTERN.match(literal):
+        return True
+
+    return ".." in literal.split("/")
 
 
 def _extract_command_literal_placeholders(literal: str) -> tuple[str, ...]:
@@ -1346,14 +1406,14 @@ def _is_numeric(value: Any) -> bool:
 
 
 def _validate_flags(
-    module_name: str,
+    module: ModuleSpec,
     action_name: str,
     action: ActionSpecInput,
 ) -> None:
     """Validate semantic rules for all action flags.
 
     Args:
-        module_name: Parent module name.
+        module: Parent module specification.
         action_name: Action name.
         action: Action specification.
 
@@ -1362,11 +1422,11 @@ def _validate_flags(
     """
 
     for flag_name, flag_spec in (action.flags or {}).items():
-        _validate_flag_value(module_name, action_name, flag_name, flag_spec)
+        _validate_flag_value(module, action_name, flag_name, flag_spec)
 
 
 def _validate_flag_value(
-    module_name: str,
+    module: ModuleSpec,
     action_name: str,
     flag_name: str,
     flag_spec: FlagSpec,
@@ -1374,7 +1434,7 @@ def _validate_flag_value(
     """Validate the literal command value associated with one flag.
 
     Args:
-        module_name: Parent module name.
+        module: Parent module specification.
         action_name: Action name.
         flag_name: Flag name.
         flag_spec: Flag definition.
@@ -1385,30 +1445,37 @@ def _validate_flag_value(
 
     if flag_spec.value == "":
         _raise_action_error(
-            module_name,
+            module.module,
             action_name,
             f"flag '{flag_name}' value must not be empty",
         )
 
     if flag_spec.value.strip() == "":
         _raise_action_error(
-            module_name,
+            module.module,
             action_name,
             f"flag '{flag_name}' value must not be whitespace-only",
         )
 
     if "\x00" in flag_spec.value:
         _raise_action_error(
-            module_name,
+            module.module,
             action_name,
             f"flag '{flag_name}' value must not contain NULL bytes",
         )
 
     if _contains_control_characters(flag_spec.value):
         _raise_action_error(
-            module_name,
+            module.module,
             action_name,
             f"flag '{flag_name}' value must not contain control characters",
+        )
+
+    if _looks_like_host_path_literal(flag_spec.value):
+        _raise_action_error(
+            module.module,
+            action_name,
+            f"flag '{flag_name}' value must not contain host paths",
         )
 
 

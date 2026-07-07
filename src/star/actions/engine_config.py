@@ -80,6 +80,27 @@ CONST_TEMPLATE_ALLOWED_ARG_TYPES: tuple[ParamType, ...] = (
 RESERVED_OUTPUT_NAMES: tuple[str, ...] = ("stdout_file",)
 
 # ------------------------------------------------------------------
+# DSL COMMAND LITERAL PATH POLICY
+# ------------------------------------------------------------------
+
+# Windows absolute path matcher used by build-time command literal validation.
+WINDOWS_DRIVE_PATH_PATTERN = re.compile(r"^[A-Za-z]:[\\/]")
+
+# Reviewed core command literal exceptions for trusted built-in specs.
+REVIEWED_COMMAND_LITERAL_PATH_ALLOWLIST: frozenset[tuple[str, str, str, str]] = (
+    frozenset(
+        {
+            (
+                CORE_SPEC_SOURCE,
+                "random",
+                "gen_uuid",
+                "/proc/sys/kernel/random/uuid",
+            )
+        }
+    )
+)
+
+# ------------------------------------------------------------------
 # RUNTIME OUTPUT SANITIZATION CONSTANTS
 # ------------------------------------------------------------------
 
