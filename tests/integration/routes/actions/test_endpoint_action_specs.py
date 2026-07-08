@@ -60,6 +60,38 @@ def test_get_action_specs_not_found(action_specs_client, auth_headers):
     assert body["error"]["code"] == "ACTION_NOT_FOUND"
 
 
+@pytest.mark.parametrize(
+    "registry_value",
+    [None, object()],
+    ids=["none", "wrong_type"],
+)
+def test_get_action_specs_returns_internal_error_when_registry_is_invalid(
+    client,
+    auth_headers,
+    registry_value,
+):
+    """
+    GIVEN application state without a valid action registry
+    WHEN GET /v1/actions/{action_id} is requested
+    THEN the endpoint returns the stable INTERNAL_ERROR envelope
+    """
+
+    client.app.state.action_registry = registry_value
+
+    response = client.get(
+        "/v1/actions/test_runtime.ping",
+        headers=auth_headers,
+    )
+
+    body = response.json()
+
+    assert response.status_code == 500
+    assert body["success"] is False
+    assert body["data"] is None
+    assert body["error"]["code"] == "INTERNAL_ERROR"
+    assert body["error"]["message"] == "Action registry is not available."
+
+
 def test_get_action_specs_contains_required_fields(action_specs_client, auth_headers):
     """
     GIVEN a valid action

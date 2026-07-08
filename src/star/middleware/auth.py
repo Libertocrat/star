@@ -11,6 +11,7 @@ from starlette.responses import JSONResponse, Response
 from starlette.status import HTTP_401_UNAUTHORIZED
 from starlette.types import ASGIApp
 
+from star.core.config import Settings
 from star.core.schemas.envelope import ResponseEnvelope
 
 
@@ -35,10 +36,11 @@ class AuthMiddleware(BaseHTTPMiddleware):
     ) -> Response:
         """Handle an incoming request, enforcing Bearer token auth.
 
-        The middleware exempts the `/health` endpoint. If authentication
-        fails, a 401 response is returned. When available, the request id
-        stored on `request.state.request_id` is included in error responses
-        for correlation.
+        The middleware exempts `/health`, `/metrics`, and documentation
+        endpoints only when runtime settings explicitly enable docs. If
+        authentication fails, a 401 response is returned. When available, the
+        request id stored on `request.state.request_id` is included in error
+        responses for correlation.
 
         Args:
             request: Incoming Starlette Request.
@@ -53,11 +55,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
         # additional prefixes can be appended without causing mypy/type
         # incompatibilities when the collection grows.
         exempt_prefixes: list[str] = ["/health", "/metrics"]
-        # Exempt docs endpoints when enabled in settings
-        if (
-            getattr(request.app.state, "settings", None)
-            and request.app.state.settings.star_enable_docs
-        ):
+        # Exempt docs endpoints only when typed runtime settings enable them.
+        settings = getattr(request.app.state, "settings", None)
+        if isinstance(settings, Settings) and settings.star_enable_docs:
             exempt_prefixes.extend(["/openapi.json", "/docs", "/redoc"])
 
         # Use prefix matching to allow for subpaths (e.g. /health/ready)

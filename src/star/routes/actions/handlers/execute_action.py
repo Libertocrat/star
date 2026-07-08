@@ -27,7 +27,6 @@ from star.actions.runtime.sanitizer import (
     DEFAULT_MAX_STDOUT_BYTES,
     transform_output,
 )
-from star.core.config import Settings, get_settings
 from star.core.errors import (
     ACTION_NOT_FOUND,
     INTERNAL_ERROR,
@@ -38,6 +37,7 @@ from star.core.errors import (
     StarError,
 )
 from star.routes.actions.schemas import ExecuteActionData, ExecuteActionRequest
+from star.routes.dependencies import get_action_registry, get_runtime_settings
 
 
 def _encode_output(data: bytes) -> tuple[str, Literal["utf-8", "base64"]]:
@@ -54,27 +54,6 @@ def _encode_output(data: bytes) -> tuple[str, Literal["utf-8", "base64"]]:
         return data.decode("utf-8"), "utf-8"
     except UnicodeDecodeError:
         return base64.b64encode(data).decode("ascii"), "base64"
-
-
-def _get_action_registry(request: Request) -> ActionRegistry:
-    """Resolve and validate the action registry from application state.
-
-    Args:
-        request: FastAPI request instance.
-
-    Returns:
-        Runtime ActionRegistry instance.
-
-    Raises:
-        StarError: If registry is missing or invalid in app state.
-    """
-    registry = getattr(request.app.state, "action_registry", None)
-    if not isinstance(registry, ActionRegistry):
-        raise StarError(
-            INTERNAL_ERROR,
-            message="Action registry is not available.",
-        )
-    return registry
 
 
 def _validate_stdout_as_file_option(
@@ -129,9 +108,8 @@ async def execute_action_handler(
         StarError: If action execution or output handling fails.
     """
 
-    registry = _get_action_registry(request)
-    settings = getattr(request.app.state, "settings", None)
-    cfg = settings if isinstance(settings, Settings) else get_settings()
+    registry = get_action_registry(request)
+    settings = get_runtime_settings(request)
 
     try:
         _validate_stdout_as_file_option(
@@ -144,7 +122,7 @@ async def execute_action_handler(
             registry,
             action_id,
             payload.params,
-            settings=cfg,
+            settings=settings,
         )
     except StarError:
         raise
@@ -196,14 +174,22 @@ async def execute_action_handler(
             details={"reason": "unexpected error"},
         ) from exc
 
-    max_stdout = getattr(cfg, "star_max_stdout_bytes", None) or DEFAULT_MAX_STDOUT_BYTES
-    max_stderr = getattr(cfg, "star_max_stderr_bytes", None) or DEFAULT_MAX_STDERR_BYTES
+    max_stdout = (
+        settings.star_max_stdout_bytes
+        if settings.star_max_stdout_bytes is not None
+        else DEFAULT_MAX_STDOUT_BYTES
+    )
+    max_stderr = (
+        settings.star_max_stderr_bytes
+        if settings.star_max_stderr_bytes is not None
+        else DEFAULT_MAX_STDERR_BYTES
+    )
 
     safe = transform_output(
         result.execution,
         max_stdout=max_stdout,
         max_stderr=max_stderr,
-        settings=cfg,
+        settings=settings,
     )
 
     outputs_payload = build_outputs(
@@ -212,7 +198,7 @@ async def execute_action_handler(
         result.execution,
         safe,
         stdout_as_file=payload.stdout_as_file,
-        settings=cfg,
+        settings=settings,
     )
 
     stdout, stdout_encoding = _encode_output(safe.stdout)

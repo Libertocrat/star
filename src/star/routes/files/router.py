@@ -16,6 +16,7 @@ from pydantic import ValidationError
 from star.core.errors import StarError
 from star.core.schemas.envelope import ResponseEnvelope
 from star.core.utils.file_storage import iter_file_chunks
+from star.routes.dependencies import get_runtime_settings
 from star.routes.files.handlers.delete_file import delete_file_handler
 from star.routes.files.handlers.get_file_content import get_file_content_handler
 from star.routes.files.handlers.get_file_metadata import get_file_metadata_handler
@@ -103,7 +104,7 @@ async def post_file(
             return JSONResponse(status_code=400, content=payload.model_dump())
 
     try:
-        settings = getattr(request.app.state, "settings", None)
+        settings = get_runtime_settings(request)
         metadata = await upload_file_handler(
             file,
             verify_checksum=verify_checksum,
@@ -163,7 +164,7 @@ async def get_file(
     """
 
     try:
-        settings = getattr(request.app.state, "settings", None)
+        settings = get_runtime_settings(request)
         metadata = await get_file_metadata_handler(file_id=id, settings=settings)
         return ResponseEnvelope.success_response(UploadFileData(file=metadata))
     except StarError as exc:
@@ -201,7 +202,7 @@ async def list_files(
     """List persisted files using cursor pagination."""
 
     try:
-        settings = getattr(request.app.state, "settings", None)
+        settings = get_runtime_settings(request)
         result = await list_files_handler(
             limit=limit,
             cursor=cursor,
@@ -269,7 +270,7 @@ async def get_file_content(id: UUID, request: Request):
     """Stream file content by UUID."""
 
     try:
-        settings = getattr(request.app.state, "settings", None)
+        settings = get_runtime_settings(request)
         descriptor = await get_file_content_handler(file_id=id, settings=settings)
 
         headers = {
@@ -316,7 +317,7 @@ async def delete_file(
     """Delete file metadata and clean its blob by UUID."""
 
     try:
-        settings = getattr(request.app.state, "settings", None)
+        settings = get_runtime_settings(request)
         result = await delete_file_handler(file_id=id, settings=settings)
         return ResponseEnvelope.success_response(DeleteFileData(file=result))
     except StarError as exc:

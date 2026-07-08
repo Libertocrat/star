@@ -51,6 +51,35 @@ def test_list_actions_returns_modules(actions_client, auth_headers):
     )
 
 
+@pytest.mark.parametrize(
+    "registry_value",
+    [None, object()],
+    ids=["none", "wrong_type"],
+)
+def test_list_actions_returns_internal_error_when_registry_is_invalid(
+    client,
+    auth_headers,
+    registry_value,
+):
+    """
+    GIVEN application state without a valid action registry
+    WHEN GET /v1/actions is requested
+    THEN the endpoint returns the stable INTERNAL_ERROR envelope
+    """
+
+    client.app.state.action_registry = registry_value
+
+    response = client.get("/v1/actions", headers=auth_headers)
+
+    body = response.json()
+
+    assert response.status_code == 500
+    assert body["success"] is False
+    assert body["data"] is None
+    assert body["error"]["code"] == "INTERNAL_ERROR"
+    assert body["error"]["message"] == "Action registry is not available."
+
+
 def test_list_actions_filters_by_any_tags_by_default(actions_client, auth_headers):
     """
     GIVEN multiple requested tags without explicit match

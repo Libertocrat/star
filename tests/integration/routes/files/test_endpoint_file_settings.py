@@ -1,7 +1,8 @@
-"""Route wiring tests for Files API runtime settings propagation."""
+"""Route wiring tests for Files API runtime settings propagation and validation."""
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -12,7 +13,6 @@ import pytest
 from fastapi import Request, UploadFile
 from fastapi.responses import JSONResponse
 
-from star.core.config import Settings
 from star.core.schemas.files import FileMetadata
 from star.routes.files import router as files_router
 from star.routes.files.handlers.get_file_content import FileContentDescriptor
@@ -24,11 +24,11 @@ from star.routes.files.schemas import (
 )
 
 
-def _request_with_settings(settings: Settings) -> Request:
+def _request_with_settings(settings: object) -> Request:
     """Build a lightweight request object with app state settings.
 
     Args:
-        settings: Runtime settings snapshot to expose through app state.
+        settings: Runtime dependency value to expose through app state.
 
     Returns:
         Object with the `request.app.state.settings` shape used by routes.
@@ -67,14 +67,14 @@ def _metadata(file_id: UUID | None = None) -> FileMetadata:
 
 
 @pytest.mark.asyncio
-async def test_post_file_passes_app_settings_to_upload_handler(
+async def test_post_file_passes_runtime_settings_to_upload_handler(
     monkeypatch,
     settings,
 ):
     """
-    GIVEN a Files API upload route and runtime app settings
+    GIVEN a Files API upload route and runtime settings
     WHEN the endpoint delegates to the upload handler
-    THEN it passes the exact app settings snapshot
+    THEN it passes the exact runtime settings snapshot
     """
 
     captured: dict[str, object] = {}
@@ -106,14 +106,14 @@ async def test_post_file_passes_app_settings_to_upload_handler(
 
 
 @pytest.mark.asyncio
-async def test_get_file_passes_app_settings_to_metadata_handler(
+async def test_get_file_passes_runtime_settings_to_metadata_handler(
     monkeypatch,
     settings,
 ):
     """
-    GIVEN a Files API metadata route and runtime app settings
+    GIVEN a Files API metadata route and runtime settings
     WHEN the endpoint delegates to the metadata handler
-    THEN it passes the exact app settings snapshot
+    THEN it passes the exact runtime settings snapshot
     """
 
     captured: dict[str, object] = {}
@@ -140,14 +140,14 @@ async def test_get_file_passes_app_settings_to_metadata_handler(
 
 
 @pytest.mark.asyncio
-async def test_list_files_passes_app_settings_to_list_handler(
+async def test_list_files_passes_runtime_settings_to_list_handler(
     monkeypatch,
     settings,
 ):
     """
-    GIVEN a Files API listing route and runtime app settings
+    GIVEN a Files API listing route and runtime settings
     WHEN the endpoint delegates to the list handler
-    THEN it passes the exact app settings snapshot
+    THEN it passes the exact runtime settings snapshot
     """
 
     captured: dict[str, object] = {}
@@ -185,15 +185,49 @@ async def test_list_files_passes_app_settings_to_list_handler(
 
 
 @pytest.mark.asyncio
-async def test_get_file_content_passes_app_settings_to_content_handler(
+@pytest.mark.parametrize(
+    "settings_value",
+    [None, object()],
+    ids=["none", "wrong_type"],
+)
+async def test_list_files_returns_internal_error_when_runtime_settings_are_invalid(
+    monkeypatch,
+    settings_value,
+):
+    """
+    GIVEN a Files API route with an invalid runtime settings dependency
+    WHEN the endpoint is called
+    THEN it returns INTERNAL_ERROR without delegating to the handler
+    """
+
+    async def _unexpected_list_handler(**_kwargs):
+        raise AssertionError("list_files_handler should not be called")
+
+    monkeypatch.setattr(files_router, "list_files_handler", _unexpected_list_handler)
+
+    response = await files_router.list_files(
+        request=_request_with_settings(settings_value),
+    )
+
+    assert isinstance(response, JSONResponse)
+    assert response.status_code == 500
+    body = json.loads(response.body)
+    assert body["success"] is False
+    assert body["data"] is None
+    assert body["error"]["code"] == "INTERNAL_ERROR"
+    assert body["error"]["message"] == "Runtime settings are not available."
+
+
+@pytest.mark.asyncio
+async def test_get_file_content_passes_runtime_settings_to_content_handler(
     monkeypatch,
     settings,
     tmp_path: Path,
 ):
     """
-    GIVEN a Files API content route and runtime app settings
+    GIVEN a Files API content route and runtime settings
     WHEN the endpoint delegates to the content handler
-    THEN it passes the exact app settings snapshot
+    THEN it passes the exact runtime settings snapshot
     """
 
     captured: dict[str, object] = {}
@@ -229,14 +263,14 @@ async def test_get_file_content_passes_app_settings_to_content_handler(
 
 
 @pytest.mark.asyncio
-async def test_delete_file_passes_app_settings_to_delete_handler(
+async def test_delete_file_passes_runtime_settings_to_delete_handler(
     monkeypatch,
     settings,
 ):
     """
-    GIVEN a Files API delete route and runtime app settings
+    GIVEN a Files API delete route and runtime settings
     WHEN the endpoint delegates to the delete handler
-    THEN it passes the exact app settings snapshot
+    THEN it passes the exact runtime settings snapshot
     """
 
     captured: dict[str, object] = {}
