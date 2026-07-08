@@ -82,7 +82,7 @@ Key startup behaviors are:
 - create storage directories through `ensure_storage_dirs(settings)`
 - register `/docs`, `/redoc`, and `/openapi.json` only when `star_enable_docs` is true
 - build the immutable runtime action registry through `build_registry_from_specs(settings)`
-- attach both `settings` and `action_registry` to `app.state`
+- attach typed runtime dependencies (`settings` and `action_registry`) to `app.state`
 - register middleware, exception handlers, and routers
 
 The runtime uses a custom `FastAPI` subclass that overrides `openapi()` so the application can lazily build and cache a runtime-aware schema through `build_openapi_schema()`.
@@ -103,7 +103,7 @@ Two global handlers are installed:
 - `http_exception_handler` maps Starlette HTTP exceptions into STAR envelopes while preserving `X-Request-Id`
 - `generic_exception_handler` logs unhandled exceptions and returns a generic structured 500 response
 
-The route layer is intentionally thin. It resolves application state, delegates to runtime or storage handlers, and maps domain exceptions to stable STAR error codes.
+The route layer is intentionally thin. It resolves and type-validates runtime dependencies from application state, delegates to runtime or storage handlers, and maps domain exceptions to stable STAR error codes.
 
 ## 4. Middleware Security Layer
 

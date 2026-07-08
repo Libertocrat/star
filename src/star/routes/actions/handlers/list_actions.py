@@ -15,6 +15,7 @@ from star.routes.actions.schemas import (
     ListActionsRequest,
     TagMatchMode,
 )
+from star.routes.dependencies import get_action_registry
 
 
 def _validate_query_param(value: str | None, name: str) -> str | None:
@@ -65,9 +66,7 @@ async def list_actions_handler(
     """
 
     try:
-        registry = getattr(request.app.state, "action_registry", None)
-        if registry is None:
-            raise StarError(INTERNAL_ERROR, "Action registry not available.")
+        registry = get_action_registry(request)
 
         q = _validate_query_param(req.q, "q")
         parsed_tags = _parse_tags_query_param(req.tags)

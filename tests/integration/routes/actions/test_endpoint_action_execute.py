@@ -140,6 +140,74 @@ def test_execute_returns_error_envelope_for_unknown_action(
     assert "message" in body["error"]
 
 
+@pytest.mark.parametrize(
+    "registry_value",
+    [None, object()],
+    ids=["none", "wrong_type"],
+)
+def test_execute_returns_internal_error_when_registry_is_invalid(
+    client,
+    auth_headers,
+    registry_value,
+):
+    """
+    GIVEN application state without a valid action registry
+    WHEN POST /v1/actions/{action_id} is requested
+    THEN the endpoint returns the stable INTERNAL_ERROR envelope
+    """
+
+    client.app.state.action_registry = registry_value
+
+    response = client.post(
+        "/v1/actions/test_runtime.ping",
+        headers=auth_headers,
+        json={"params": {}},
+    )
+
+    body = response.json()
+
+    assert response.status_code == 500
+    assert body["success"] is False
+    assert body["data"] is None
+    assert body["error"]["code"] == "INTERNAL_ERROR"
+    assert body["error"]["message"] == "Action registry is not available."
+
+
+@pytest.mark.parametrize(
+    "settings_value",
+    [None, object()],
+    ids=["none", "wrong_type"],
+)
+def test_execute_returns_internal_error_when_runtime_settings_are_invalid(
+    client,
+    auth_headers,
+    valid_registry,
+    settings_value,
+):
+    """
+    GIVEN application state without valid runtime settings
+    WHEN POST /v1/actions/{action_id} is requested
+    THEN the endpoint returns the stable INTERNAL_ERROR envelope
+    """
+
+    client.app.state.action_registry = valid_registry
+    client.app.state.settings = settings_value
+
+    response = client.post(
+        "/v1/actions/test_runtime.ping",
+        headers=auth_headers,
+        json={"params": {}},
+    )
+
+    body = response.json()
+
+    assert response.status_code == 500
+    assert body["success"] is False
+    assert body["data"] is None
+    assert body["error"]["code"] == "INTERNAL_ERROR"
+    assert body["error"]["message"] == "Runtime settings are not available."
+
+
 def test_execute_invalid_param_type_maps_to_invalid_params(
     client, auth_headers, valid_registry
 ):
