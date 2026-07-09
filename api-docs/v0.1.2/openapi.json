@@ -1,0 +1,4434 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Secure Templated Actions Runtime (STAR)",
+    "description": "Secure Templated Actions Runtime (STAR) is a hardened execution microservice designed to expose a strictly allow-listed action surface for automation platforms and internal systems.\n\nIt enforces:\n- Explicit action registry (no arbitrary command execution)\n- Defense-in-depth middleware stack\n- Deterministic response envelopes\n- Centralized error taxonomy\n- Observability-first architecture\n- Runtime-aware OpenAPI contract generation",
+    "version": "0.1.2",
+    "contact": {
+      "name": "Libertocrat",
+      "url": "https://github.com/Libertocrat/",
+      "email": "libertocrat@proton.me"
+    },
+    "license": {
+      "name": "Apache License 2.0",
+      "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
+    }
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": [
+          "Observability"
+        ],
+        "summary": "Health",
+        "description": "Health check endpoint.\n\nReturns a minimal readiness payload as defined in the SRS.\n\nReturns:\n    A JSONResponse containing the readiness status, e.g. `{\"status\": \"ok\"}`.",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Health success response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "success": true,
+                    "error": null,
+                    "data": {
+                      "status": "ok"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/metrics": {
+      "get": {
+        "tags": [
+          "Observability"
+        ],
+        "summary": "Metrics",
+        "description": "Prometheus metrics exposition endpoint.\n\nThis endpoint returns the current Prometheus metrics snapshot for the\nrunning process using the `prometheus_client` library.\n\nReturns:\n    A Starlette Response with the metrics payload and Prometheus content\n    type (`CONTENT_TYPE_LATEST`).",
+        "operationId": "metrics_metrics_get",
+        "responses": {
+          "200": {
+            "description": "Prometheus metrics snapshot",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "example": "# HELP http_requests_total ...\n# TYPE http_requests_total counter\nhttp_requests_total 42\n# HELP ...\n"
+                }
+              }
+            }
+          }
+        },
+        "security": [],
+        "externalDocs": {
+          "description": "Prometheus scraping documentation",
+          "url": "https://prometheus.io/docs/prometheus/latest/configuration/configuration/#scrape_config"
+        }
+      }
+    },
+    "/v1/actions": {
+      "get": {
+        "tags": [
+          "Actions"
+        ],
+        "summary": "List available actions grouped by module with optional filtering.",
+        "description": "Discover registered actions grouped by module.\n\nQuery parameters:\n- `q`: Optional free-text search over action name, summary, description, and effective tags.\n- `tags`: Optional CSV tag filter, for example `hashing,checksum`. Tokens are trimmed, normalized to lowercase, and deduplicated.\n- `match`: Optional tag matching mode: `any` or `all`.\n\nBehavior:\n- If `tags` is provided and `match` is omitted, matching defaults to `any`.\n- Providing `match` without `tags` returns `INVALID_PARAMS`.\n- When `q` and `tags` are both present, filters are combined with logical AND.",
+        "operationId": "list_actions_v1_actions_get",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q",
+              "type": "string",
+              "example": "sha256"
+            },
+            "description": "Optional free-text filter over action name, summary, description, and effective tags."
+          },
+          {
+            "name": "tags",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tags",
+              "type": "string",
+              "example": "hashing,checksum"
+            },
+            "description": "Optional CSV tags filter. Example: `hashing,checksum`. Tokens are trimmed, lowercased, and deduplicated."
+          },
+          {
+            "name": "match",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Match",
+              "type": "string",
+              "enum": [
+                "any",
+                "all"
+              ],
+              "default": "any",
+              "example": "all"
+            },
+            "description": "Optional tag match mode. Allowed: `any` or `all`. Requires `tags`; defaults to `any` when omitted."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_ListActionsData_"
+                },
+                "example": {
+                  "success": true,
+                  "error": null,
+                  "data": {
+                    "modules": [
+                      {
+                        "module": "crypto",
+                        "module_id": "base.crypto",
+                        "namespace": "base",
+                        "namespace_path": [
+                          "base"
+                        ],
+                        "description": "Cryptographic primitives for hashing, integrity checks, and file encryption workflows",
+                        "tags": [
+                          "crypto",
+                          "security",
+                          "files"
+                        ],
+                        "authors": [
+                          "Libertocrat <libertocrat@proton.me>"
+                        ],
+                        "actions": [
+                          {
+                            "action": "sha256_file",
+                            "action_id": "base.crypto.sha256_file",
+                            "summary": "Hash one file with SHA-256",
+                            "description": "Compute the SHA-256 digest of one managed file using sha256sum",
+                            "tags": [
+                              "crypto",
+                              "security",
+                              "files",
+                              "hashing",
+                              "digest",
+                              "integrity",
+                              "checksum",
+                              "sha256",
+                              "file",
+                              "single_file"
+                            ]
+                          },
+                          {
+                            "action": "sha256_files",
+                            "action_id": "base.crypto.sha256_files",
+                            "summary": "Hash multiple files with SHA-256",
+                            "description": "Compute SHA-256 digests for multiple managed files in a single action",
+                            "tags": [
+                              "crypto",
+                              "security",
+                              "files",
+                              "hashing",
+                              "digest",
+                              "integrity",
+                              "checksum",
+                              "sha256",
+                              "file",
+                              "multiple_files",
+                              "batch"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "422 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "UNPROCESSABLE_ENTITY": {
+                    "summary": "UNPROCESSABLE_ENTITY",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "UNPROCESSABLE_ENTITY",
+                        "message": "Unprocessable entity."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "400 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "INVALID_REQUEST": {
+                    "summary": "INVALID_REQUEST",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "INVALID_REQUEST",
+                        "message": "Invalid request."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "500 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "INTERNAL_ERROR": {
+                    "summary": "INTERNAL_ERROR",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "INTERNAL_ERROR",
+                        "message": "Unhandled error while executing action."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "401 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "UNAUTHORIZED": {
+                    "summary": "UNAUTHORIZED",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "UNAUTHORIZED",
+                        "message": "Authentication required or invalid token."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "429 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "RATE_LIMITED": {
+                    "summary": "RATE_LIMITED",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "RATE_LIMITED",
+                        "message": "Rate limit exceeded."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before retrying.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+$"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "504 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "TIMEOUT": {
+                    "summary": "TIMEOUT",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "TIMEOUT",
+                        "message": "Operation timed out."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "413 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "FILE_TOO_LARGE": {
+                    "summary": "FILE_TOO_LARGE",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "FILE_TOO_LARGE",
+                        "message": "File exceeds maximum allowed size."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/actions/{action_id}": {
+      "get": {
+        "tags": [
+          "Actions"
+        ],
+        "summary": "Get public specification of an action",
+        "description": "Retrieve the full public contract of a DSL-defined action.\n\nIncludes:\n- Arguments\n- Flags\n- Outputs\n- Request/response schemas",
+        "operationId": "get_action_specs_v1_actions__action_id__get",
+        "parameters": [
+          {
+            "name": "action_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Action Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_GetActionData_"
+                },
+                "example": {
+                  "success": true,
+                  "error": null,
+                  "data": {
+                    "action": "ping",
+                    "action_id": "test_runtime.ping",
+                    "summary": "Ping",
+                    "description": "Return deterministic hello output",
+                    "tags": [
+                      "test",
+                      "runtime",
+                      "health",
+                      "smoke_test"
+                    ],
+                    "allow_stdout_as_file": true,
+                    "args": [],
+                    "flags": [],
+                    "outputs": [],
+                    "params_contract": {},
+                    "params_example": {},
+                    "response_contract": {},
+                    "response_example": {}
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "422 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "UNPROCESSABLE_ENTITY": {
+                    "summary": "UNPROCESSABLE_ENTITY",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "UNPROCESSABLE_ENTITY",
+                        "message": "Unprocessable entity."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "404 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "ACTION_NOT_FOUND": {
+                    "summary": "ACTION_NOT_FOUND",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "ACTION_NOT_FOUND",
+                        "message": "Unsupported action."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "400 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "INVALID_REQUEST": {
+                    "summary": "INVALID_REQUEST",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "INVALID_REQUEST",
+                        "message": "Invalid request."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "500 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "INTERNAL_ERROR": {
+                    "summary": "INTERNAL_ERROR",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "INTERNAL_ERROR",
+                        "message": "Unhandled error while executing action."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "401 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "UNAUTHORIZED": {
+                    "summary": "UNAUTHORIZED",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "UNAUTHORIZED",
+                        "message": "Authentication required or invalid token."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "429 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "RATE_LIMITED": {
+                    "summary": "RATE_LIMITED",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "RATE_LIMITED",
+                        "message": "Rate limit exceeded."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before retrying.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+$"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "504 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "TIMEOUT": {
+                    "summary": "TIMEOUT",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "TIMEOUT",
+                        "message": "Operation timed out."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "413 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "FILE_TOO_LARGE": {
+                    "summary": "FILE_TOO_LARGE",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "FILE_TOO_LARGE",
+                        "message": "File exceeds maximum allowed size."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Actions"
+        ],
+        "summary": "Execute a registered action with given parameters.",
+        "description": "Executes a registered STAR action within the secure sandbox environment.\n\nSet the target action using the `action_id` path parameter.\n\n### Supported Actions\n\n- `base.analyze.count_file_chars`: Count file characters\n- `base.analyze.count_file_lines`: Count file lines\n- `base.analyze.count_file_words`: Count file words\n- `base.analyze.inspect_file_type`: Inspect file type\n- `base.analyze.preview_file_end`: Preview file end lines\n- `base.analyze.preview_file_start`: Preview file start lines\n- `base.analyze.search_file_lines`: Search lines in a file\n- `base.crypto.decrypt_file_aes256`: Decrypt a file encrypted with AES-256\n- `base.crypto.encrypt_file_aes256`: Encrypt a file with AES-256\n- `base.crypto.hash_file`: Hash a file with a selected algorithm\n- `base.crypto.sha256_file`: Hash one file with SHA-256\n- `base.crypto.sha256_files`: Hash multiple files with SHA-256\n- `base.random.gen_bytes_file`: Generate random bytes as file\n- `base.random.gen_token_base64`: Generate a random Base64 token\n- `base.random.gen_token_hex`: Generate a random hex token\n- `base.random.gen_uuid`: Generate a kernel-backed UUIDv4",
+        "operationId": "execute_action_v1_actions__action_id__post",
+        "parameters": [
+          {
+            "name": "action_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Action Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExecuteActionRequest"
+              },
+              "examples": {
+                "base.analyze.count_file_chars": {
+                  "summary": "base.analyze.count_file_chars: Count file characters",
+                  "description": "\nCount characters in a managed file\n\n#### Args\n\n- `input_file` (`file_id`): Managed file ID to measure; **\\*required**\n\n#### Flags\n\n- _No flags_\n\n#### Request Options\n\n- `stdout_as_file` (`bool`): Store sanitized stdout as `outputs.stdout_file` when enabled and allowed by the action; default: `false`;",
+                  "value": {
+                    "params": {
+                      "input_file": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+                    },
+                    "stdout_as_file": false
+                  }
+                },
+                "base.analyze.count_file_lines": {
+                  "summary": "base.analyze.count_file_lines: Count file lines",
+                  "description": "\nCount lines in a managed file\n\n#### Args\n\n- `input_file` (`file_id`): Managed file ID to measure; **\\*required**\n\n#### Flags\n\n- _No flags_\n\n#### Request Options\n\n- `stdout_as_file` (`bool`): Store sanitized stdout as `outputs.stdout_file` when enabled and allowed by the action; default: `false`;",
+                  "value": {
+                    "params": {
+                      "input_file": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+                    },
+                    "stdout_as_file": false
+                  }
+                },
+                "base.analyze.count_file_words": {
+                  "summary": "base.analyze.count_file_words: Count file words",
+                  "description": "\nCount words in a managed file\n\n#### Args\n\n- `input_file` (`file_id`): Managed file ID to measure; **\\*required**\n\n#### Flags\n\n- _No flags_\n\n#### Request Options\n\n- `stdout_as_file` (`bool`): Store sanitized stdout as `outputs.stdout_file` when enabled and allowed by the action; default: `false`;",
+                  "value": {
+                    "params": {
+                      "input_file": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+                    },
+                    "stdout_as_file": false
+                  }
+                },
+                "base.analyze.inspect_file_type": {
+                  "summary": "base.analyze.inspect_file_type: Inspect file type",
+                  "description": "\nInspect file type information using the file utility\n\n#### Args\n\n- `input_file` (`file_id`): Managed file ID to inspect; **\\*required**\n\n#### Flags\n\n- _No flags_\n\n#### Request Options\n\n- `stdout_as_file` (`bool`): Store sanitized stdout as `outputs.stdout_file` when enabled and allowed by the action; default: `false`;",
+                  "value": {
+                    "params": {
+                      "input_file": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+                    },
+                    "stdout_as_file": false
+                  }
+                },
+                "base.analyze.preview_file_end": {
+                  "summary": "base.analyze.preview_file_end: Preview file end lines",
+                  "description": "\nPreview the last lines of a managed file\n\n#### Args\n\n- `input_file` (`file_id`): Managed file ID to preview; **\\*required**\n- `lines` (`int`): Number of lines to return from the end of the file; default: `10`\n\n#### Flags\n\n- _No flags_\n\n#### Request Options\n\n- `stdout_as_file` (`bool`): Store sanitized stdout as `outputs.stdout_file` when enabled and allowed by the action; default: `false`;",
+                  "value": {
+                    "params": {
+                      "input_file": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+                      "lines": 10
+                    },
+                    "stdout_as_file": false
+                  }
+                },
+                "base.analyze.preview_file_start": {
+                  "summary": "base.analyze.preview_file_start: Preview file start lines",
+                  "description": "\nPreview the first lines of a managed file\n\n#### Args\n\n- `input_file` (`file_id`): Managed file ID to preview; **\\*required**\n- `lines` (`int`): Number of lines to return from the beginning of the file; default: `10`\n\n#### Flags\n\n- _No flags_\n\n#### Request Options\n\n- `stdout_as_file` (`bool`): Store sanitized stdout as `outputs.stdout_file` when enabled and allowed by the action; default: `false`;",
+                  "value": {
+                    "params": {
+                      "input_file": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+                      "lines": 10
+                    },
+                    "stdout_as_file": false
+                  }
+                },
+                "base.analyze.search_file_lines": {
+                  "summary": "base.analyze.search_file_lines: Search lines in a file",
+                  "description": "\nSearch matching lines in a managed file using grep semantics\n\n#### Args\n\n- `input_file` (`file_id`): Managed file ID to inspect; **\\*required**\n- `pattern` (`string`): Search pattern passed directly to grep; **\\*required**\n\n#### Flags\n\n- `regex`: Interpret pattern as an extended grep regular expression; default: `false`\n- `ignore_case`: Perform case-insensitive matching; default: `false`\n- `add_line_numbers`: Prefix each match with its line number; default: `false`\n- `invert_match`: Return non-matching lines instead of matches; default: `false`\n\n#### Request Options\n\n- `stdout_as_file` (`bool`): Store sanitized stdout as `outputs.stdout_file` when enabled and allowed by the action; default: `false`;",
+                  "value": {
+                    "params": {
+                      "input_file": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+                      "pattern": "pattern_value",
+                      "regex": false,
+                      "ignore_case": false,
+                      "add_line_numbers": false,
+                      "invert_match": false
+                    },
+                    "stdout_as_file": false
+                  }
+                },
+                "base.crypto.decrypt_file_aes256": {
+                  "summary": "base.crypto.decrypt_file_aes256: Decrypt a file encrypted with AES-256",
+                  "description": "\nDecrypt an AES-256-CBC managed file using the same passphrase used during encryption\n\n#### Args\n\n- `input_file` (`file_id`): Managed encrypted file ID to decrypt; **\\*required**\n- `password` (`string`): Password used to derive the decryption key; **\\*required**\n\n#### Flags\n\n- _No flags_\n\n#### Request Options\n\n- `stdout_as_file` (`bool`): Store sanitized stdout as `outputs.stdout_file` when enabled and allowed by the action; default: `false`;",
+                  "value": {
+                    "params": {
+                      "input_file": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+                      "password": "password_value"
+                    },
+                    "stdout_as_file": false
+                  }
+                },
+                "base.crypto.encrypt_file_aes256": {
+                  "summary": "base.crypto.encrypt_file_aes256: Encrypt a file with AES-256",
+                  "description": "\nEncrypt a managed file using AES-256-CBC with PBKDF2-derived key material\n\n#### Args\n\n- `input_file` (`file_id`): Managed file ID to encrypt; **\\*required**\n- `password` (`string`): Password used to derive the encryption key; **\\*required**\n\n#### Flags\n\n- _No flags_\n\n#### Request Options\n\n- `stdout_as_file` (`bool`): Store sanitized stdout as `outputs.stdout_file` when enabled and allowed by the action; default: `false`;",
+                  "value": {
+                    "params": {
+                      "input_file": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+                      "password": "password_value"
+                    },
+                    "stdout_as_file": false
+                  }
+                },
+                "base.crypto.hash_file": {
+                  "summary": "base.crypto.hash_file: Hash a file with a selected algorithm",
+                  "description": "\nCompute a cryptographic digest for a managed file using a selectable OpenSSL hash algorithm\n\n#### Args\n\n- `input_file` (`file_id`): Managed file ID to hash; **\\*required**\n- `algorithm` (`string`): Digest algorithm to apply; default: `sha256`\n\n#### Flags\n\n- _No flags_\n\n#### Request Options\n\n- `stdout_as_file` (`bool`): Store sanitized stdout as `outputs.stdout_file` when enabled and allowed by the action; default: `false`;",
+                  "value": {
+                    "params": {
+                      "input_file": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+                      "algorithm": "sha256"
+                    },
+                    "stdout_as_file": false
+                  }
+                },
+                "base.crypto.sha256_file": {
+                  "summary": "base.crypto.sha256_file: Hash one file with SHA-256",
+                  "description": "\nCompute the SHA-256 digest of one managed file using sha256sum\n\n#### Args\n\n- `input_file` (`file_id`): Managed file ID to hash; **\\*required**\n\n#### Flags\n\n- _No flags_\n\n#### Request Options\n\n- `stdout_as_file` (`bool`): Store sanitized stdout as `outputs.stdout_file` when enabled and allowed by the action; default: `false`;",
+                  "value": {
+                    "params": {
+                      "input_file": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+                    },
+                    "stdout_as_file": false
+                  }
+                },
+                "base.crypto.sha256_files": {
+                  "summary": "base.crypto.sha256_files: Hash multiple files with SHA-256",
+                  "description": "\nCompute SHA-256 digests for multiple managed files in a single action\n\n#### Args\n\n- `input_files` (`list[file_id]`): Ordered list of managed file IDs to hash; **\\*required**\n\n#### Flags\n\n- _No flags_\n\n#### Request Options\n\n- `stdout_as_file` (`bool`): Store sanitized stdout as `outputs.stdout_file` when enabled and allowed by the action; default: `false`;",
+                  "value": {
+                    "params": {
+                      "input_files": [
+                        "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+                        "98e56387-3364-4ce2-9c66-44d23ec4e23a"
+                      ]
+                    },
+                    "stdout_as_file": false
+                  }
+                },
+                "base.random.gen_bytes_file": {
+                  "summary": "base.random.gen_bytes_file: Generate random bytes as file",
+                  "description": "\nGenerate random bytes and store them as a managed output file\n\n#### Args\n\n- `bytes` (`int`): Number of random bytes to write to the output file; default: `32`\n\n#### Flags\n\n- _No flags_\n\n#### Request Options\n\n- `stdout_as_file` (`bool`): Store sanitized stdout as `outputs.stdout_file` when enabled and allowed by the action; default: `false`;",
+                  "value": {
+                    "params": {
+                      "bytes": 32
+                    },
+                    "stdout_as_file": false
+                  }
+                },
+                "base.random.gen_token_base64": {
+                  "summary": "base.random.gen_token_base64: Generate a random Base64 token",
+                  "description": "\nGenerate a random Base64 token using OpenSSL\n\n#### Args\n\n- `bytes` (`int`): Number of random bytes to generate before Base64 encoding; default: `16`\n\n#### Flags\n\n- _No flags_\n\n#### Request Options\n\n- `stdout_as_file` (`bool`): Store sanitized stdout as `outputs.stdout_file` when enabled and allowed by the action; default: `false`;",
+                  "value": {
+                    "params": {
+                      "bytes": 16
+                    },
+                    "stdout_as_file": false
+                  }
+                },
+                "base.random.gen_token_hex": {
+                  "summary": "base.random.gen_token_hex: Generate a random hex token",
+                  "description": "\nGenerate a random hexadecimal token using OpenSSL\n\n#### Args\n\n- `bytes` (`int`): Number of random bytes to generate before hex encoding; default: `16`\n\n#### Flags\n\n- _No flags_\n\n#### Request Options\n\n- `stdout_as_file` (`bool`): Store sanitized stdout as `outputs.stdout_file` when enabled and allowed by the action; default: `false`;",
+                  "value": {
+                    "params": {
+                      "bytes": 16
+                    },
+                    "stdout_as_file": false
+                  }
+                },
+                "base.random.gen_uuid": {
+                  "summary": "base.random.gen_uuid: Generate a kernel-backed UUIDv4",
+                  "description": "\nGenerate a UUIDv4 from the Linux kernel random UUID interface\n\n#### Args\n\n- _No args_\n\n#### Flags\n\n- _No flags_\n\n#### Request Options\n\n- `stdout_as_file` (`bool`): Store sanitized stdout as `outputs.stdout_file` when enabled and allowed by the action; default: `false`;",
+                  "value": {
+                    "params": {},
+                    "stdout_as_file": false
+                  }
+                }
+              }
+            }
+          },
+          "description": "Request body containing action-specific `params` and request-level execution options.\n\nThe target action is selected via the `action_id` path parameter. Use `stdout_as_file=true` to store sanitized stdout as `outputs.stdout_file` when the selected action allows it. Select an example below to inspect parameter contracts per action."
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_ExecuteActionData_"
+                },
+                "examples": {
+                  "base.analyze.count_file_chars": {
+                    "summary": "Response for: base.analyze.count_file_chars",
+                    "description": "\n#### Outputs\n\n- `stdout_file` (`FileMetadata`): Managed text file created from sanitized stdout when `stdout_as_file=true`; source: `stdout`; reserved output name",
+                    "value": {
+                      "success": true,
+                      "error": null,
+                      "data": {
+                        "exit_code": 0,
+                        "stdout": "",
+                        "stdout_encoding": "utf-8",
+                        "stderr": "",
+                        "stderr_encoding": "utf-8",
+                        "exec_time": 0.01,
+                        "pid": 12345,
+                        "truncated": false,
+                        "redacted": false,
+                        "outputs": {}
+                      }
+                    }
+                  },
+                  "base.analyze.count_file_lines": {
+                    "summary": "Response for: base.analyze.count_file_lines",
+                    "description": "\n#### Outputs\n\n- `stdout_file` (`FileMetadata`): Managed text file created from sanitized stdout when `stdout_as_file=true`; source: `stdout`; reserved output name",
+                    "value": {
+                      "success": true,
+                      "error": null,
+                      "data": {
+                        "exit_code": 0,
+                        "stdout": "",
+                        "stdout_encoding": "utf-8",
+                        "stderr": "",
+                        "stderr_encoding": "utf-8",
+                        "exec_time": 0.01,
+                        "pid": 12345,
+                        "truncated": false,
+                        "redacted": false,
+                        "outputs": {}
+                      }
+                    }
+                  },
+                  "base.analyze.count_file_words": {
+                    "summary": "Response for: base.analyze.count_file_words",
+                    "description": "\n#### Outputs\n\n- `stdout_file` (`FileMetadata`): Managed text file created from sanitized stdout when `stdout_as_file=true`; source: `stdout`; reserved output name",
+                    "value": {
+                      "success": true,
+                      "error": null,
+                      "data": {
+                        "exit_code": 0,
+                        "stdout": "",
+                        "stdout_encoding": "utf-8",
+                        "stderr": "",
+                        "stderr_encoding": "utf-8",
+                        "exec_time": 0.01,
+                        "pid": 12345,
+                        "truncated": false,
+                        "redacted": false,
+                        "outputs": {}
+                      }
+                    }
+                  },
+                  "base.analyze.inspect_file_type": {
+                    "summary": "Response for: base.analyze.inspect_file_type",
+                    "description": "\n#### Outputs\n\n- `stdout_file` (`FileMetadata`): Managed text file created from sanitized stdout when `stdout_as_file=true`; source: `stdout`; reserved output name",
+                    "value": {
+                      "success": true,
+                      "error": null,
+                      "data": {
+                        "exit_code": 0,
+                        "stdout": "",
+                        "stdout_encoding": "utf-8",
+                        "stderr": "",
+                        "stderr_encoding": "utf-8",
+                        "exec_time": 0.01,
+                        "pid": 12345,
+                        "truncated": false,
+                        "redacted": false,
+                        "outputs": {}
+                      }
+                    }
+                  },
+                  "base.analyze.preview_file_end": {
+                    "summary": "Response for: base.analyze.preview_file_end",
+                    "description": "\n#### Outputs\n\n- `stdout_file` (`FileMetadata`): Managed text file created from sanitized stdout when `stdout_as_file=true`; source: `stdout`; reserved output name",
+                    "value": {
+                      "success": true,
+                      "error": null,
+                      "data": {
+                        "exit_code": 0,
+                        "stdout": "",
+                        "stdout_encoding": "utf-8",
+                        "stderr": "",
+                        "stderr_encoding": "utf-8",
+                        "exec_time": 0.01,
+                        "pid": 12345,
+                        "truncated": false,
+                        "redacted": false,
+                        "outputs": {}
+                      }
+                    }
+                  },
+                  "base.analyze.preview_file_start": {
+                    "summary": "Response for: base.analyze.preview_file_start",
+                    "description": "\n#### Outputs\n\n- `stdout_file` (`FileMetadata`): Managed text file created from sanitized stdout when `stdout_as_file=true`; source: `stdout`; reserved output name",
+                    "value": {
+                      "success": true,
+                      "error": null,
+                      "data": {
+                        "exit_code": 0,
+                        "stdout": "",
+                        "stdout_encoding": "utf-8",
+                        "stderr": "",
+                        "stderr_encoding": "utf-8",
+                        "exec_time": 0.01,
+                        "pid": 12345,
+                        "truncated": false,
+                        "redacted": false,
+                        "outputs": {}
+                      }
+                    }
+                  },
+                  "base.analyze.search_file_lines": {
+                    "summary": "Response for: base.analyze.search_file_lines",
+                    "description": "\n#### Outputs\n\n- `stdout_file` (`FileMetadata`): Managed text file created from sanitized stdout when `stdout_as_file=true`; source: `stdout`; reserved output name",
+                    "value": {
+                      "success": true,
+                      "error": null,
+                      "data": {
+                        "exit_code": 0,
+                        "stdout": "",
+                        "stdout_encoding": "utf-8",
+                        "stderr": "",
+                        "stderr_encoding": "utf-8",
+                        "exec_time": 0.01,
+                        "pid": 12345,
+                        "truncated": false,
+                        "redacted": false,
+                        "outputs": {}
+                      }
+                    }
+                  },
+                  "base.crypto.decrypt_file_aes256": {
+                    "summary": "Response for: base.crypto.decrypt_file_aes256",
+                    "description": "\n#### Outputs\n\n- `decrypted_file` (`FileMetadata`): Managed output file containing decrypted bytes; source: `command`\n- `stdout_file` (`FileMetadata`): Managed text file created from sanitized stdout when `stdout_as_file=true`; source: `stdout`; reserved output name",
+                    "value": {
+                      "success": true,
+                      "error": null,
+                      "data": {
+                        "exit_code": 0,
+                        "stdout": "",
+                        "stdout_encoding": "utf-8",
+                        "stderr": "",
+                        "stderr_encoding": "utf-8",
+                        "exec_time": 0.01,
+                        "pid": 12345,
+                        "truncated": false,
+                        "redacted": false,
+                        "outputs": {
+                          "decrypted_file": {
+                            "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+                            "original_filename": "action.decrypted_file.bin",
+                            "stored_filename": "file_3fa85f64-5717-4562-b3fc-2c963f66afa6.bin",
+                            "mime_type": "application/octet-stream",
+                            "extension": ".bin",
+                            "size_bytes": 1024,
+                            "sha256": "8e9aa02fb68dfb526d787f6b66adda7b651dd3f9f3b4a03e266d466161f4c39e",
+                            "created_at": "2026-01-01T00:00:00Z",
+                            "updated_at": "2026-01-01T00:00:00Z",
+                            "status": "ready"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "base.crypto.encrypt_file_aes256": {
+                    "summary": "Response for: base.crypto.encrypt_file_aes256",
+                    "description": "\n#### Outputs\n\n- `encrypted_file` (`FileMetadata`): Managed output file containing encrypted bytes; source: `command`\n- `stdout_file` (`FileMetadata`): Managed text file created from sanitized stdout when `stdout_as_file=true`; source: `stdout`; reserved output name",
+                    "value": {
+                      "success": true,
+                      "error": null,
+                      "data": {
+                        "exit_code": 0,
+                        "stdout": "",
+                        "stdout_encoding": "utf-8",
+                        "stderr": "",
+                        "stderr_encoding": "utf-8",
+                        "exec_time": 0.01,
+                        "pid": 12345,
+                        "truncated": false,
+                        "redacted": false,
+                        "outputs": {
+                          "encrypted_file": {
+                            "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+                            "original_filename": "action.encrypted_file.bin",
+                            "stored_filename": "file_3fa85f64-5717-4562-b3fc-2c963f66afa6.bin",
+                            "mime_type": "application/octet-stream",
+                            "extension": ".bin",
+                            "size_bytes": 1024,
+                            "sha256": "8e9aa02fb68dfb526d787f6b66adda7b651dd3f9f3b4a03e266d466161f4c39e",
+                            "created_at": "2026-01-01T00:00:00Z",
+                            "updated_at": "2026-01-01T00:00:00Z",
+                            "status": "ready"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "base.crypto.hash_file": {
+                    "summary": "Response for: base.crypto.hash_file",
+                    "description": "\n#### Outputs\n\n- `stdout_file` (`FileMetadata`): Managed text file created from sanitized stdout when `stdout_as_file=true`; source: `stdout`; reserved output name",
+                    "value": {
+                      "success": true,
+                      "error": null,
+                      "data": {
+                        "exit_code": 0,
+                        "stdout": "",
+                        "stdout_encoding": "utf-8",
+                        "stderr": "",
+                        "stderr_encoding": "utf-8",
+                        "exec_time": 0.01,
+                        "pid": 12345,
+                        "truncated": false,
+                        "redacted": false,
+                        "outputs": {}
+                      }
+                    }
+                  },
+                  "base.crypto.sha256_file": {
+                    "summary": "Response for: base.crypto.sha256_file",
+                    "description": "\n#### Outputs\n\n- `stdout_file` (`FileMetadata`): Managed text file created from sanitized stdout when `stdout_as_file=true`; source: `stdout`; reserved output name",
+                    "value": {
+                      "success": true,
+                      "error": null,
+                      "data": {
+                        "exit_code": 0,
+                        "stdout": "",
+                        "stdout_encoding": "utf-8",
+                        "stderr": "",
+                        "stderr_encoding": "utf-8",
+                        "exec_time": 0.01,
+                        "pid": 12345,
+                        "truncated": false,
+                        "redacted": false,
+                        "outputs": {}
+                      }
+                    }
+                  },
+                  "base.crypto.sha256_files": {
+                    "summary": "Response for: base.crypto.sha256_files",
+                    "description": "\n#### Outputs\n\n- `stdout_file` (`FileMetadata`): Managed text file created from sanitized stdout when `stdout_as_file=true`; source: `stdout`; reserved output name",
+                    "value": {
+                      "success": true,
+                      "error": null,
+                      "data": {
+                        "exit_code": 0,
+                        "stdout": "",
+                        "stdout_encoding": "utf-8",
+                        "stderr": "",
+                        "stderr_encoding": "utf-8",
+                        "exec_time": 0.01,
+                        "pid": 12345,
+                        "truncated": false,
+                        "redacted": false,
+                        "outputs": {}
+                      }
+                    }
+                  },
+                  "base.random.gen_bytes_file": {
+                    "summary": "Response for: base.random.gen_bytes_file",
+                    "description": "\n#### Outputs\n\n- `random_bytes_file` (`FileMetadata`): Managed output file containing raw random bytes; source: `command`\n- `stdout_file` (`FileMetadata`): Managed text file created from sanitized stdout when `stdout_as_file=true`; source: `stdout`; reserved output name",
+                    "value": {
+                      "success": true,
+                      "error": null,
+                      "data": {
+                        "exit_code": 0,
+                        "stdout": "",
+                        "stdout_encoding": "utf-8",
+                        "stderr": "",
+                        "stderr_encoding": "utf-8",
+                        "exec_time": 0.01,
+                        "pid": 12345,
+                        "truncated": false,
+                        "redacted": false,
+                        "outputs": {
+                          "random_bytes_file": {
+                            "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+                            "original_filename": "action.random_bytes_file.bin",
+                            "stored_filename": "file_3fa85f64-5717-4562-b3fc-2c963f66afa6.bin",
+                            "mime_type": "application/octet-stream",
+                            "extension": ".bin",
+                            "size_bytes": 1024,
+                            "sha256": "8e9aa02fb68dfb526d787f6b66adda7b651dd3f9f3b4a03e266d466161f4c39e",
+                            "created_at": "2026-01-01T00:00:00Z",
+                            "updated_at": "2026-01-01T00:00:00Z",
+                            "status": "ready"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "base.random.gen_token_base64": {
+                    "summary": "Response for: base.random.gen_token_base64",
+                    "description": "\n#### Outputs\n\n- `stdout_file` (`FileMetadata`): Managed text file created from sanitized stdout when `stdout_as_file=true`; source: `stdout`; reserved output name",
+                    "value": {
+                      "success": true,
+                      "error": null,
+                      "data": {
+                        "exit_code": 0,
+                        "stdout": "",
+                        "stdout_encoding": "utf-8",
+                        "stderr": "",
+                        "stderr_encoding": "utf-8",
+                        "exec_time": 0.01,
+                        "pid": 12345,
+                        "truncated": false,
+                        "redacted": false,
+                        "outputs": {}
+                      }
+                    }
+                  },
+                  "base.random.gen_token_hex": {
+                    "summary": "Response for: base.random.gen_token_hex",
+                    "description": "\n#### Outputs\n\n- `stdout_file` (`FileMetadata`): Managed text file created from sanitized stdout when `stdout_as_file=true`; source: `stdout`; reserved output name",
+                    "value": {
+                      "success": true,
+                      "error": null,
+                      "data": {
+                        "exit_code": 0,
+                        "stdout": "",
+                        "stdout_encoding": "utf-8",
+                        "stderr": "",
+                        "stderr_encoding": "utf-8",
+                        "exec_time": 0.01,
+                        "pid": 12345,
+                        "truncated": false,
+                        "redacted": false,
+                        "outputs": {}
+                      }
+                    }
+                  },
+                  "base.random.gen_uuid": {
+                    "summary": "Response for: base.random.gen_uuid",
+                    "description": "\n#### Outputs\n\n- `stdout_file` (`FileMetadata`): Managed text file created from sanitized stdout when `stdout_as_file=true`; source: `stdout`; reserved output name",
+                    "value": {
+                      "success": true,
+                      "error": null,
+                      "data": {
+                        "exit_code": 0,
+                        "stdout": "",
+                        "stdout_encoding": "utf-8",
+                        "stderr": "",
+                        "stderr_encoding": "utf-8",
+                        "exec_time": 0.01,
+                        "pid": 12345,
+                        "truncated": false,
+                        "redacted": false,
+                        "outputs": {}
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "422 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "UNPROCESSABLE_ENTITY": {
+                    "summary": "UNPROCESSABLE_ENTITY",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "UNPROCESSABLE_ENTITY",
+                        "message": "Unprocessable entity."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "400 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "INVALID_REQUEST": {
+                    "summary": "INVALID_REQUEST",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "INVALID_REQUEST",
+                        "message": "Invalid request."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "401 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "UNAUTHORIZED": {
+                    "summary": "UNAUTHORIZED",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "UNAUTHORIZED",
+                        "message": "Authentication required or invalid token."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "403 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "PATH_NOT_ALLOWED": {
+                    "summary": "PATH_NOT_ALLOWED",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "PATH_NOT_ALLOWED",
+                        "message": "Path not allowed."
+                      },
+                      "data": null
+                    }
+                  },
+                  "PERMISSION_DENIED": {
+                    "summary": "PERMISSION_DENIED",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "PERMISSION_DENIED",
+                        "message": "Permission denied."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "404 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "RESOURCE_NOT_FOUND": {
+                    "summary": "RESOURCE_NOT_FOUND",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "RESOURCE_NOT_FOUND",
+                        "message": "Resource not found."
+                      },
+                      "data": null
+                    }
+                  },
+                  "ACTION_NOT_FOUND": {
+                    "summary": "ACTION_NOT_FOUND",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "ACTION_NOT_FOUND",
+                        "message": "Unsupported action."
+                      },
+                      "data": null
+                    }
+                  },
+                  "FILE_NOT_FOUND": {
+                    "summary": "FILE_NOT_FOUND",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "FILE_NOT_FOUND",
+                        "message": "File not found."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "405 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "METHOD_NOT_ALLOWED": {
+                    "summary": "METHOD_NOT_ALLOWED",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "METHOD_NOT_ALLOWED",
+                        "message": "HTTP method not allowed for this path."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "409 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "CONFLICT": {
+                    "summary": "CONFLICT",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "CONFLICT",
+                        "message": "Resource conflict."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "413 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "FILE_TOO_LARGE": {
+                    "summary": "FILE_TOO_LARGE",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "FILE_TOO_LARGE",
+                        "message": "File exceeds maximum allowed size."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "415 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "UNSUPPORTED_MEDIA_TYPE": {
+                    "summary": "UNSUPPORTED_MEDIA_TYPE",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "UNSUPPORTED_MEDIA_TYPE",
+                        "message": "Unsupported media type."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "429 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "RATE_LIMITED": {
+                    "summary": "RATE_LIMITED",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "RATE_LIMITED",
+                        "message": "Rate limit exceeded."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before retrying.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+$"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "500 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "INVALID_RESULT": {
+                    "summary": "INVALID_RESULT",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "INVALID_RESULT",
+                        "message": "Handler returned invalid result."
+                      },
+                      "data": null
+                    }
+                  },
+                  "INTERNAL_ERROR": {
+                    "summary": "INTERNAL_ERROR",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "INTERNAL_ERROR",
+                        "message": "Unhandled error while executing action."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "504 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "TIMEOUT": {
+                    "summary": "TIMEOUT",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "TIMEOUT",
+                        "message": "Operation timed out."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          }
+        },
+        "x-star-integrity": {
+          "content_type_required": "application/json",
+          "body_limit_bytes": 1048576,
+          "enforced_by": "RequestIntegrityMiddleware"
+        }
+      }
+    },
+    "/v1/files": {
+      "post": {
+        "tags": [
+          "Files"
+        ],
+        "summary": "Upload and persist a file",
+        "description": "**Upload and securely persist a file using STAR-managed storage.**\n\nThis endpoint accepts multipart/form-data uploads and enforces a strict validation pipeline before persisting any data.\n\nProcessing steps:\n- Stream upload to temporary storage\n- Compute SHA256 checksum\n- Detect MIME type using server-side inspection\n- Validate extension ↔ MIME mapping\n- Reject executable or unsafe file types\n- Enforce maximum file size limits\n- Persist blob and metadata atomically\n\nChecksum verification:\n- An optional `checksum` field may be provided\n- The value MUST be the SHA256 hash (hex-encoded) of the file contents\n- If provided, STAR verifies integrity before accepting the upload\n- Mismatches result in request rejection\n\nStorage model:\n- Files are stored as immutable blobs\n- Metadata is persisted as a JSON sidecar document\n- Each file is identified by a UUID\n\nSecurity guarantees:\n- No trust in client-provided MIME types\n- Strict extension-to-MIME validation\n- Executable content is rejected by default\n- Atomic write operations prevent partial persistence",
+        "operationId": "post_file_v1_files_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_post_file_v1_files_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_UploadFileData_"
+                },
+                "example": {
+                  "success": true,
+                  "error": null,
+                  "data": {
+                    "file": {
+                      "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+                      "original_filename": "document.pdf",
+                      "stored_filename": "file_<uuid>.bin",
+                      "mime_type": "application/pdf",
+                      "extension": ".pdf",
+                      "size_bytes": 1024,
+                      "sha256": "abc123...",
+                      "created_at": "2026-01-01T00:00:00Z",
+                      "updated_at": "2026-01-01T00:00:00Z",
+                      "status": "ready"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "422 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "UNPROCESSABLE_ENTITY": {
+                    "summary": "UNPROCESSABLE_ENTITY",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "UNPROCESSABLE_ENTITY",
+                        "message": "Unprocessable entity."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "400 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "INVALID_REQUEST": {
+                    "summary": "INVALID_REQUEST",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "INVALID_REQUEST",
+                        "message": "Invalid request."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "413 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "FILE_TOO_LARGE": {
+                    "summary": "FILE_TOO_LARGE",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "FILE_TOO_LARGE",
+                        "message": "File exceeds maximum allowed size."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "415 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "UNSUPPORTED_MEDIA_TYPE": {
+                    "summary": "UNSUPPORTED_MEDIA_TYPE",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "UNSUPPORTED_MEDIA_TYPE",
+                        "message": "Unsupported media type."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "500 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "INTERNAL_ERROR": {
+                    "summary": "INTERNAL_ERROR",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "INTERNAL_ERROR",
+                        "message": "Unhandled error while executing action."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "401 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "UNAUTHORIZED": {
+                    "summary": "UNAUTHORIZED",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "UNAUTHORIZED",
+                        "message": "Authentication required or invalid token."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "429 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "RATE_LIMITED": {
+                    "summary": "RATE_LIMITED",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "RATE_LIMITED",
+                        "message": "Rate limit exceeded."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before retrying.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+$"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "504 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "TIMEOUT": {
+                    "summary": "TIMEOUT",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "TIMEOUT",
+                        "message": "Operation timed out."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Files"
+        ],
+        "summary": "List stored files",
+        "description": "**List STAR-managed files with cursor pagination and deterministic ordering.**\n\nSupports filtering by `status`, `mime_type`, and `extension`, with sorting by `created_at` and stable tiebreaking by file id.",
+        "operationId": "list_files_v1_files_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "created_at",
+              "title": "Sort"
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "asc",
+              "title": "Order"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "mime_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Mime Type"
+            }
+          },
+          {
+            "name": "extension",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Extension"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_FileListData_"
+                },
+                "example": {
+                  "success": true,
+                  "error": null,
+                  "data": {
+                    "files": [],
+                    "pagination": {
+                      "count": 0,
+                      "next_cursor": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "422 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "UNPROCESSABLE_ENTITY": {
+                    "summary": "UNPROCESSABLE_ENTITY",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "UNPROCESSABLE_ENTITY",
+                        "message": "Unprocessable entity."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "400 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "INVALID_REQUEST": {
+                    "summary": "INVALID_REQUEST",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "INVALID_REQUEST",
+                        "message": "Invalid request."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "500 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "INTERNAL_ERROR": {
+                    "summary": "INTERNAL_ERROR",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "INTERNAL_ERROR",
+                        "message": "Unhandled error while executing action."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "401 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "UNAUTHORIZED": {
+                    "summary": "UNAUTHORIZED",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "UNAUTHORIZED",
+                        "message": "Authentication required or invalid token."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "429 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "RATE_LIMITED": {
+                    "summary": "RATE_LIMITED",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "RATE_LIMITED",
+                        "message": "Rate limit exceeded."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before retrying.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+$"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "504 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "TIMEOUT": {
+                    "summary": "TIMEOUT",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "TIMEOUT",
+                        "message": "Operation timed out."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "413 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "FILE_TOO_LARGE": {
+                    "summary": "FILE_TOO_LARGE",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "FILE_TOO_LARGE",
+                        "message": "File exceeds maximum allowed size."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/files/{id}": {
+      "get": {
+        "tags": [
+          "Files"
+        ],
+        "summary": "Retrieve file metadata",
+        "description": "**Retrieve metadata for a previously uploaded file managed by STAR.**\n\nThis endpoint provides read-only access to file metadata stored in the STAR filesystem-backed storage model. It does not return the file contents.\n\nBehavior:\n- Validates the provided file identifier (UUID)\n- Loads metadata from STAR-managed storage\n- Returns structured metadata in a standard response envelope\n\nStorage model:\n- Files are stored as immutable blobs\n- Metadata is persisted as a JSON sidecar document\n- Each file is uniquely identified by a UUID\n\nSecurity considerations:\n- No direct filesystem paths are exposed\n- No file content is returned by this endpoint\n- Access is controlled via STAR authentication middleware\n\nUse cases:\n- Verify upload success\n- Inspect file properties (size, type, checksum)\n- Integrate with automation workflows (e.g., n8n)",
+        "operationId": "get_file_v1_files__id__get",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_UploadFileData_"
+                },
+                "example": {
+                  "success": true,
+                  "error": null,
+                  "data": {
+                    "file": {
+                      "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+                      "original_filename": "example.txt",
+                      "stored_filename": "file_<uuid>.bin",
+                      "mime_type": "text/plain",
+                      "extension": ".txt",
+                      "size_bytes": 123,
+                      "sha256": "8e9aa02fb68dfb526d787f6b66adda7b651dd3f9f3b4a03e266d466161f4c39e",
+                      "created_at": "2026-01-01T00:00:00Z",
+                      "updated_at": "2026-01-01T00:00:00Z",
+                      "status": "ready"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "422 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "UNPROCESSABLE_ENTITY": {
+                    "summary": "UNPROCESSABLE_ENTITY",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "UNPROCESSABLE_ENTITY",
+                        "message": "Unprocessable entity."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "404 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "FILE_NOT_FOUND": {
+                    "summary": "FILE_NOT_FOUND",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "FILE_NOT_FOUND",
+                        "message": "File not found."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "400 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "INVALID_REQUEST": {
+                    "summary": "INVALID_REQUEST",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "INVALID_REQUEST",
+                        "message": "Invalid request."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "500 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "INTERNAL_ERROR": {
+                    "summary": "INTERNAL_ERROR",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "INTERNAL_ERROR",
+                        "message": "Unhandled error while executing action."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "401 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "UNAUTHORIZED": {
+                    "summary": "UNAUTHORIZED",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "UNAUTHORIZED",
+                        "message": "Authentication required or invalid token."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "429 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "RATE_LIMITED": {
+                    "summary": "RATE_LIMITED",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "RATE_LIMITED",
+                        "message": "Rate limit exceeded."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before retrying.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+$"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "504 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "TIMEOUT": {
+                    "summary": "TIMEOUT",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "TIMEOUT",
+                        "message": "Operation timed out."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "413 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "FILE_TOO_LARGE": {
+                    "summary": "FILE_TOO_LARGE",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "FILE_TOO_LARGE",
+                        "message": "File exceeds maximum allowed size."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Files"
+        ],
+        "summary": "Delete a stored file",
+        "description": "**Delete a previously uploaded file managed by STAR.**\n\nThis endpoint resolves the file through STAR metadata, removes the public metadata record first, and then cleans the blob artifact best-effort. If valid metadata exists but the blob is already missing, the request is treated as successful cleanup. Deletion is only allowed when file metadata is in `ready` state.",
+        "operationId": "delete_file_v1_files__id__delete",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_DeleteFileData_"
+                },
+                "example": {
+                  "success": true,
+                  "error": null,
+                  "data": {
+                    "file": {
+                      "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+                      "deleted": true
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "422 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "UNPROCESSABLE_ENTITY": {
+                    "summary": "UNPROCESSABLE_ENTITY",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "UNPROCESSABLE_ENTITY",
+                        "message": "Unprocessable entity."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "404 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "FILE_NOT_FOUND": {
+                    "summary": "FILE_NOT_FOUND",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "FILE_NOT_FOUND",
+                        "message": "File not found."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "400 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "INVALID_REQUEST": {
+                    "summary": "INVALID_REQUEST",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "INVALID_REQUEST",
+                        "message": "Invalid request."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "500 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "INTERNAL_ERROR": {
+                    "summary": "INTERNAL_ERROR",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "INTERNAL_ERROR",
+                        "message": "Unhandled error while executing action."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "401 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "UNAUTHORIZED": {
+                    "summary": "UNAUTHORIZED",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "UNAUTHORIZED",
+                        "message": "Authentication required or invalid token."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "429 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "RATE_LIMITED": {
+                    "summary": "RATE_LIMITED",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "RATE_LIMITED",
+                        "message": "Rate limit exceeded."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before retrying.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+$"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "504 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "TIMEOUT": {
+                    "summary": "TIMEOUT",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "TIMEOUT",
+                        "message": "Operation timed out."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "413 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "FILE_TOO_LARGE": {
+                    "summary": "FILE_TOO_LARGE",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "FILE_TOO_LARGE",
+                        "message": "File exceeds maximum allowed size."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/files/{id}/content": {
+      "get": {
+        "tags": [
+          "Files"
+        ],
+        "summary": "Download file content",
+        "description": "**Stream the binary contents of a previously uploaded file managed by STAR.**\n\nThis endpoint resolves the file through STAR metadata, validates that the file is in ready state, and returns the blob as a streamed download response.\n\nBehavior:\n- Validates the provided file identifier (UUID)\n- Loads metadata from STAR-managed storage\n- Verifies that the file is available for download\n- Streams the file content without loading the entire blob into memory\n\nSecurity considerations:\n- No direct filesystem paths are exposed\n- Only STAR-managed file identifiers are accepted\n- Access is controlled via STAR authentication middleware",
+        "operationId": "get_file_content_v1_files__id__content_get",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Streamed file content.",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "422 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "UNPROCESSABLE_ENTITY": {
+                    "summary": "UNPROCESSABLE_ENTITY",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "UNPROCESSABLE_ENTITY",
+                        "message": "Unprocessable entity."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "404 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "FILE_NOT_FOUND": {
+                    "summary": "FILE_NOT_FOUND",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "FILE_NOT_FOUND",
+                        "message": "File not found."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "400 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "INVALID_REQUEST": {
+                    "summary": "INVALID_REQUEST",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "INVALID_REQUEST",
+                        "message": "Invalid request."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "500 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "INTERNAL_ERROR": {
+                    "summary": "INTERNAL_ERROR",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "INTERNAL_ERROR",
+                        "message": "Unhandled error while executing action."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "401 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "UNAUTHORIZED": {
+                    "summary": "UNAUTHORIZED",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "UNAUTHORIZED",
+                        "message": "Authentication required or invalid token."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "429 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "RATE_LIMITED": {
+                    "summary": "RATE_LIMITED",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "RATE_LIMITED",
+                        "message": "Rate limit exceeded."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before retrying.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9]+$"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "504 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "TIMEOUT": {
+                    "summary": "TIMEOUT",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "TIMEOUT",
+                        "message": "Operation timed out."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "413 error",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "FILE_TOO_LARGE": {
+                    "summary": "FILE_TOO_LARGE",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "FILE_TOO_LARGE",
+                        "message": "File exceeds maximum allowed size."
+                      },
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ActionSummarySchema": {
+        "properties": {
+          "action": {
+            "type": "string",
+            "title": "Action"
+          },
+          "action_id": {
+            "type": "string",
+            "title": "Action Id"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags"
+          }
+        },
+        "type": "object",
+        "required": [
+          "action",
+          "action_id",
+          "summary",
+          "description",
+          "tags"
+        ],
+        "title": "ActionSummarySchema",
+        "description": "Public summary payload for one registered action.\n\nAttributes:\n    action: Short DSL action name.\n    action_id: Fully qualified runtime action name.\n    summary: Optional short summary.\n    description: Optional long description.\n    tags: Effective public action tags."
+      },
+      "Body_post_file_v1_files_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          },
+          "checksum": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checksum"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_post_file_v1_files_post"
+      },
+      "DeleteFileData": {
+        "properties": {
+          "file": {
+            "$ref": "#/components/schemas/DeleteFileResult"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "DeleteFileData",
+        "description": "Success payload for `DELETE /v1/files/{id}`.\n\nAttributes:\n    file: Structured delete outcome."
+      },
+      "DeleteFileResult": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "deleted": {
+            "type": "boolean",
+            "title": "Deleted"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "deleted"
+        ],
+        "title": "DeleteFileResult",
+        "description": "Delete result payload for a previously stored file.\n\nAttributes:\n    id: UUID of the deleted file.\n    deleted: Deletion success flag."
+      },
+      "ErrorInfo": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code",
+            "description": "Machine-readable error code.",
+            "enum": [
+              "BAD_REQUEST",
+              "INVALID_PARAMS",
+              "INVALID_REQUEST",
+              "INVALID_ALGORITHM",
+              "FILE_EXTENSION_MISSING",
+              "MIME_MAPPING_NOT_DEFINED",
+              "UNAUTHORIZED",
+              "PATH_NOT_ALLOWED",
+              "PERMISSION_DENIED",
+              "RESOURCE_NOT_FOUND",
+              "ACTION_NOT_FOUND",
+              "FILE_NOT_FOUND",
+              "METHOD_NOT_ALLOWED",
+              "CONFLICT",
+              "FILE_TOO_LARGE",
+              "UNSUPPORTED_MEDIA_TYPE",
+              "UNPROCESSABLE_ENTITY",
+              "RATE_LIMITED",
+              "INVALID_RESULT",
+              "INTERNAL_ERROR",
+              "TIMEOUT"
+            ]
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "description": "Human-readable error message."
+          },
+          "details": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Details",
+            "description": "Optional details."
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "ErrorInfo",
+        "description": "Standard error payload returned on failed requests.\n\nAttributes:\n    code: Machine-readable error code.\n    message: Human-readable error message.\n    details: Optional structured details payload."
+      },
+      "ExecuteActionData": {
+        "properties": {
+          "exit_code": {
+            "type": "integer",
+            "title": "Exit Code"
+          },
+          "stdout": {
+            "type": "string",
+            "title": "Stdout"
+          },
+          "stdout_encoding": {
+            "type": "string",
+            "enum": [
+              "utf-8",
+              "base64"
+            ],
+            "title": "Stdout Encoding"
+          },
+          "stderr": {
+            "type": "string",
+            "title": "Stderr"
+          },
+          "stderr_encoding": {
+            "type": "string",
+            "enum": [
+              "utf-8",
+              "base64"
+            ],
+            "title": "Stderr Encoding"
+          },
+          "exec_time": {
+            "type": "number",
+            "title": "Exec Time"
+          },
+          "pid": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pid"
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated"
+          },
+          "redacted": {
+            "type": "boolean",
+            "title": "Redacted"
+          },
+          "outputs": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/FileMetadata"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outputs"
+          }
+        },
+        "type": "object",
+        "required": [
+          "exit_code",
+          "stdout",
+          "stdout_encoding",
+          "stderr",
+          "stderr_encoding",
+          "exec_time",
+          "truncated",
+          "redacted"
+        ],
+        "title": "ExecuteActionData",
+        "description": "Typed success payload for the `POST /v1/actions/{action_id}` endpoint.\n\nAttributes:\n    exit_code: Process return code.\n    stdout: Sanitized stdout text or base64 payload.\n    stdout_encoding: Encoding label for stdout.\n    stderr: Sanitized stderr text or base64 payload.\n    stderr_encoding: Encoding label for stderr.\n    exec_time: Total execution time in seconds.\n    pid: Process identifier when available.\n    truncated: Whether stdout or stderr was truncated.\n    redacted: Whether output was redacted.\n    outputs: Materialized file outputs, if any."
+      },
+      "ExecuteActionRequest": {
+        "properties": {
+          "params": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Params",
+            "description": "Action parameters."
+          },
+          "stdout_as_file": {
+            "type": "boolean",
+            "title": "Stdout As File",
+            "description": "When true, STAR stores sanitized stdout as a managed text file under outputs.stdout_file if the action allows it.",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "ExecuteActionRequest",
+        "description": "Client request body for executing a STAR action.\n\nAttributes:\n    params: Action parameters.\n    stdout_as_file: Whether sanitized stdout should be stored as a managed\n        file when the action allows it."
+      },
+      "FileListData": {
+        "properties": {
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/FileMetadata"
+            },
+            "type": "array",
+            "title": "Files"
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/Pagination"
+          }
+        },
+        "type": "object",
+        "required": [
+          "files",
+          "pagination"
+        ],
+        "title": "FileListData",
+        "description": "Success payload for `GET /v1/files`.\n\nAttributes:\n    files: File metadata records included in the current page.\n    pagination: Cursor pagination metadata."
+      },
+      "FileMetadata": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "original_filename": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Original Filename"
+          },
+          "stored_filename": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Stored Filename"
+          },
+          "mime_type": {
+            "type": "string",
+            "pattern": "^[a-z0-9.+-]+/[a-z0-9.+-]+$",
+            "title": "Mime Type"
+          },
+          "extension": {
+            "type": "string",
+            "pattern": "^\\.[a-z0-9]+$",
+            "title": "Extension"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Size Bytes"
+          },
+          "sha256": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Sha256"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "unverified",
+              "ready"
+            ],
+            "title": "Status",
+            "default": "ready"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "original_filename",
+          "stored_filename",
+          "mime_type",
+          "extension",
+          "size_bytes",
+          "sha256",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "FileMetadata",
+        "description": "Typed metadata persisted for each STAR-managed file.\n\nThis model validates JSON metadata sidecars at the storage boundary and is\nalso projected through the current public file and action response\ncontracts.\n\nAttributes:\n    id: Stable UUID assigned by STAR for the managed file.\n    original_filename: Client or producer filename after basename\n        normalization.\n    stored_filename: Internal blob filename persisted by STAR.\n    mime_type: Server-detected MIME type in `type/subtype` form.\n    extension: Normalized lowercase extension including leading dot.\n    size_bytes: Persisted file size in bytes.\n    sha256: Lowercase SHA-256 digest as 64 hex characters.\n    created_at: UTC timestamp when the record was created.\n    updated_at: UTC timestamp when the record was last updated.\n    status: Lifecycle state of the file metadata. Defaults to `ready`."
+      },
+      "GetActionData": {
+        "properties": {
+          "action": {
+            "type": "string",
+            "title": "Action"
+          },
+          "action_id": {
+            "type": "string",
+            "title": "Action Id"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags"
+          },
+          "allow_stdout_as_file": {
+            "type": "boolean",
+            "title": "Allow Stdout As File"
+          },
+          "args": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Args"
+          },
+          "flags": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Flags"
+          },
+          "outputs": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Outputs"
+          },
+          "params_contract": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Params Contract"
+          },
+          "params_example": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Params Example"
+          },
+          "response_contract": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Response Contract"
+          },
+          "response_example": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Response Example"
+          }
+        },
+        "type": "object",
+        "required": [
+          "action",
+          "action_id",
+          "summary",
+          "description",
+          "tags",
+          "allow_stdout_as_file",
+          "args",
+          "flags",
+          "outputs",
+          "params_contract",
+          "params_example",
+          "response_contract",
+          "response_example"
+        ],
+        "title": "GetActionData",
+        "description": "Success payload for `GET /v1/actions/{action_id}`.\n\nAttributes:\n    action: Short DSL action name.\n    action_id: Fully qualified runtime action name.\n    summary: Optional short summary.\n    description: Optional long description.\n    tags: Effective public action tags.\n    allow_stdout_as_file: Whether sanitized stdout may be stored as a\n        managed file.\n    args: Serialized argument definitions.\n    flags: Serialized flag definitions.\n    outputs: Serialized output definitions.\n    params_contract: Public params contract.\n    params_example: Public params example payload.\n    response_contract: Public response contract.\n    response_example: Public response example payload."
+      },
+      "ListActionsData": {
+        "properties": {
+          "modules": {
+            "items": {
+              "$ref": "#/components/schemas/ModuleSummarySchema"
+            },
+            "type": "array",
+            "title": "Modules"
+          }
+        },
+        "type": "object",
+        "required": [
+          "modules"
+        ],
+        "title": "ListActionsData",
+        "description": "Success payload for `GET /v1/actions`.\n\nAttributes:\n    modules: Discovery summaries grouped by module."
+      },
+      "ModuleSummarySchema": {
+        "properties": {
+          "module": {
+            "type": "string",
+            "title": "Module"
+          },
+          "module_id": {
+            "type": "string",
+            "title": "Module Id"
+          },
+          "namespace": {
+            "type": "string",
+            "title": "Namespace"
+          },
+          "namespace_path": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Namespace Path"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags"
+          },
+          "authors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Authors"
+          },
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/ActionSummarySchema"
+            },
+            "type": "array",
+            "title": "Actions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "module",
+          "module_id",
+          "namespace",
+          "namespace_path",
+          "description",
+          "tags",
+          "authors",
+          "actions"
+        ],
+        "title": "ModuleSummarySchema",
+        "description": "Public summary payload for one DSL module.\n\nAttributes:\n    module: Bare module name.\n    module_id: Fully qualified module identifier.\n    namespace: Dot-separated namespace string.\n    namespace_path: Namespace segments.\n    description: Public module description.\n    tags: Public module tags.\n    authors: Public module authors.\n    actions: Public action summaries within the module."
+      },
+      "Pagination": {
+        "properties": {
+          "count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Count"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "type": "object",
+        "required": [
+          "count"
+        ],
+        "title": "Pagination",
+        "description": "Cursor pagination metadata for file listing responses.\n\nAttributes:\n    count: Number of files returned in the current page.\n    next_cursor: Opaque cursor for the next page, if available."
+      },
+      "ResponseEnvelope_DeleteFileData_": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "description": "Success flag."
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DeleteFileData"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Result payload on success."
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ErrorInfo"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Error payload on failure."
+          }
+        },
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "title": "ResponseEnvelope[DeleteFileData]"
+      },
+      "ResponseEnvelope_ExecuteActionData_": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "description": "Success flag."
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExecuteActionData"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Result payload on success."
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ErrorInfo"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Error payload on failure."
+          }
+        },
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "title": "ResponseEnvelope[ExecuteActionData]"
+      },
+      "ResponseEnvelope_FileListData_": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "description": "Success flag."
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FileListData"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Result payload on success."
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ErrorInfo"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Error payload on failure."
+          }
+        },
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "title": "ResponseEnvelope[FileListData]"
+      },
+      "ResponseEnvelope_GetActionData_": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "description": "Success flag."
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GetActionData"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Result payload on success."
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ErrorInfo"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Error payload on failure."
+          }
+        },
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "title": "ResponseEnvelope[GetActionData]"
+      },
+      "ResponseEnvelope_ListActionsData_": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "description": "Success flag."
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ListActionsData"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Result payload on success."
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ErrorInfo"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Error payload on failure."
+          }
+        },
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "title": "ResponseEnvelope[ListActionsData]"
+      },
+      "ResponseEnvelope_UploadFileData_": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "description": "Success flag."
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UploadFileData"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Result payload on success."
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ErrorInfo"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Error payload on failure."
+          }
+        },
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "title": "ResponseEnvelope[UploadFileData]"
+      },
+      "UploadFileData": {
+        "properties": {
+          "file": {
+            "$ref": "#/components/schemas/FileMetadata"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "UploadFileData",
+        "description": "Success payload for `POST /v1/files`.\n\nAttributes:\n    file: Persisted metadata for the uploaded file."
+      },
+      "ResponseEnvelope": {
+        "description": "Standard HTTP response envelope used across services.\n\nFields follow the README contract: `success`, `data`, and `error`.\nRequest correlation is performed via the `X-Request-Id` header injected\nby middleware; the JSON body deliberately omits `request_id`.\n\nAttributes:\n    success: Whether the request completed successfully.\n    data: Success payload when available.\n    error: Structured error payload when request fails.",
+        "properties": {
+          "success": {
+            "description": "Success flag.",
+            "title": "Success",
+            "type": "boolean"
+          },
+          "data": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Result payload on success.",
+            "title": "Data"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ErrorInfo"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Error payload on failure."
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "ResponseEnvelope",
+        "type": "object"
+      },
+      "BaseAnalyzeCountFileCharsParams": {
+        "properties": {
+          "input_file": {
+            "description": "Managed file ID to measure",
+            "format": "uuid4",
+            "title": "Input File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "input_file"
+        ],
+        "title": "BaseAnalyzeCountFileCharsParams",
+        "type": "object"
+      },
+      "BaseAnalyzeCountFileLinesParams": {
+        "properties": {
+          "input_file": {
+            "description": "Managed file ID to measure",
+            "format": "uuid4",
+            "title": "Input File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "input_file"
+        ],
+        "title": "BaseAnalyzeCountFileLinesParams",
+        "type": "object"
+      },
+      "BaseAnalyzeCountFileWordsParams": {
+        "properties": {
+          "input_file": {
+            "description": "Managed file ID to measure",
+            "format": "uuid4",
+            "title": "Input File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "input_file"
+        ],
+        "title": "BaseAnalyzeCountFileWordsParams",
+        "type": "object"
+      },
+      "BaseAnalyzeInspectFileTypeParams": {
+        "properties": {
+          "input_file": {
+            "description": "Managed file ID to inspect",
+            "format": "uuid4",
+            "title": "Input File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "input_file"
+        ],
+        "title": "BaseAnalyzeInspectFileTypeParams",
+        "type": "object"
+      },
+      "BaseAnalyzePreviewFileEndParams": {
+        "properties": {
+          "input_file": {
+            "description": "Managed file ID to preview",
+            "format": "uuid4",
+            "title": "Input File",
+            "type": "string"
+          },
+          "lines": {
+            "default": 10,
+            "description": "Number of lines to return from the end of the file",
+            "title": "Lines",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "input_file"
+        ],
+        "title": "BaseAnalyzePreviewFileEndParams",
+        "type": "object"
+      },
+      "BaseAnalyzePreviewFileStartParams": {
+        "properties": {
+          "input_file": {
+            "description": "Managed file ID to preview",
+            "format": "uuid4",
+            "title": "Input File",
+            "type": "string"
+          },
+          "lines": {
+            "default": 10,
+            "description": "Number of lines to return from the beginning of the file",
+            "title": "Lines",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "input_file"
+        ],
+        "title": "BaseAnalyzePreviewFileStartParams",
+        "type": "object"
+      },
+      "BaseAnalyzeSearchFileLinesParams": {
+        "properties": {
+          "input_file": {
+            "description": "Managed file ID to inspect",
+            "format": "uuid4",
+            "title": "Input File",
+            "type": "string"
+          },
+          "pattern": {
+            "description": "Search pattern passed directly to grep",
+            "title": "Pattern",
+            "type": "string"
+          },
+          "regex": {
+            "default": false,
+            "description": "Interpret pattern as an extended grep regular expression",
+            "title": "Regex",
+            "type": "boolean"
+          },
+          "ignore_case": {
+            "default": false,
+            "description": "Perform case-insensitive matching",
+            "title": "Ignore Case",
+            "type": "boolean"
+          },
+          "add_line_numbers": {
+            "default": false,
+            "description": "Prefix each match with its line number",
+            "title": "Add Line Numbers",
+            "type": "boolean"
+          },
+          "invert_match": {
+            "default": false,
+            "description": "Return non-matching lines instead of matches",
+            "title": "Invert Match",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "input_file",
+          "pattern"
+        ],
+        "title": "BaseAnalyzeSearchFileLinesParams",
+        "type": "object"
+      },
+      "BaseCryptoDecryptFileAes256Params": {
+        "properties": {
+          "input_file": {
+            "description": "Managed encrypted file ID to decrypt",
+            "format": "uuid4",
+            "title": "Input File",
+            "type": "string"
+          },
+          "password": {
+            "description": "Password used to derive the decryption key",
+            "title": "Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "input_file",
+          "password"
+        ],
+        "title": "BaseCryptoDecryptFileAes256Params",
+        "type": "object"
+      },
+      "BaseCryptoEncryptFileAes256Params": {
+        "properties": {
+          "input_file": {
+            "description": "Managed file ID to encrypt",
+            "format": "uuid4",
+            "title": "Input File",
+            "type": "string"
+          },
+          "password": {
+            "description": "Password used to derive the encryption key",
+            "title": "Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "input_file",
+          "password"
+        ],
+        "title": "BaseCryptoEncryptFileAes256Params",
+        "type": "object"
+      },
+      "BaseCryptoHashFileParams": {
+        "properties": {
+          "input_file": {
+            "description": "Managed file ID to hash",
+            "format": "uuid4",
+            "title": "Input File",
+            "type": "string"
+          },
+          "algorithm": {
+            "default": "sha256",
+            "description": "Digest algorithm to apply",
+            "title": "Algorithm",
+            "type": "string"
+          }
+        },
+        "required": [
+          "input_file"
+        ],
+        "title": "BaseCryptoHashFileParams",
+        "type": "object"
+      },
+      "BaseCryptoSha256FileParams": {
+        "properties": {
+          "input_file": {
+            "description": "Managed file ID to hash",
+            "format": "uuid4",
+            "title": "Input File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "input_file"
+        ],
+        "title": "BaseCryptoSha256FileParams",
+        "type": "object"
+      },
+      "BaseCryptoSha256FilesParams": {
+        "properties": {
+          "input_files": {
+            "description": "Ordered list of managed file IDs to hash",
+            "items": {
+              "format": "uuid4",
+              "type": "string"
+            },
+            "title": "Input Files",
+            "type": "array"
+          }
+        },
+        "required": [
+          "input_files"
+        ],
+        "title": "BaseCryptoSha256FilesParams",
+        "type": "object"
+      },
+      "BaseRandomGenBytesFileParams": {
+        "properties": {
+          "bytes": {
+            "default": 32,
+            "description": "Number of random bytes to write to the output file",
+            "title": "Bytes",
+            "type": "integer"
+          }
+        },
+        "title": "BaseRandomGenBytesFileParams",
+        "type": "object"
+      },
+      "BaseRandomGenTokenBase64Params": {
+        "properties": {
+          "bytes": {
+            "default": 16,
+            "description": "Number of random bytes to generate before Base64 encoding",
+            "title": "Bytes",
+            "type": "integer"
+          }
+        },
+        "title": "BaseRandomGenTokenBase64Params",
+        "type": "object"
+      },
+      "BaseRandomGenTokenHexParams": {
+        "properties": {
+          "bytes": {
+            "default": 16,
+            "description": "Number of random bytes to generate before hex encoding",
+            "title": "Bytes",
+            "type": "integer"
+          }
+        },
+        "title": "BaseRandomGenTokenHexParams",
+        "type": "object"
+      },
+      "BaseRandomGenUuidParams": {
+        "properties": {},
+        "title": "BaseRandomGenUuidParams",
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "Opaque token",
+        "description": "Send Authorization: Bearer <STAR_API_TOKEN>"
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Actions",
+      "description": "Discover and execute DSL-defined actions."
+    },
+    {
+      "name": "Files",
+      "description": "Upload and manage persisted files."
+    },
+    {
+      "name": "Observability",
+      "description": "System health checks and Prometheus metrics endpoints.",
+      "externalDocs": {
+        "description": "Prometheus official documentation",
+        "url": "https://prometheus.io/docs/"
+      }
+    }
+  ],
+  "externalDocs": {
+    "description": "Project repository and architectural documentation",
+    "url": "https://github.com/Libertocrat/star"
+  },
+  "security": [
+    {
+      "BearerAuth": []
+    }
+  ]
+}
