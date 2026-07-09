@@ -115,7 +115,7 @@ def low_timeout_client(low_timeout_app):
 
 
 # ============================================================================
-# Fixtures: Slow endpoint handlers
+# Slow Endpoint Handler Fixtures
 # ============================================================================
 
 
@@ -424,7 +424,7 @@ def test_slow_metrics_is_not_intercepted_by_timeout(
 
 
 # ============================================================================
-# Section: Metrics path normalization
+# Metrics Path Normalization
 # ============================================================================
 
 

@@ -144,7 +144,7 @@ def test_successful_request_increments_requests_total_and_duration_count(client)
 
 
 # ============================================================================
-# 404 Behavior
+# Not Found Behavior
 # ============================================================================
 
 
@@ -207,7 +207,7 @@ def test_request_integrity_rejection_is_counted_by_observability_as_4xx(
 
 
 # ============================================================================
-# 5xx Behavior
+# Server Error Behavior
 # ============================================================================
 
 

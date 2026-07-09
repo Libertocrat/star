@@ -9,7 +9,7 @@ Design goals:
 - Deterministic
 - Docker-independent
 - One-to-many mapping (an extension may map to multiple valid MIME types)
-- Hardcoded for v0.1.0 (future override may be added)
+- Hardcoded in source until an external override is added
 """
 
 from __future__ import annotations

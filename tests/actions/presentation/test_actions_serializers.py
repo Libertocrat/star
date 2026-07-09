@@ -107,7 +107,7 @@ def sample_module_summary(sample_action_spec: ActionSpec) -> ModuleSummary:
 
 
 # ============================================================================
-# ACTION SUMMARY
+# Action Summary
 # ============================================================================
 
 
@@ -129,7 +129,7 @@ def test_to_action_summary_maps_fields(sample_action_spec: ActionSpec) -> None:
 
 
 # ============================================================================
-# ACTION PUBLIC SPEC
+# Action Public Spec
 # ============================================================================
 
 
@@ -233,7 +233,7 @@ def test_to_action_public_spec_constraints_from_valid_registry(valid_registry) -
 
 
 # ============================================================================
-# MODULE SERIALIZATION
+# Module Serialization
 # ============================================================================
 
 

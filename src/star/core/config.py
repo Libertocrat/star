@@ -136,7 +136,7 @@ class Settings(BaseSettings):
     star_max_stderr_bytes: int | None = Field(None)
     star_timeout_ms: int = Field(5000)
     star_rate_limit_rps: int = Field(10)
-    star_app_version: str = Field("0.1.0")
+    star_app_version: str = Field("0.1.2")
     star_enable_docs: bool = Field(False)
     star_enable_security_headers: bool = Field(True)
     star_blocked_binaries_extra: str | None = Field(None)

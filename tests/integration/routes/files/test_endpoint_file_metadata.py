@@ -52,7 +52,7 @@ def _upload_text_file_and_get_id(
 
 
 # ============================================================================
-# Section: Happy path
+# Happy Path
 # ============================================================================
 
 
@@ -102,7 +102,7 @@ def test_files_metadata_get_returns_metadata_for_existing_file(
 
 
 # ============================================================================
-# Validation / rejection paths
+# Validation and Rejection Paths
 # ============================================================================
 
 
@@ -151,7 +151,7 @@ def test_files_metadata_get_rejects_invalid_uuid_format(
 
 
 # ============================================================================
-# Authorization paths
+# Authorization Paths
 # ============================================================================
 
 
@@ -199,7 +199,7 @@ def test_files_metadata_get_rejects_invalid_token(
 
 
 # ============================================================================
-# JSON invalid metadata paths
+# Invalid JSON Metadata Paths
 # ============================================================================
 
 

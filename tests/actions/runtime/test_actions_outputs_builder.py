@@ -207,7 +207,7 @@ def _minimal_png_bytes() -> bytes:
 
 
 # ============================================================================
-# FILE + COMMAND — SUCCESS PATH
+# File Command Success Path
 # ============================================================================
 
 
@@ -368,7 +368,7 @@ def test_outputs_builder__file_command_uses_existing_blob(tmp_path, monkeypatch)
 
 
 # ============================================================================
-# FILE + COMMAND — EMPTY OUTPUT
+# File Command Empty Output
 # ============================================================================
 
 
@@ -445,7 +445,7 @@ def test_outputs_builder__file_command_empty_blob_metadata_is_valid(
 
 
 # ============================================================================
-# FILE + COMMAND — FAILURE PATH
+# File Command Failure Path
 # ============================================================================
 
 
@@ -549,7 +549,7 @@ def test_outputs_builder__cleanup_is_not_duplicated(monkeypatch):
 
 
 # ============================================================================
-# STDOUT AS FILE OPTION
+# Stdout As File Option
 # ============================================================================
 
 
@@ -655,7 +655,7 @@ def test_build_outputs_returns_null_stdout_file_on_failed_command(
 
 
 # ============================================================================
-# ORDER PRESERVATION
+# Order Preservation
 # ============================================================================
 
 
@@ -693,7 +693,7 @@ def test_outputs_builder__preserves_output_order(tmp_path, monkeypatch):
 
 
 # ============================================================================
-# ERROR HANDLING
+# Error Handling
 # ============================================================================
 
 

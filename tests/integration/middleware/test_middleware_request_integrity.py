@@ -178,7 +178,7 @@ def test_execute_allows_application_json_with_charset(
 
 
 # ============================================================================
-# Header Integrity and CL/TE Conflict
+# Header Integrity and Transfer Encoding Conflict
 # ============================================================================
 
 
