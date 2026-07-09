@@ -151,7 +151,7 @@ def low_rps_docs_client(low_rps_docs_app):
 
 
 # ============================================================================
-# Section: Happy path
+# Happy Path
 # ============================================================================
 
 
@@ -173,7 +173,7 @@ def test_request_within_limit_proceeds_without_429(client, auth_headers):
 
 
 # ============================================================================
-# Section: Rate limit exceeded
+# Rate Limit Exceeded
 # ============================================================================
 
 
@@ -207,7 +207,7 @@ def test_rate_limit_exceeded_returns_429_envelope_headers_and_metric(
 
 
 # ============================================================================
-# Section: Retry-After correctness
+# Retry-After Correctness
 # ============================================================================
 
 
@@ -230,7 +230,7 @@ def test_retry_after_is_integer_and_reasonable_for_one_rps(
 
 
 # ============================================================================
-# Section: Environment configuration
+# Environment Configuration
 # ============================================================================
 
 
@@ -266,7 +266,7 @@ def test_rate_limit_respects_env_configuration(
 
 
 # ============================================================================
-# Section: Exempt endpoints
+# Exempt Endpoints
 # ============================================================================
 
 
@@ -305,7 +305,7 @@ def test_docs_endpoints_are_exempt_when_docs_are_enabled(
 
 
 # ============================================================================
-# Section: Metric path normalization
+# Metric Path Normalization
 # ============================================================================
 
 

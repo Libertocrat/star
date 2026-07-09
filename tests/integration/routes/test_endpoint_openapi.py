@@ -32,9 +32,7 @@ def _openapi_document(
 ) -> dict:
     """Fetch the generated OpenAPI document.
 
-    GIVEN a valid minimal STAR runtime environment
-    WHEN the test app is created with docs explicitly enabled
-    THEN `/openapi.json` returns a successful OpenAPI payload.
+    Build a docs-enabled test app and return the parsed `/openapi.json` payload.
 
     Args:
         minimal_safe_env: Fixture that provides required STAR environment vars.
@@ -55,7 +53,7 @@ def _openapi_document(
 
 
 # ============================================================================
-# OpenAPI spec validation
+# OpenAPI Spec Validation
 # ============================================================================
 
 
@@ -163,7 +161,7 @@ def test_openapi_actions_list_docs_describe_query_rules(
 
 
 # ============================================================================
-# Execute contract projection
+# Execute Contract Projection
 # ============================================================================
 
 
@@ -421,7 +419,7 @@ def test_openapi_includes_global_metadata_from_app_settings(
 
     info = schema["info"]
     assert info["title"] == "Secure Templated Actions Runtime (STAR)"
-    assert info["version"] == "0.1.0"
+    assert info["version"] == "0.1.2"
     assert "Runtime-aware OpenAPI contract generation" in info["description"]
 
     assert info["contact"]["name"] == "Libertocrat"
@@ -435,7 +433,7 @@ def test_openapi_includes_global_metadata_from_app_settings(
 
 
 # ============================================================================
-# Public endpoint overrides
+# Public Endpoint Overrides
 # ============================================================================
 
 
@@ -516,7 +514,7 @@ def test_openapi_registers_action_models_and_prunes_internal_schemas(
 
 
 # ============================================================================
-# Error examples
+# Error Examples
 # ============================================================================
 
 
@@ -549,7 +547,7 @@ def test_openapi_error_contract_replaces_default_422_with_public_error_examples(
 
 
 # ============================================================================
-# v1/files endpoints contracts
+# Files Endpoints Contracts
 # ============================================================================
 
 

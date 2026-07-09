@@ -1,7 +1,7 @@
 """Build versioned Swagger documentation site for GitHub Pages.
 
 This script:
-- Receives the current release version (e.g. v0.1.0)
+- Receives the current release version (for example: vX.Y.Z)
 - Copies Swagger UI assets and the OpenAPI schema into /api-docs/<version>/
 - Publishes a global STAR social-preview image under /assets/
 - Generates metadata-aware redirect pages for the root and /api-docs/
@@ -55,9 +55,7 @@ def get_release_version() -> str:
 
     version = os.environ["RELEASE_VERSION"].strip()
     if not re.fullmatch(r"v?\d+\.\d+\.\d+", version):
-        raise ValueError(
-            "RELEASE_VERSION must be in format vX.Y.Z or X.Y.Z " "(for example: v1.2.3)"
-        )
+        raise ValueError("RELEASE_VERSION must be in format vX.Y.Z or X.Y.Z")
     return version
 
 

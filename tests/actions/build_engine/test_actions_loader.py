@@ -28,7 +28,7 @@ from star.actions.schemas import ModuleSpec
 from star.core.config import Settings
 
 # ============================================================================
-# Local fixtures and helpers
+# Local Fixtures and Helpers
 # ============================================================================
 
 
@@ -270,7 +270,7 @@ actions:
 
 
 # ============================================================================
-# discover_spec_files
+# Discover Spec Files
 # ============================================================================
 
 
@@ -467,7 +467,7 @@ def test_discover_spec_files_rejects_invalid_yaml_filename_stem(
 
 
 # ============================================================================
-# load_module_spec
+# Load Module Spec
 # ============================================================================
 
 
@@ -607,7 +607,7 @@ actions:
 
 
 # ============================================================================
-# load_module_spec (specs YAML realism layer)
+# Load Module Spec YAML Realism
 # ============================================================================
 
 
@@ -682,7 +682,7 @@ def test_load_module_spec_fails_on_invalid_yaml_variants(
 
 
 # ============================================================================
-# validate_yaml_file_safety
+# Validate YAML File Safety
 # ============================================================================
 
 
@@ -735,7 +735,7 @@ def test_validate_yaml_file_safety_rejects_disallowed_yaml_patterns(
 
 
 # ============================================================================
-# load_module_specs
+# Load Module Specs
 # ============================================================================
 
 

@@ -21,7 +21,7 @@ This script is optional when using the default Compose mapping (`STAR_HOST_BIND_
 
 The script starts an ephemeral `alpine/socat` container on the same Docker network as STAR. The forward binds to `127.0.0.1`, not to all host interfaces.
 
-### Responsibilities
+### star-forward.sh Responsibilities
 
 - Resolve the target STAR container
 - Choose or validate a local TCP port
@@ -59,7 +59,7 @@ In normal local use, pass the same `.env` file that was used to start the Compos
 - `--dry-run`: print actions without starting the proxy container
 - `-h`, `--help`: show usage and exit
 
-### Example
+### star-forward.sh Example
 
 ```bash
 docker compose up -d star
@@ -76,29 +76,29 @@ The forwarding script does not enable docs endpoints by itself. It only forwards
 
 ### Reference
 
-- [scripts/specs/star-forward.spec.md](scripts/specs/star-forward.spec.md)
+- [specs/star-forward.spec.md](specs/star-forward.spec.md)
 
 ## export_openapi.py
 
 Builds the STAR application and writes the generated OpenAPI schema to `docs/api-docs/output/openapi.json`.
 
-### Responsibilities
+### export_openapi.py Responsibilities
 
 - Normalize and validate the release version
 - Build a documentation-specific `Settings` object
 - Create the FastAPI application
 - Generate and write the OpenAPI schema as JSON
 
-### Inputs
+### export_openapi.py Inputs
 
 - `RELEASE_VERSION`: optional environment variable
   - Accepted formats: `vX.Y.Z` or `X.Y.Z`
-  - Default: `0.1.0`
+  - Default: `0.1.2`
 - `STAR_DOCS_ROOT_DIR`: optional environment variable for STAR storage initialization during export
   - Must be an absolute path
   - Default: `<repo>/.star-docs` (resolved from current working directory)
 
-### Behavior
+### export_openapi.py Behavior
 
 - The script strips a leading `v` before storing the version in settings
 - The generated settings set `star_enable_docs=True` explicitly so export behavior stays stable regardless of runtime defaults
@@ -106,15 +106,15 @@ Builds the STAR application and writes the generated OpenAPI schema to `docs/api
 - The output directory is created automatically if needed
 - The JSON file is written with indentation and a trailing newline
 
-### Requirements
+### export_openapi.py Requirements
 
 - Python dependencies required by STAR must be installed
 - The STAR package must be importable in the current environment
 
-### Example
+### export_openapi.py Example
 
 ```bash
-export RELEASE_VERSION=v0.1.0
+export RELEASE_VERSION=vX.Y.Z
 # Optional for CI or restricted environments
 # export STAR_DOCS_ROOT_DIR=/tmp/star-docs
 python scripts/export_openapi.py
@@ -149,7 +149,7 @@ Builds a versioned Swagger UI site under `site/api-docs/` for publication to Git
 - `DOCS_PUBLIC_BASE_URL`: optional public base URL used for canonical, Open Graph, Twitter, and favicon URLs
   - Default: `https://libertocrat.github.io/star`
 
-### Behavior
+### build_docs_site.py Behavior
 
 - The script preserves existing content in `site/api-docs/` by copying new files into the selected version directory
 - The script injects title, description, canonical, Open Graph, Twitter card, and light/dark favicon metadata into generated pages
@@ -157,16 +157,16 @@ Builds a versioned Swagger UI site under `site/api-docs/` for publication to Git
 - `site/api-docs/index.html` redirects to the latest version directory
 - `site/index.html` redirects to `./api-docs/`
 
-### Requirements
+### build_docs_site.py Requirements
 
 - `RELEASE_VERSION` must be set in the environment with format `vX.Y.Z` or `X.Y.Z`
 - Swagger UI assets must already be installed under `node_modules`
 - The OpenAPI export must already exist before this script runs
 
-### Example
+### build_docs_site.py Example
 
 ```bash
-export RELEASE_VERSION=v0.1.0
+export RELEASE_VERSION=vX.Y.Z
 npm init -y
 npm install swagger-ui-dist@5.17.14
 python scripts/export_openapi.py

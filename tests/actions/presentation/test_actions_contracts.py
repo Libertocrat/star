@@ -149,7 +149,7 @@ def sample_action_spec(contracts_special_registry):
 
 
 # ============================================================================
-# PARAMS CONTRACT
+# Params Contract
 # ============================================================================
 
 
@@ -313,7 +313,7 @@ def test_build_params_contract_constraints_always_present(
 
 
 # ============================================================================
-# PARAMS EXAMPLE
+# Params Example
 # ============================================================================
 
 
@@ -391,7 +391,7 @@ def test_build_params_example_list_file_id(contracts_special_registry) -> None:
 
 
 # ============================================================================
-# RESPONSE CONTRACT
+# Response Contract
 # ============================================================================
 
 
@@ -532,7 +532,7 @@ def test_action_response_contract_omits_stdout_file_when_disallowed(
 
 
 # ============================================================================
-# RESPONSE EXAMPLE
+# Response Example
 # ============================================================================
 
 
@@ -598,7 +598,7 @@ def test_build_response_example_outputs_present(sample_action_spec) -> None:
 
 
 # ============================================================================
-# INTEGRATION
+# Integration
 # ============================================================================
 
 
@@ -622,7 +622,7 @@ def test_build_action_contracts_integration(valid_registry) -> None:
 
 
 # ============================================================================
-# EDGE CASES
+# Edge Cases
 # ============================================================================
 
 

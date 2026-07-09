@@ -23,7 +23,7 @@ from star.core.utils.file_storage import (
 )
 
 # ============================================================================
-# Happy path
+# Happy Path
 # ============================================================================
 
 
@@ -52,14 +52,14 @@ def test_settings_defaults_applied(minimal_safe_env):
     assert s.star_max_yml_bytes == 102400
     assert s.star_timeout_ms == 5000
     assert s.star_rate_limit_rps == 10
-    assert s.star_app_version == "0.1.0"
+    assert s.star_app_version == "0.1.2"
     assert s.star_enable_docs is False
     assert s.star_enable_security_headers is True
 
 
-# ---------------------------------------------------------------------------
-# STAR_ROOT_DIR VALIDATION
-# ---------------------------------------------------------------------------
+# ----------------------------------------------------------------------------
+# STAR Root Directory Validation
+# ----------------------------------------------------------------------------
 
 
 def test_star_root_dir_must_be_absolute(minimal_safe_env, monkeypatch):
@@ -107,7 +107,7 @@ def test_storage_dirs_created(tmp_path, minimal_safe_env, monkeypatch):
 
 
 # ============================================================================
-# Required variables
+# Required Variables
 # ============================================================================
 
 
@@ -135,7 +135,7 @@ def test_missing_required_env_raises(minimal_safe_env, monkeypatch, missing_var)
 
 
 # ============================================================================
-# Variables datatype validation
+# Variable Datatype Validation
 # ============================================================================
 
 
