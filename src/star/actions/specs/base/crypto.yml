@@ -92,8 +92,14 @@ actions:
         description: "Managed file ID to encrypt"
 
       password:
-        type: string
+        type: secret
         required: true
+        delivery:
+          type: stdin
+          append_newline: true
+        constraints:
+          min_length: 1
+          max_length: 4096
         description: "Password used to derive the encryption key"
 
     outputs:
@@ -113,7 +119,7 @@ actions:
       - "-out"
       - output: encrypted_file
       - "-pass"
-      - "pass:{password}"
+      - "stdin"
 
 
   decrypt_file_aes256:
@@ -128,8 +134,14 @@ actions:
         description: "Managed encrypted file ID to decrypt"
 
       password:
-        type: string
+        type: secret
         required: true
+        delivery:
+          type: stdin
+          append_newline: true
+        constraints:
+          min_length: 1
+          max_length: 4096
         description: "Password used to derive the decryption key"
 
     outputs:
@@ -149,4 +161,4 @@ actions:
       - "-out"
       - output: decrypted_file
       - "-pass"
-      - "pass:{password}"
+      - "stdin"

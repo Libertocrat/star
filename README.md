@@ -260,7 +260,7 @@ For the full analysis, see [docs/AI_SECURITY.md](docs/AI_SECURITY.md).
 
 - add JWT-based authentication and authorization
 - introduce action risk tiers, policy hooks, and caller identity propagation
-- expand output redaction for secrets, API keys, tokens, and PII
+- expand output redaction beyond invocation-provided secrets to API keys, tokens, and PII
 - add static and dynamic malware scanning through a dedicated microservice
 - improve service-to-service security with mTLS for trusted internal deployments
 

@@ -14,7 +14,7 @@ import pytest
 
 import star.actions.registry as registry_module
 from star.actions.exceptions import ActionNotFoundError
-from star.actions.models import ActionSpec
+from star.actions.models import ActionSpec, ParamType
 from star.actions.registry import ActionRegistry, build_registry_from_specs
 from star.core.config import Settings
 
@@ -109,6 +109,44 @@ actions:
 
     assert registry.has("file.sample.ping") is True
     assert registry.has("sample.ping") is False
+
+
+@pytest.mark.parametrize(
+    "action_id",
+    [
+        "base.crypto.encrypt_file_aes256",
+        "base.crypto.decrypt_file_aes256",
+    ],
+    ids=["encrypt", "decrypt"],
+)
+def test_builtin_aes_actions_use_secret_stdin_instead_of_pass_argv(
+    tmp_path,
+    action_id: str,
+):
+    """
+    GIVEN the built-in AES actions
+    WHEN the default registry is built
+    THEN password is a secret delivered through stdin and never pass: argv
+    """
+    settings = Settings.model_validate(
+        {
+            "star_root_dir": str(tmp_path),
+        }
+    )
+
+    registry = build_registry_from_specs(settings)
+    spec = registry.get(action_id)
+    password = spec.arg_defs["password"]
+    const_values = [
+        token["value"] for token in spec.command_template if token["kind"] == "const"
+    ]
+
+    assert password.type == ParamType.SECRET
+    assert password.delivery is not None
+    assert password.delivery.type == "stdin"
+    assert "-pass" in const_values
+    assert "stdin" in const_values
+    assert not any(value.startswith("pass:") for value in const_values)
 
 
 # ============================================================================

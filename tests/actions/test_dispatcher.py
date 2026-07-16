@@ -12,11 +12,19 @@ from __future__ import annotations
 import asyncio
 
 import pytest
-from pydantic import ValidationError
+from pydantic import BaseModel, SecretStr, ValidationError
 
 from star.actions.dispatcher import DispatchedActionResult, dispatch_action
 from star.actions.exceptions import ActionBinaryBlockedError, ActionNotFoundError
-from star.actions.models import ActionExecutionResult
+from star.actions.models import (
+    ActionExecutionResult,
+    ActionSpec,
+    ArgDef,
+    ParamType,
+)
+from star.actions.models.core import SecretDelivery
+from star.actions.models.security import BinaryPolicy
+from star.actions.registry import ActionRegistry
 from star.actions.runtime.file_manager import (
     cleanup_output_placeholders as cleanup_real_output_placeholders,
 )
@@ -83,11 +91,17 @@ async def test_dispatch_action_passes_spec_to_executor(valid_registry, monkeypat
 
     captured: dict[str, object] = {}
 
-    async def _fake_execute(argv, spec, timeout=None):  # noqa: ASYNC109
+    async def _fake_execute(
+        argv,
+        spec,
+        timeout=None,  # noqa: ASYNC109
+        stdin_data=None,
+    ):
         """Capture executor inputs and return deterministic success result."""
         captured["argv"] = argv
         captured["spec_name"] = spec.name
         captured["timeout"] = timeout
+        captured["stdin_data"] = stdin_data
         return ActionExecutionResult(
             returncode=0,
             stdout=b"ok",
@@ -106,6 +120,81 @@ async def test_dispatch_action_passes_spec_to_executor(valid_registry, monkeypat
     assert captured["argv"] == ["echo", "hello"]
     assert captured["spec_name"] == "test_runtime.ping"
     assert captured["timeout"] is None
+    assert captured["stdin_data"] is None
+
+
+@pytest.mark.asyncio
+async def test_dispatch_action_passes_secret_stdin_data_to_executor(monkeypatch):
+    """
+    GIVEN a registered action with a stdin-delivered secret param
+    WHEN dispatch_action calls the executor
+    THEN executor receives clean argv plus secret stdin bytes
+    """
+
+    class Params(BaseModel):
+        """Params model with a sensitive password field.
+
+        Attributes:
+            password: Secret password consumed by stdin delivery.
+        """
+
+        password: SecretStr
+
+    spec = ActionSpec(
+        name="secret_runtime.echo_secret",
+        namespace=(),
+        module="secret_runtime",
+        action="echo_secret",
+        version=1,
+        params_model=Params,
+        binary="cat",
+        command_template=({"kind": "binary", "value": "cat"},),
+        execution_policy=BinaryPolicy(allowed=("cat",), blocked=()),
+        arg_defs={
+            "password": ArgDef(
+                type=ParamType.SECRET,
+                required=True,
+                delivery=SecretDelivery(type="stdin"),
+                description="password",
+            )
+        },
+        flag_defs={},
+        defaults={},
+    )
+    registry = ActionRegistry({"secret_runtime.echo_secret": spec}, [])
+    captured: dict[str, object] = {}
+
+    async def _fake_execute(
+        argv,
+        _spec,
+        timeout=None,  # noqa: ASYNC109
+        stdin_data=None,
+    ):
+        """Capture executor inputs and return deterministic success result."""
+        captured["argv"] = argv
+        captured["timeout"] = timeout
+        captured["stdin_data"] = stdin_data
+        return ActionExecutionResult(
+            returncode=0,
+            stdout=b"ok",
+            stderr=b"",
+            exec_time=0.001,
+            pid=123,
+        )
+
+    monkeypatch.setattr(
+        "star.actions.dispatcher.runtime_executor.execute_command",
+        _fake_execute,
+    )
+
+    await dispatch_action(
+        registry,
+        "secret_runtime.echo_secret",
+        {"password": "topsecret"},
+    )
+
+    assert captured["argv"] == ["cat"]
+    assert captured["stdin_data"] == b"topsecret\n"
 
 
 @pytest.mark.asyncio
@@ -122,9 +211,15 @@ async def test_dispatch_action_passes_runtime_settings_timeout(
 
     captured: dict[str, object] = {}
 
-    async def _fake_execute(_argv, _spec, timeout=None):  # noqa: ASYNC109
+    async def _fake_execute(
+        _argv,
+        _spec,
+        timeout=None,  # noqa: ASYNC109
+        stdin_data=None,
+    ):
         """Capture the timeout and return deterministic success result."""
         captured["timeout"] = timeout
+        captured["stdin_data"] = stdin_data
         return ActionExecutionResult(
             returncode=0,
             stdout=b"ok",
@@ -141,6 +236,7 @@ async def test_dispatch_action_passes_runtime_settings_timeout(
     await dispatch_action(valid_registry, "test_runtime.ping", {}, settings=settings)
 
     assert captured["timeout"] == settings.star_timeout_ms / 1000.0
+    assert captured["stdin_data"] is None
 
 
 @pytest.mark.asyncio
@@ -154,9 +250,15 @@ async def test_dispatch_action_propagates_policy_runtime_errors(
     THEN the same exception propagates unchanged
     """
 
-    async def _raise_blocked(_argv, _spec, timeout=None):  # noqa: ASYNC109
+    async def _raise_blocked(
+        _argv,
+        _spec,
+        timeout=None,  # noqa: ASYNC109
+        stdin_data=None,
+    ):
         """Raise a deterministic blocked-binary runtime error for tests."""
         del timeout
+        del stdin_data
         raise ActionBinaryBlockedError("blocked")
 
     monkeypatch.setattr(
@@ -182,10 +284,16 @@ async def test_dispatch_action_cleans_placeholders_when_cancelled(
 
     captured: dict[str, object] = {}
 
-    async def _raise_cancelled(argv, _spec, timeout=None):  # noqa: ASYNC109
+    async def _raise_cancelled(
+        argv,
+        _spec,
+        timeout=None,  # noqa: ASYNC109
+        stdin_data=None,
+    ):
         """Raise cancellation after dispatcher has rendered the command."""
         captured["argv"] = argv
         del timeout
+        del stdin_data
         raise asyncio.CancelledError
 
     def _capture_cleanup(output_files, settings=None):

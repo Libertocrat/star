@@ -297,6 +297,8 @@ The normal workflow is:
 
 This is important when reasoning about STAR locally: an action is a controlled command template with a fixed contract, not an arbitrary shell command accepted from the API.
 
+When an action needs a sensitive string such as a passphrase, declare the arg as `type: secret` instead of `type: string`. Secret args are still sent by clients inside the JSON `params` payload, but the DSL must define an internal delivery policy and command templates must not render them into argv with `arg: password` or const placeholders such as `pass:{password}`. The currently supported delivery path writes the secret to subprocess stdin for binaries that support that pattern.
+
 ## 4. Environment Setup
 
 Make sure the CLI tools outlined in section [2.1 Installing Required CLI Tools](#21-installing-required-cli-tools) are installed before continuing.

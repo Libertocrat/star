@@ -24,6 +24,7 @@ from uuid import UUID
 from star.actions.engine_config import (
     CONST_TEMPLATE_ALLOWED_ARG_TYPES,
     IDENTIFIER_NAME_PATTERN,
+    MAX_SECRET_LENGTH,
     MIME_LIKE_PATTERN,
     RESERVED_OUTPUT_NAMES,
     REVIEWED_COMMAND_LITERAL_PATH_ALLOWLIST,
@@ -830,6 +831,16 @@ def _validate_command_references(
                 action_name,
                 f"arg '{element.arg}' referenced in command but not defined",
             )
+        if (
+            isinstance(element, ArgCmd)
+            and element.arg in args
+            and args[element.arg].type == ParamType.SECRET
+        ):
+            _raise_action_error(
+                module_name,
+                action_name,
+                f"secret arg '{element.arg}' cannot be rendered directly in argv",
+            )
 
         if isinstance(element, FlagCmd) and element.flag not in flags:
             _raise_action_error(
@@ -844,6 +855,23 @@ def _validate_command_references(
                 action_name,
                 f"output '{element.output}' referenced in command but not defined",
             )
+
+        if isinstance(element, str):
+            try:
+                literal_placeholders = _extract_command_literal_placeholders(element)
+            except ValueError:
+                continue
+            for placeholder_name in literal_placeholders:
+                if (
+                    placeholder_name in args
+                    and args[placeholder_name].type == ParamType.SECRET
+                ):
+                    _raise_action_error(
+                        module_name,
+                        action_name,
+                        f"secret arg '{placeholder_name}' cannot be rendered "
+                        "directly in argv",
+                    )
 
 
 def _validate_unused_definitions(
@@ -865,6 +893,8 @@ def _validate_unused_definitions(
     used_args = {
         element.arg for element in action.command if isinstance(element, ArgCmd)
     }
+    secret_stdin_args = _secret_stdin_arg_names(action)
+    used_args.update(secret_stdin_args)
     for element in action.command:
         if not isinstance(element, str):
             continue
@@ -923,6 +953,25 @@ def _validate_unused_definitions(
                 )
 
 
+def _secret_stdin_arg_names(action: ActionSpecInput) -> set[str]:
+    """Return secret argument names consumed by stdin delivery.
+
+    Args:
+        action: Action specification.
+
+    Returns:
+        Set of secret argument names delivered through stdin.
+    """
+
+    return {
+        arg_name
+        for arg_name, arg_spec in (action.args or {}).items()
+        if arg_spec.type == ParamType.SECRET
+        and arg_spec.delivery is not None
+        and arg_spec.delivery.type == "stdin"
+    }
+
+
 def _validate_args(
     module_name: str,
     action_name: str,
@@ -940,6 +989,12 @@ def _validate_args(
     """
 
     for arg_name, arg_spec in (action.args or {}).items():
+        _validate_arg_secret_rules(
+            module_name=module_name,
+            action_name=action_name,
+            arg_name=arg_name,
+            arg_spec=arg_spec,
+        )
         _validate_arg_list_items_rules(
             module_name=module_name,
             action_name=action_name,
@@ -954,6 +1009,78 @@ def _validate_args(
         )
         _validate_arg_default(module_name, action_name, arg_name, arg_spec)
         _validate_arg_constraints(module_name, action_name, arg_name, arg_spec)
+
+    _validate_secret_delivery_uniqueness(module_name, action_name, action)
+
+
+def _validate_arg_secret_rules(
+    module_name: str,
+    action_name: str,
+    arg_name: str,
+    arg_spec: ArgSpec,
+) -> None:
+    """Validate secret-specific DSL rules for one argument.
+
+    Args:
+        module_name: Parent module name.
+        action_name: Action name.
+        arg_name: Argument name.
+        arg_spec: Argument definition.
+
+    Raises:
+        ActionSpecsParseError: If secret delivery or declaration is invalid.
+    """
+
+    has_delivery = "delivery" in arg_spec.model_fields_set
+
+    if arg_spec.type != ParamType.SECRET:
+        if has_delivery:
+            _raise_action_error(
+                module_name,
+                action_name,
+                f"arg '{arg_name}' with type '{arg_spec.type.value}' cannot define "
+                "'delivery'",
+            )
+        return
+
+    if arg_spec.required is not True:
+        _raise_action_error(
+            module_name,
+            action_name,
+            f"arg '{arg_name}' with type 'secret' must set required to true",
+        )
+
+    if not has_delivery or arg_spec.delivery is None:
+        _raise_action_error(
+            module_name,
+            action_name,
+            f"arg '{arg_name}' with type 'secret' must define delivery",
+        )
+
+
+def _validate_secret_delivery_uniqueness(
+    module_name: str,
+    action_name: str,
+    action: ActionSpecInput,
+) -> None:
+    """Validate action-level secret delivery limits.
+
+    Args:
+        module_name: Parent module name.
+        action_name: Action name.
+        action: Action specification.
+
+    Raises:
+        ActionSpecsParseError: If multiple stdin secrets are declared.
+    """
+
+    stdin_secret_names = sorted(_secret_stdin_arg_names(action))
+    if len(stdin_secret_names) > 1:
+        _raise_action_error(
+            module_name,
+            action_name,
+            "only one secret arg may use stdin delivery",
+        )
 
 
 def _validate_arg_list_items_rules(
@@ -1038,6 +1165,15 @@ def _validate_arg_required_default_rules(
             )
         return
 
+    if arg_spec.type == ParamType.SECRET:
+        if has_default:
+            _raise_action_error(
+                module_name,
+                action_name,
+                f"arg '{arg_name}' with type 'secret' cannot define a default",
+            )
+        return
+
     if required and has_default:
         _raise_action_error(
             module_name,
@@ -1091,6 +1227,8 @@ def _validate_arg_default(
         is_valid = isinstance(default, str) and _is_uuid4(default)
     elif param_type == ParamType.LIST:
         is_valid = isinstance(default, list)
+    elif param_type == ParamType.SECRET:
+        is_valid = False
 
     if not is_valid:
         _raise_action_error(
@@ -1181,6 +1319,10 @@ def validate_constraints(
         _validate_string_constraints(arg_name, constraints)
         return
 
+    if arg_type == ParamType.SECRET:
+        _validate_secret_constraints(arg_name, constraints)
+        return
+
     if arg_type == ParamType.FILE_ID:
         _validate_file_constraints(arg_name, constraints)
         return
@@ -1214,7 +1356,26 @@ def _allowed_constraint_keys(arg_type: ParamType) -> set[str]:
         return {"max_size", "allowed_extensions", "allowed_mime_types"}
     if arg_type == ParamType.LIST:
         return {"min_items", "max_items"}
+    if arg_type == ParamType.SECRET:
+        return {"min_length", "max_length"}
     return set()
+
+
+def _validate_secret_constraints(arg_name: str, constraints: dict[str, Any]) -> None:
+    """Validate secret-specific constraints.
+
+    Args:
+        arg_name: Argument name.
+        constraints: Constraints dictionary.
+
+    Raises:
+        ValueError: If constraints are invalid.
+    """
+
+    _validate_string_length_constraints(arg_name, constraints)
+    max_length = constraints.get("max_length")
+    if max_length is not None and max_length > MAX_SECRET_LENGTH:
+        raise ValueError(f"arg '{arg_name}' max_length must be <= {MAX_SECRET_LENGTH}")
 
 
 def _validate_numeric_constraints(
@@ -1282,9 +1443,39 @@ def _validate_string_constraints(arg_name: str, constraints: dict[str, Any]) -> 
         ValueError: If constraints are invalid.
     """
 
+    allowed_values = constraints.get("allowed_values")
+
+    _validate_string_length_constraints(arg_name, constraints)
+
+    if "allowed_values" in constraints:
+        if not isinstance(allowed_values, list) or len(allowed_values) == 0:
+            raise ValueError(
+                f"arg '{arg_name}' allowed_values must be a non-empty list of strings"
+            )
+        if not all(isinstance(item, str) for item in allowed_values):
+            raise ValueError(
+                f"arg '{arg_name}' allowed_values must be a non-empty list of strings"
+            )
+        if len(set(allowed_values)) != len(allowed_values):
+            raise ValueError(f"arg '{arg_name}' allowed_values must be unique")
+
+
+def _validate_string_length_constraints(
+    arg_name: str,
+    constraints: dict[str, Any],
+) -> None:
+    """Validate shared string length constraints.
+
+    Args:
+        arg_name: Argument name.
+        constraints: Constraints dictionary.
+
+    Raises:
+        ValueError: If length constraints are invalid.
+    """
+
     min_length = constraints.get("min_length")
     max_length = constraints.get("max_length")
-    allowed_values = constraints.get("allowed_values")
     validated_min_length: int | None = None
 
     if "min_length" in constraints:
@@ -1301,18 +1492,6 @@ def _validate_string_constraints(arg_name: str, constraints: dict[str, Any]) -> 
             raise ValueError(f"arg '{arg_name}' max_length must be > 0")
         if validated_min_length is not None and max_length < validated_min_length:
             raise ValueError(f"arg '{arg_name}' max_length must be >= min_length")
-
-    if "allowed_values" in constraints:
-        if not isinstance(allowed_values, list) or len(allowed_values) == 0:
-            raise ValueError(
-                f"arg '{arg_name}' allowed_values must be a non-empty list of strings"
-            )
-        if not all(isinstance(item, str) for item in allowed_values):
-            raise ValueError(
-                f"arg '{arg_name}' allowed_values must be a non-empty list of strings"
-            )
-        if len(set(allowed_values)) != len(allowed_values):
-            raise ValueError(f"arg '{arg_name}' allowed_values must be unique")
 
 
 def _validate_file_constraints(arg_name: str, constraints: dict[str, Any]) -> None:

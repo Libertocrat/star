@@ -11,7 +11,7 @@ from __future__ import annotations
 from uuid import uuid4
 
 import pytest
-from pydantic import UUID4, ValidationError
+from pydantic import UUID4, SecretStr, ValidationError
 
 from star.actions.build_engine.builder import build_actions
 from star.actions.exceptions import ActionSpecsBuildError
@@ -403,6 +403,41 @@ def test_arg_defs_compiled_correctly(
     assert arg_def.constraints == {"min": 1, "max": 64}
 
 
+def test_arg_defs_compile_secret_delivery(
+    make_module_payload,
+    make_module_spec,
+    make_action_spec_input,
+):
+    """
+    GIVEN an action with a secret arg and stdin delivery
+    WHEN build_actions is called
+    THEN arg_defs preserve the internal secret delivery policy
+    """
+    action = make_action_spec_input(
+        args={
+            "password": {
+                "type": "secret",
+                "required": True,
+                "delivery": {"type": "stdin", "append_newline": False},
+                "constraints": {"min_length": 1, "max_length": 64},
+                "description": "password",
+            }
+        },
+        command=[{"binary": "echo"}],
+    )
+    module = make_module_spec(make_module_payload(actions={"encrypt": action}))
+
+    spec = build_actions([module], _test_settings())["test_module.encrypt"]
+    arg_def = spec.arg_defs["password"]
+
+    assert arg_def.type == ParamType.SECRET
+    assert arg_def.required is True
+    assert arg_def.delivery is not None
+    assert arg_def.delivery.type == "stdin"
+    assert arg_def.delivery.append_newline is False
+    assert arg_def.constraints == {"min_length": 1, "max_length": 64}
+
+
 # ============================================================================
 # flag_defs
 # ============================================================================
@@ -591,6 +626,45 @@ def test_params_model_required_behavior(
     validated = model.model_validate({"name": "alice"})
     assert validated.count == 2
     assert validated.verbose is False
+
+
+def test_params_model_uses_secretstr_for_secret_args(
+    make_module_payload,
+    make_module_spec,
+    make_action_spec_input,
+):
+    """
+    GIVEN an action with a secret arg
+    WHEN build_actions creates the params_model
+    THEN the field uses SecretStr and redacts its repr/schema metadata
+    """
+    action = make_action_spec_input(
+        args={
+            "password": {
+                "type": "secret",
+                "required": True,
+                "delivery": {"type": "stdin"},
+                "description": "password",
+            }
+        },
+        command=[{"binary": "echo"}],
+    )
+    module = make_module_spec(make_module_payload(actions={"encrypt": action}))
+    model = build_actions([module], _test_settings())[
+        "test_module.encrypt"
+    ].params_model
+
+    field = model.model_fields["password"]
+    schema = model.model_json_schema()["properties"]["password"]
+    validated = model.model_validate({"password": "topsecret"})
+
+    assert field.annotation is SecretStr
+    assert field.repr is False
+    assert schema["format"] == "password"
+    assert schema["writeOnly"] is True
+    assert schema["sensitive"] is True
+    assert isinstance(validated.password, SecretStr)
+    assert "topsecret" not in repr(validated)
 
 
 def test_file_id_validates_uuid4(

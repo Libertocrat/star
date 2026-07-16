@@ -25,6 +25,7 @@ An action is therefore best understood as predefined command execution, but with
 - only DSL-declared binaries, args, flags, and outputs are accepted
 - request params are validated against generated Pydantic models
 - command rendering is deterministic and template-constrained
+- sensitive action params use dedicated delivery handling instead of being rendered into argv
 - binary policy checks are enforced both at build time and at execution time
 - stdout and stderr are sanitized before they are returned, and file outputs may be materialized either from declared command placeholders or from sanitized stdout when `stdout_as_file` is `true` and allowed
 
@@ -210,7 +211,7 @@ This is the allowlist boundary. If a spec is invalid, the registry is not built 
 
 1. Resolve the action from `ActionRegistry`.
 2. Validate request params and execution options, including `stdout_as_file` policy checks.
-3. Render the final argv list with `render_command()`.
+3. Render the final argv list and any internal sensitive delivery payloads with `render_command()`.
 4. Resolve `file_id` args and output placeholders through the managed file layer.
 5. Re-check binary policy and execute the argv with `asyncio.create_subprocess_exec()` in `execute_command()`, using the configured runtime timeout and POSIX process-group cleanup where supported.
 6. Process stdout and stderr through the output pipeline, including sanitization, declared command-output handling, and optional `stdout_file` materialization from sanitized stdout.
@@ -243,6 +244,14 @@ An action is not arbitrary shell submitted by the client.
 An action is a predeclared command template whose binary, accepted params, flag mapping, output declarations, and public contract are all defined in YAML and compiled before the service accepts traffic. Clients only provide values for the declared parameter surface.
 
 In STAR, an action is safer than direct command execution because the command shape is frozen by the DSL and enforced by validation, rendering, policy checks, and response sanitization.
+
+### Sensitive action parameters
+
+The DSL supports `secret` args for request values such as passphrases that must remain strings at the API boundary but must not be treated as ordinary argv text. A `secret` arg is required, cannot define a default, and must declare an internal delivery policy. The currently implemented delivery sink writes the secret to subprocess stdin and keeps the delivery detail out of public action contracts.
+
+Build-time validation rejects `secret` args referenced through direct command args or const-template placeholders such as `pass:{password}`. Runtime rendering repeats that check as defense in depth, produces argv without the secret value, and stores only invocation-local stdin bytes plus redaction values for the output sanitizer. The executor still runs the command without a shell; `stdin=PIPE` is used only when the rendered action has stdin data, otherwise stdin is connected to `DEVNULL`.
+
+Public action contracts expose the parameter as `type: secret` with password-oriented metadata and a safe example placeholder. They do not expose the internal delivery policy.
 
 ## 6. Managed File and Filesystem Security Model
 
@@ -389,6 +398,7 @@ STAR generates OpenAPI dynamically from the live application, the runtime action
 - marks `/health` and `/metrics` as public in the OpenAPI document
 - registers shared schemas such as `ResponseEnvelope` and `ErrorInfo`
 - enriches `POST /v1/actions/{action_id}` with action-specific examples and runtime response variants
+- marks secret params as sensitive password inputs while keeping internal delivery policy out of public examples and schemas
 - documents the public contracts for `GET /v1/actions` and `GET /v1/actions/{action_id}`
 - applies explicit `/v1/files` contract overrides for upload, metadata retrieval, listing, content streaming, and delete operations
 - adds STAR response headers such as `X-Request-Id` and `Retry-After`

@@ -53,6 +53,7 @@ class ParamType(str, Enum):
     BOOL = "bool"
     FILE_ID = "file_id"
     LIST = "list"
+    SECRET = "secret"  # noqa: S105
 
 
 class OutputType(str, Enum):
@@ -134,6 +135,19 @@ CommandElement = Union[BinaryCmd, ArgCmd, FlagCmd, OutputCmd, ConstCmd]
 
 
 @dataclass(frozen=True, slots=True)
+class SecretDelivery:
+    """Typed internal delivery policy for sensitive action arguments.
+
+    Attributes:
+        type: Delivery sink used to pass the secret to the process.
+        append_newline: Whether stdin delivery appends a trailing newline.
+    """
+
+    type: Literal["stdin"]
+    append_newline: bool = True
+
+
+@dataclass(frozen=True, slots=True)
 class ArgDef:
     """Typed internal definition of an action argument.
 
@@ -151,6 +165,7 @@ class ArgDef:
         required: Whether the argument is required.
         default: Default value for optional arguments.
         constraints: Optional runtime constraints.
+        delivery: Optional sensitive delivery policy.
         description: Human-readable argument description.
     """
 
@@ -159,6 +174,7 @@ class ArgDef:
     required: bool = False
     default: Any | None = None
     constraints: dict[str, Any] | None = None
+    delivery: SecretDelivery | None = None
 
     description: str = ""
 

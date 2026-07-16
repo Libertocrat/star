@@ -25,6 +25,7 @@ STAR uses defense in depth through these mechanisms:
 - API token loading from the Docker secret `/run/secrets/star_api_token`
 - request structure validation in `RequestIntegrityMiddleware`
 - strict startup validation of DSL YAML spec files
+- sensitive DSL params that are kept out of rendered argv
 - build-time and runtime binary policy checks
 - managed file storage rooted at `STAR_ROOT_DIR`
 - sandbox path enforcement in low-level filesystem helpers
@@ -43,6 +44,7 @@ The implemented security goals are:
 - prevent filesystem access outside STAR-managed storage boundaries
 - reject malformed or structurally unsafe HTTP requests early
 - limit denial of service through oversized requests, request flooding, and long-running operations
+- prevent action-provided secrets from being rendered as subprocess argv or echoed back through public errors and outputs
 - keep action behavior deterministic by validating inputs, command rendering, and declared outputs
 
 These goals do not include multi-tenant isolation or public Internet exposure.
@@ -55,6 +57,7 @@ STAR protects these assets:
 - Managed storage contents. File uploads, action outputs, blobs, and metadata are limited to a strict root boundary at `STAR_ROOT_DIR`.
 - Action execution environment. Only DSL-defined actions that passed startup validation can run through `POST /v1/actions/{action_id}`.
 - Authentication token. The bearer token gates protected endpoints and is loaded from a Docker secret path.
+- Invocation secrets. Some actions accept sensitive request params, such as passphrases, that must not be rendered into argv or public response details.
 - Service availability. Body size limits, rate limiting, and request timeouts protect the service from simple abuse patterns.
 - Integrity of action results. Param validation, runtime rendering checks, binary policy enforcement, and output sanitization reduce malformed execution results.
 - Observability data. Request IDs and Prometheus metrics support incident analysis and abuse detection.
@@ -134,6 +137,7 @@ Authentication coverage is as follows:
 - invalid `Content-Length` values
 - oversized request bodies
 - invalid action parameters that do not match the generated Pydantic model
+- sensitive action parameters supplied in JSON request bodies for actions that declare `secret` args
 
 ### Filesystem threats
 
@@ -150,6 +154,7 @@ Authentication coverage is as follows:
 - invoking an action name that is not present in the built registry
 - attempting to bypass action contracts with malformed parameters
 - attempting to smuggle unsafe values through template placeholders or rendered argv
+- exposure of sensitive action params through argv inspection, public errors, logs, or subprocess output
 - use of blocked or non-allowlisted binaries
 - abuse of declared outputs to force unsafe file handling
 - returning unsafe or excessively large process output
@@ -183,13 +188,16 @@ Authentication coverage is as follows:
 - `ContentTypePolicy` restricts `POST /v1/actions/{action_id}` to `application/json` and `POST /v1/files` to `multipart/form-data`.
 - Action execution validates params against the action-specific generated `params_model`.
 - Runtime rendering rejects invalid placeholder values and `None` values before execution.
+- Pydantic validation errors are mapped without rejected input values in public `StarError` details.
 
 ### DSL build and execution mitigations
 
 - YAML specs are discovered deterministically and checked for file size, extension, UTF-8 safety, NUL bytes, disallowed control characters, and dangerous YAML patterns.
 - `validate_modules()` rejects unsupported DSL versions, duplicate module identities, invalid identifiers, blocked binaries, malformed action declarations, and host-path-like command literals except for narrow reviewed core exceptions.
+- `secret` args cannot define defaults, cannot be optional, cannot be rendered through direct argv args or const-template placeholders, and must use an explicit sensitive delivery policy.
 - `build_actions()` compiles only validated modules into immutable runtime `ActionSpec` objects.
 - The registry is an explicit in-memory allowlist built from validated DSL specs.
+- `render_command()` keeps secret values out of argv and delivers currently supported secret payloads through subprocess stdin bytes owned by the invocation.
 - `execute_command()` rejects binary paths, blocked binaries, and non-allowlisted binaries before subprocess execution, applies configured runtime timeouts, and cleans the owned process group on timeout or cancellation where supported.
 
 ### Filesystem mitigations
@@ -204,6 +212,7 @@ Authentication coverage is as follows:
 ### Action output mitigations
 
 - Stdout and stderr are transformed through the runtime sanitizer before they are returned, by redacting sensitive filesystem paths under static internal prefixes and the runtime `STAR_ROOT_DIR`.
+- Invocation-provided secret values are redacted from sanitized stdout and stderr before truncation and public response construction.
 - Configurable stdout and stderr size limits can truncate returned output.
 - Declared file outputs are handled through runtime placeholder and output-builder logic instead of trusting client-supplied destination paths.
 
@@ -233,6 +242,7 @@ Some risks remain by design or by deployment assumption.
 - `/health` and `/metrics` are intentionally unauthenticated. Docs endpoints are also unauthenticated while enabled and increase reachable surface inside the trusted network boundary.
 - Filesystem race conditions are reduced but not fully eliminated. The code explicitly notes TOCTOU limitations around some path-resolution patterns.
 - Service availability still depends on the underlying container host, mounted volume performance, and upstream request volume.
+- `secret` params are still accepted as plaintext JSON request values. STAR reduces argv, public error, and output exposure for those values, but it does not provide client-side encryption, asymmetric encryption, persistent secret storage, or protection from highly privileged process or memory inspection.
 
 ## 9. Security Assumptions
 

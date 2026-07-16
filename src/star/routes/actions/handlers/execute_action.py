@@ -135,7 +135,7 @@ async def execute_action_handler(
     except ValidationError as exc:
         raise StarError(
             INVALID_PARAMS,
-            details={"errors": exc.errors()},
+            details={"errors": exc.errors(include_input=False)},
         ) from exc
     except ActionInvalidArgError as exc:
         raise StarError(
@@ -190,6 +190,7 @@ async def execute_action_handler(
         max_stdout=max_stdout,
         max_stderr=max_stderr,
         settings=settings,
+        secret_redactions=result.rendered.secret_redactions,
     )
 
     outputs_payload = build_outputs(
