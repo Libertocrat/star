@@ -9,14 +9,19 @@ They do NOT test dispatcher internals or action business logic.
 """
 
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
+from pydantic import BaseModel, SecretStr
 
 from star.actions.exceptions import (
     ActionBinaryBlockedError,
     ActionBinaryNotAllowedError,
     ActionBinaryPathForbiddenError,
 )
+from star.core.errors import StarError
+from star.routes.actions.handlers.execute_action import execute_action_handler
+from star.routes.actions.schemas import ExecuteActionRequest
 
 # ============================================================================
 # Request Validation
@@ -316,6 +321,59 @@ def test_execute_out_of_range_param_maps_to_invalid_params(
 
     assert response.status_code == 400
     assert body["error"]["code"] == "INVALID_PARAMS"
+
+
+@pytest.mark.asyncio
+async def test_execute_handler_validation_error_omits_secret_input(
+    monkeypatch,
+    valid_registry,
+    settings,
+):
+    """
+    GIVEN dispatcher raises a Pydantic validation error containing secret input
+    WHEN the execute handler maps the error
+    THEN StarError details omit the rejected input value
+    """
+
+    class Params(BaseModel):
+        """Params model used to raise a realistic validation error.
+
+        Attributes:
+            password: Secret password field.
+        """
+
+        password: SecretStr
+
+    async def _raise_validation_error(*_args, **_kwargs):
+        """Raise a validation error whose default details include secret input."""
+        Params.model_validate({"password": ["topsecret"]})
+        raise AssertionError("validation should have failed")
+
+    request = SimpleNamespace(
+        app=SimpleNamespace(
+            state=SimpleNamespace(
+                action_registry=valid_registry,
+                settings=settings,
+            )
+        )
+    )
+
+    monkeypatch.setattr(
+        "star.routes.actions.handlers.execute_action.dispatch_action",
+        _raise_validation_error,
+    )
+
+    with pytest.raises(StarError) as exc_info:
+        await execute_action_handler(
+            request,
+            "test_runtime.ping",
+            ExecuteActionRequest(params={}),
+        )
+
+    error = exc_info.value
+    assert error.code == "INVALID_PARAMS"
+    assert "topsecret" not in repr(error.details)
+    assert "input" not in error.details["errors"][0]
 
 
 @pytest.mark.parametrize(

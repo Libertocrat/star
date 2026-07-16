@@ -55,6 +55,7 @@ def to_action_public_spec(spec: ActionSpec) -> ActionPublicSpec:
             "default": spec.defaults.get(name),
             "constraints": arg.constraints,
             "description": arg.description,
+            "sensitive": arg.type.value == "secret",
         }
         for name, arg in spec.arg_defs.items()
     ]

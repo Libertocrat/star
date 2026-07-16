@@ -9,6 +9,20 @@ from pydantic import BaseModel, ConfigDict
 from star.actions.models import ParamType
 
 
+class SecretDeliverySpec(BaseModel):
+    """Definition of how a secret argument is delivered to a subprocess.
+
+    Attributes:
+        type: Supported delivery sink for the secret value.
+        append_newline: Whether to append a newline when writing to stdin.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["stdin"]
+    append_newline: bool = True
+
+
 class ArgSpec(BaseModel):
     """Definition of an argument in the STAR DSL.
 
@@ -17,6 +31,7 @@ class ArgSpec(BaseModel):
         items: Item type when `type` is `list`.
         required: Whether the argument is required.
         default: Default value for optional arguments.
+        delivery: Delivery policy for sensitive arguments.
         constraints: Optional argument constraints.
         description: Human-readable argument description.
     """
@@ -27,6 +42,7 @@ class ArgSpec(BaseModel):
     items: ParamType | None = None
     required: Optional[bool] = False
     default: Optional[Any] = None
+    delivery: SecretDeliverySpec | None = None
     constraints: Optional[dict[str, Any]] = None
 
     description: str

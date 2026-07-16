@@ -43,16 +43,23 @@ class _FakeAsyncProcess:
 
         self.returncode: int | None = None
         self.communicated = False
+        self.communicate_input: bytes | None = None
         self.exit_event = asyncio.Event()
         self.communicate_event = asyncio.Event()
 
-    async def communicate(self) -> tuple[bytes, bytes]:
+    async def communicate(
+        self, input: bytes | None = None
+    ) -> tuple[bytes, bytes]:  # noqa: A002
         """Wait for test-controlled drain release and return output bytes.
+
+        Args:
+            input: Optional bytes written to stdin by the executor.
 
         Returns:
             Tuple containing stdout and stderr bytes.
         """
 
+        self.communicate_input = input
         await self.communicate_event.wait()
         self.communicated = True
         return b"", b""
@@ -161,6 +168,18 @@ async def test_execute_command__rejects_non_string_argv(argv):
         await execute_command(argv, _make_spec())
 
 
+@pytest.mark.asyncio
+async def test_execute_command__rejects_non_bytes_stdin_data():
+    """
+    GIVEN stdin_data with a non-bytes value
+    WHEN execute_command is called
+    THEN TypeError is raised before subprocess creation
+    """
+
+    with pytest.raises(TypeError, match="stdin_data must be bytes"):
+        await execute_command(["cat"], _make_spec(), stdin_data="secret")
+
+
 @pytest.mark.parametrize(
     "timeout",
     [0, -1],
@@ -260,6 +279,20 @@ async def test_execute_command__command_with_arguments():
     assert result.stdout == b"alpha beta gamma\n"
 
 
+@pytest.mark.asyncio
+async def test_execute_command__writes_stdin_data_to_process():
+    """
+    GIVEN a command that reads from stdin
+    WHEN execute_command receives stdin_data
+    THEN the process receives those bytes and returns them on stdout
+    """
+
+    result = await execute_command(["cat"], _make_spec(), stdin_data=b"hello secret")
+
+    assert result.returncode == 0
+    assert result.stdout == b"hello secret"
+
+
 # ============================================================================
 # Non-Zero Exit
 # ============================================================================
@@ -342,10 +375,16 @@ async def test_execute_command__timeout_terminates_process_group(monkeypatch):
     monkeypatch.setattr(executor_module.os, "killpg", _fake_killpg)
 
     with pytest.raises(ActionExecutionTimeoutError, match="timed out"):
-        await execute_command(["sleep", "1"], _make_spec(), timeout=0.001)
+        await execute_command(
+            ["sleep", "1"],
+            _make_spec(),
+            timeout=0.001,
+            stdin_data=b"secret",
+        )
 
     assert signals_sent == [signal.SIGTERM, signal.SIGKILL]
     assert fake_proc.communicated is True
+    assert fake_proc.communicate_input == b"secret"
 
 
 @pytest.mark.asyncio
@@ -378,7 +417,9 @@ async def test_execute_command__cancellation_terminates_process_group(monkeypatc
     monkeypatch.setattr(executor_module.asyncio, "create_subprocess_exec", _fake_spawn)
     monkeypatch.setattr(executor_module.os, "killpg", _fake_killpg)
 
-    task = asyncio.create_task(execute_command(["sleep", "1"], _make_spec()))
+    task = asyncio.create_task(
+        execute_command(["sleep", "1"], _make_spec(), stdin_data=b"secret")
+    )
     await asyncio.sleep(0)
 
     task.cancel()
@@ -388,6 +429,7 @@ async def test_execute_command__cancellation_terminates_process_group(monkeypatc
 
     assert signals_sent == [signal.SIGTERM, signal.SIGKILL]
     assert fake_proc.communicated is True
+    assert fake_proc.communicate_input == b"secret"
 
 
 # ============================================================================

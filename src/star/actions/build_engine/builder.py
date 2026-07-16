@@ -21,7 +21,7 @@ import logging
 import re
 from typing import Any, cast
 
-from pydantic import UUID4, BaseModel, Field, create_model
+from pydantic import UUID4, BaseModel, Field, SecretStr, create_model
 
 from star.actions.exceptions import ActionSpecsBuildError
 from star.actions.models.core import (
@@ -33,6 +33,7 @@ from star.actions.models.core import (
     OutputSource,
     OutputType,
     ParamType,
+    SecretDelivery,
 )
 from star.actions.schemas.action import ActionSpecInput
 from star.actions.schemas.dsl import ArgCmd as SchemaArgCmd
@@ -206,6 +207,14 @@ def _build_arg_defs(action: ActionSpecInput) -> dict[str, ArgDef]:
             required=required,
             default=arg_spec.default,
             constraints=arg_spec.constraints,
+            delivery=(
+                None
+                if arg_spec.delivery is None
+                else SecretDelivery(
+                    type=arg_spec.delivery.type,
+                    append_newline=arg_spec.delivery.append_newline,
+                )
+            ),
             description=arg_spec.description,
         )
 
@@ -379,14 +388,26 @@ def _build_params_model(
     for arg_name, arg_def in arg_defs.items():
         annotation = _map_param_type_to_python(arg_def)
         if arg_def.required:
+            field_info = Field(
+                ...,
+                description=arg_def.description,
+                json_schema_extra=_build_param_json_schema_extra(arg_def),
+                repr=arg_def.type != ParamType.SECRET,
+            )
             field_definitions[arg_name] = (
                 annotation,
-                Field(..., description=arg_def.description),
+                field_info,
             )
         else:
+            field_info = Field(
+                default=arg_def.default,
+                description=arg_def.description,
+                json_schema_extra=_build_param_json_schema_extra(arg_def),
+                repr=arg_def.type != ParamType.SECRET,
+            )
             field_definitions[arg_name] = (
                 annotation,
-                Field(default=arg_def.default, description=arg_def.description),
+                field_info,
             )
 
     for flag_name, flag_def in flag_defs.items():
@@ -414,6 +435,26 @@ def _build_model_name(action_fqdn: str) -> str:
 
     parts = [part for part in re.split(r"[._]", action_fqdn) if part]
     return "".join(part.capitalize() for part in parts) + "Params"
+
+
+def _build_param_json_schema_extra(arg_def: ArgDef) -> dict[str, Any] | None:
+    """Build optional JSON Schema metadata for generated params fields.
+
+    Args:
+        arg_def: Runtime argument definition.
+
+    Returns:
+        Optional JSON Schema extras for the generated field.
+    """
+
+    if arg_def.type != ParamType.SECRET:
+        return None
+
+    return {
+        "format": "password",
+        "writeOnly": True,
+        "sensitive": True,
+    }
 
 
 def _normalize_tags(tags_input: list[str] | None) -> tuple[str, ...]:
@@ -503,6 +544,8 @@ def _map_param_type_to_python(arg_def: ArgDef) -> type[Any]:
         return float
     if param_type == ParamType.STRING:
         return str
+    if param_type == ParamType.SECRET:
+        return SecretStr
     if param_type == ParamType.BOOL:
         return bool
     if param_type == ParamType.FILE_ID:

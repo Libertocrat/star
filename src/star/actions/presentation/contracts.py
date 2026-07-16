@@ -32,6 +32,9 @@ def _build_required_arg_example_value(
     if param_type == ParamType.STRING:
         return f"{arg_name}_value"
 
+    if param_type == ParamType.SECRET:
+        return "<secret>"
+
     if param_type == ParamType.BOOL:
         return True
 
@@ -191,6 +194,11 @@ def build_params_contract(spec: ActionSpec) -> dict[str, Any]:
             arg_def.type == ParamType.LIST and arg_def.items == ParamType.FILE_ID
         ):
             item_contract["format"] = "uuid4"
+
+        if arg_def.type == ParamType.SECRET:
+            item_contract["format"] = "password"
+            item_contract["sensitive"] = True
+            item_contract["write_only"] = True
 
         params[arg_name] = item_contract
 

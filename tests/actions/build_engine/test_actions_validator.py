@@ -1010,6 +1010,33 @@ def test_validate_modules_accepts_command_literal_placeholders_and_marks_args_us
     validate_modules([module])
 
 
+def test_validate_modules_rejects_secret_command_literal_placeholder(
+    make_module_payload,
+    make_action_payload,
+    make_module_spec,
+):
+    """
+    GIVEN a secret arg referenced by a const literal placeholder
+    WHEN validate_modules is called
+    THEN ActionSpecsParseError is raised before the secret can render as argv
+    """
+    action = make_action_payload(
+        args={
+            "password": {
+                "type": "secret",
+                "required": True,
+                "delivery": {"type": "stdin"},
+                "description": "password",
+            }
+        },
+        command=[{"binary": "echo"}, "pass:{password}"],
+    )
+    module = make_module_spec(make_module_payload(actions={"encrypt": action}))
+
+    with pytest.raises(ActionSpecsParseError, match="unsupported type 'secret'"):
+        validate_modules([module])
+
+
 @pytest.mark.parametrize(
     "literal",
     [
@@ -1147,6 +1174,36 @@ def test_validate_modules_rejects_undefined_arg_reference(make_valid_module):
     with pytest.raises(
         ActionSpecsParseError,
         match="arg 'value' referenced in command but not defined",
+    ):
+        validate_modules([module])
+
+
+def test_validate_modules_rejects_secret_arg_reference(
+    make_module_payload,
+    make_action_payload,
+    make_module_spec,
+):
+    """
+    GIVEN a secret arg referenced as a direct command arg
+    WHEN validate_modules is called
+    THEN ActionSpecsParseError is raised before the secret can render as argv
+    """
+    action = make_action_payload(
+        args={
+            "password": {
+                "type": "secret",
+                "required": True,
+                "delivery": {"type": "stdin"},
+                "description": "password",
+            }
+        },
+        command=[{"binary": "echo"}, {"arg": "password"}],
+    )
+    module = make_module_spec(make_module_payload(actions={"encrypt": action}))
+
+    with pytest.raises(
+        ActionSpecsParseError,
+        match="secret arg 'password' cannot be rendered directly in argv",
     ):
         validate_modules([module])
 
@@ -1560,6 +1617,149 @@ def test_validate_modules_rejects_non_integer_float_default_for_int(
         validate_modules([module])
 
 
+def test_validate_modules_accepts_required_secret_with_stdin_delivery(
+    make_module_payload,
+    make_action_payload,
+    make_module_spec,
+):
+    """
+    GIVEN a required secret arg consumed by stdin delivery
+    WHEN validate_modules is called
+    THEN validation succeeds without requiring an argv reference
+    """
+    action = make_action_payload(
+        args={
+            "password": {
+                "type": "secret",
+                "required": True,
+                "delivery": {"type": "stdin"},
+                "constraints": {"min_length": 1, "max_length": 64},
+                "description": "password",
+            }
+        },
+        command=[{"binary": "echo"}],
+    )
+    module = make_module_spec(make_module_payload(actions={"encrypt": action}))
+
+    validate_modules([module])
+
+
+def test_validate_modules_rejects_delivery_on_non_secret_arg(
+    make_module_payload,
+    make_action_payload,
+    make_module_spec,
+):
+    """
+    GIVEN a non-secret arg that declares delivery
+    WHEN validate_modules is called
+    THEN ActionSpecsParseError is raised
+    """
+    action = make_action_payload(
+        args={
+            "value": {
+                "type": "string",
+                "required": True,
+                "delivery": {"type": "stdin"},
+                "description": "value",
+            }
+        },
+        command=[{"binary": "echo"}, {"arg": "value"}],
+    )
+    module = make_module_spec(make_module_payload(actions={"ping": action}))
+
+    with pytest.raises(ActionSpecsParseError, match="cannot define 'delivery'"):
+        validate_modules([module])
+
+
+def test_validate_modules_rejects_optional_secret(
+    make_module_payload,
+    make_action_payload,
+    make_module_spec,
+):
+    """
+    GIVEN a secret arg that is not required
+    WHEN validate_modules is called
+    THEN ActionSpecsParseError is raised
+    """
+    action = make_action_payload(
+        args={
+            "password": {
+                "type": "secret",
+                "required": False,
+                "default": "fallback",
+                "delivery": {"type": "stdin"},
+                "description": "password",
+            }
+        },
+        command=[{"binary": "echo"}],
+    )
+    module = make_module_spec(make_module_payload(actions={"encrypt": action}))
+
+    with pytest.raises(ActionSpecsParseError, match="must set required to true"):
+        validate_modules([module])
+
+
+def test_validate_modules_rejects_secret_default(
+    make_module_payload,
+    make_action_payload,
+    make_module_spec,
+):
+    """
+    GIVEN a required secret arg that declares a default
+    WHEN validate_modules is called
+    THEN ActionSpecsParseError is raised
+    """
+    action = make_action_payload(
+        args={
+            "password": {
+                "type": "secret",
+                "required": True,
+                "default": "fallback",
+                "delivery": {"type": "stdin"},
+                "description": "password",
+            }
+        },
+        command=[{"binary": "echo"}],
+    )
+    module = make_module_spec(make_module_payload(actions={"encrypt": action}))
+
+    with pytest.raises(ActionSpecsParseError, match="cannot define a default"):
+        validate_modules([module])
+
+
+def test_validate_modules_rejects_multiple_stdin_secret_deliveries(
+    make_module_payload,
+    make_action_payload,
+    make_module_spec,
+):
+    """
+    GIVEN an action with two stdin-delivered secret args
+    WHEN validate_modules is called
+    THEN ActionSpecsParseError is raised
+    """
+    action = make_action_payload(
+        args={
+            "password": {
+                "type": "secret",
+                "required": True,
+                "delivery": {"type": "stdin"},
+                "description": "password",
+            },
+            "token": {
+                "type": "secret",
+                "required": True,
+                "delivery": {"type": "stdin"},
+                "description": "token",
+            },
+        },
+        command=[{"binary": "echo"}],
+    )
+    module = make_module_spec(make_module_payload(actions={"encrypt": action}))
+
+    with pytest.raises(ActionSpecsParseError, match="only one secret arg"):
+        validate_modules([module])
+
+
 # ============================================================================
 # Managed File Validation
 # ============================================================================
@@ -1658,6 +1858,33 @@ def test_validate_modules_accepts_valid_string_constraints(
     validate_modules([module])
 
 
+def test_validate_modules_accepts_valid_secret_constraints(
+    make_module_payload,
+    make_action_payload,
+    make_module_spec,
+):
+    """
+    GIVEN a secret arg with valid length constraints
+    WHEN validate_modules is called
+    THEN validation succeeds
+    """
+    action = make_action_payload(
+        args={
+            "password": {
+                "type": "secret",
+                "required": True,
+                "delivery": {"type": "stdin"},
+                "constraints": {"min_length": 1, "max_length": 4096},
+                "description": "password",
+            }
+        },
+        command=[{"binary": "echo"}],
+    )
+    module = make_module_spec(make_module_payload(actions={"encrypt": action}))
+
+    validate_modules([module])
+
+
 def test_validate_modules_accepts_valid_file_constraints(
     make_module_payload,
     make_action_payload,
@@ -1718,6 +1945,34 @@ def test_validate_modules_rejects_unknown_constraint_key(
     module = make_module_spec(make_module_payload(actions={"ping": action}))
 
     with pytest.raises(ActionSpecsParseError, match="unsupported constraint key"):
+        validate_modules([module])
+
+
+def test_validate_modules_rejects_secret_max_length_above_global_limit(
+    make_module_payload,
+    make_action_payload,
+    make_module_spec,
+):
+    """
+    GIVEN a secret arg with max_length above STAR's secret limit
+    WHEN validate_modules is called
+    THEN ActionSpecsParseError is raised
+    """
+    action = make_action_payload(
+        args={
+            "password": {
+                "type": "secret",
+                "required": True,
+                "delivery": {"type": "stdin"},
+                "constraints": {"max_length": 4097},
+                "description": "password",
+            }
+        },
+        command=[{"binary": "echo"}],
+    )
+    module = make_module_spec(make_module_payload(actions={"encrypt": action}))
+
+    with pytest.raises(ActionSpecsParseError, match="max_length must be <= 4096"):
         validate_modules([module])
 
 

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 from pydantic import BaseModel
 
@@ -13,6 +15,7 @@ from star.actions.models.core import (
     OutputSource,
     OutputType,
     ParamType,
+    SecretDelivery,
 )
 from star.actions.models.presentation import (
     ActionPublicSpec,
@@ -230,6 +233,37 @@ def test_to_action_public_spec_constraints_from_valid_registry(valid_registry) -
 
     assert result.args[0]["name"] == "value"
     assert result.args[0]["constraints"] == {"min": 1, "max": 10}
+
+
+def test_to_action_public_spec_marks_secret_without_delivery(
+    sample_action_spec: ActionSpec,
+) -> None:
+    """
+    GIVEN an ActionSpec with a secret argument
+    WHEN converting to ActionPublicSpec
+    THEN the public arg marks sensitivity without exposing delivery
+    """
+
+    secret_spec = replace(
+        sample_action_spec,
+        arg_defs={
+            "password": ArgDef(
+                type=ParamType.SECRET,
+                required=True,
+                delivery=SecretDelivery(type="stdin"),
+                description="password",
+            )
+        },
+        defaults={"verbose": False},
+    )
+
+    result = to_action_public_spec(secret_spec)
+    arg = result.args[0]
+
+    assert arg["name"] == "password"
+    assert arg["type"] == "secret"
+    assert arg["sensitive"] is True
+    assert "delivery" not in arg
 
 
 # ============================================================================

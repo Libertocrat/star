@@ -52,6 +52,7 @@ async def dispatch_action(
             rendered.argv,
             action_spec,
             timeout=timeout,
+            stdin_data=rendered.stdin_data,
         )
     except ActionRuntimeExecError:
         cleanup_output_placeholders(rendered.output_files, settings=settings)

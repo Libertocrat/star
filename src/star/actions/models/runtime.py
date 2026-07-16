@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from uuid import UUID
 
 
@@ -56,10 +56,18 @@ class RenderedAction:
     Attributes:
         argv: Final resolved argv passed to executor.
         output_files: Mapping of output name to STAR file id for `file + command`.
+        stdin_data: Optional bytes written to subprocess stdin.
+        secret_redactions: Secret values that must be redacted from output.
     """
 
     argv: list[str]
     output_files: dict[str, UUID]
+    stdin_data: bytes | None = field(default=None, repr=False, compare=False)
+    secret_redactions: tuple[str, ...] = field(
+        default_factory=tuple,
+        repr=False,
+        compare=False,
+    )
 
     def __iter__(self):
         """Iterate over argv tokens for backward-compatible list semantics."""

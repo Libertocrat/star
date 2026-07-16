@@ -97,6 +97,21 @@ actions:
             - binary: echo
             - arg: files
 
+    secret_action:
+        description: "Action requiring a secret value"
+        args:
+            password:
+                type: secret
+                required: true
+                delivery:
+                    type: stdin
+                constraints:
+                    min_length: 1
+                    max_length: 64
+                description: "Secret password"
+        command:
+            - binary: echo
+
     outputs_dynamic_action:
         description: "Action with dynamic output contracts"
         allow_stdout_as_file: true
@@ -288,6 +303,28 @@ def test_build_params_contract_list_file_id_format(contracts_special_registry) -
     assert result["params"]["files"]["format"] == "uuid4"
 
 
+def test_build_params_contract_secret_marks_sensitive_without_delivery(
+    contracts_special_registry,
+) -> None:
+    """
+    GIVEN an action with a secret param
+    WHEN building params contract
+    THEN the public contract marks it sensitive without exposing delivery
+    """
+
+    spec = contracts_special_registry.get("contracts_runtime.secret_action")
+
+    result = build_params_contract(spec)
+    password = result["params"]["password"]
+
+    assert password["type"] == "secret"
+    assert password["format"] == "password"
+    assert password["sensitive"] is True
+    assert password["write_only"] is True
+    assert password["constraints"] == {"min_length": 1, "max_length": 64}
+    assert "delivery" not in password
+
+
 def test_build_params_contract_constraints_always_present(
     valid_registry,
     contracts_special_registry,
@@ -388,6 +425,22 @@ def test_build_params_example_list_file_id(contracts_special_registry) -> None:
         "3fa85f64-5717-4562-b3fc-2c963f66afa6",
         "98e56387-3364-4ce2-9c66-44d23ec4e23a",
     ]
+
+
+def test_build_params_example_secret_uses_placeholder(
+    contracts_special_registry,
+) -> None:
+    """
+    GIVEN an action with a required secret param
+    WHEN building params example
+    THEN the example uses a placeholder instead of a real secret
+    """
+
+    spec = contracts_special_registry.get("contracts_runtime.secret_action")
+
+    result = build_params_example(spec)
+
+    assert result["password"] == "<secret>"  # noqa: S105
 
 
 # ============================================================================

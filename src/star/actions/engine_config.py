@@ -76,6 +76,9 @@ CONST_TEMPLATE_ALLOWED_ARG_TYPES: tuple[ParamType, ...] = (
     ParamType.FLOAT,
 )
 
+# Upper bound for secret arguments delivered through sensitive sinks.
+MAX_SECRET_LENGTH = 4096
+
 # Reserved output names used by runtime-generated outputs.
 RESERVED_OUTPUT_NAMES: tuple[str, ...] = ("stdout_file",)
 
@@ -113,6 +116,9 @@ TRUNCATION_MARKER = b"\n[STAR OUTPUT TRUNCATED]\n"
 
 # Marker used when sensitive filesystem paths are redacted from output.
 PATH_REDACTION = "[REDACTED_PATH]"
+
+# Marker used when invocation-provided secrets are redacted from output.
+SECRET_REDACTION = "[REDACTED_SECRET]"  # noqa: S105
 
 # Token characters that should prevent path matching when adjacent to `/`.
 # This avoids false positives inside compact tokens such as base64/base64url.

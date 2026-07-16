@@ -36,12 +36,14 @@ async def execute_command(
     argv: list[str],
     spec: ActionSpec,
     timeout: float | None = None,  # noqa: ASYNC109
+    stdin_data: bytes | None = None,
 ) -> ActionExecutionResult:
     """Execute a validated command using an async subprocess.
 
     Args:
         argv: Fully resolved command arguments.
         timeout: Optional timeout in seconds.
+        stdin_data: Optional bytes to write to subprocess stdin.
 
     Returns:
         ActionExecutionResult containing process outputs.
@@ -59,6 +61,9 @@ async def execute_command(
     for item in argv:
         if not isinstance(item, str):
             raise TypeError("argv must contain only strings")
+
+    if stdin_data is not None and not isinstance(stdin_data, bytes):
+        raise TypeError("stdin_data must be bytes")
 
     binary = argv[0]
     if not is_simple_binary_name(binary):
@@ -87,6 +92,11 @@ async def execute_command(
         if _SUPPORTS_PROCESS_GROUPS:
             proc = await asyncio.create_subprocess_exec(
                 *argv,
+                stdin=(
+                    asyncio.subprocess.PIPE
+                    if stdin_data is not None
+                    else asyncio.subprocess.DEVNULL
+                ),
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 start_new_session=True,
@@ -94,11 +104,16 @@ async def execute_command(
         else:
             proc = await asyncio.create_subprocess_exec(
                 *argv,
+                stdin=(
+                    asyncio.subprocess.PIPE
+                    if stdin_data is not None
+                    else asyncio.subprocess.DEVNULL
+                ),
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
         pid = proc.pid
-        communicate_task = asyncio.create_task(proc.communicate())
+        communicate_task = asyncio.create_task(proc.communicate(stdin_data))
 
         if timeout is None:
             stdout, stderr = await asyncio.shield(communicate_task)

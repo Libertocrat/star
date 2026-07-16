@@ -7,6 +7,7 @@ import pytest
 from star.actions.models.runtime import ActionExecutionResult
 from star.actions.runtime.sanitizer import (
     PATH_REDACTION,
+    SECRET_REDACTION,
     TRUNCATION_MARKER,
     sanitize_output,
     transform_output,
@@ -180,6 +181,35 @@ def test_sanitize_output_does_not_redact_non_sensitive_absolute_paths():
     assert PATH_REDACTION.encode("utf-8") not in out
 
 
+def test_sanitize_output_redacts_invocation_secret_values():
+    """GIVEN output containing an invocation secret value
+    WHEN sanitize_output is called with secret redactions
+    THEN the exact secret is replaced by the secret redaction marker
+    """
+
+    out = sanitize_output(
+        b"password=topsecret\n",
+        secret_redactions=("topsecret",),
+    )
+
+    assert out == b"password=[REDACTED_SECRET]\n"
+    assert b"topsecret" not in out
+
+
+def test_sanitize_output_redacts_longer_secret_before_shorter_secret():
+    """GIVEN overlapping secret values
+    WHEN sanitize_output is called with both values
+    THEN the longest exact secret is redacted first
+    """
+
+    out = sanitize_output(
+        b"token=abcdef abc\n",
+        secret_redactions=("abc", "abcdef"),
+    )
+
+    assert out == b"token=[REDACTED_SECRET] [REDACTED_SECRET]\n"
+
+
 def test_sanitize_output_redacts_configured_star_root_dir(settings):
     """GIVEN output containing the configured STAR root directory
     WHEN sanitize_output is called with runtime settings
@@ -289,6 +319,28 @@ def test_redacted_when_sensitive_path_present():
 
     assert safe.redacted is True
     assert PATH_REDACTION.encode("utf-8") in safe.stdout
+
+
+def test_transform_output_marks_redacted_when_secret_value_present():
+    """GIVEN stdout and stderr containing an invocation secret value
+    WHEN transform_output is called with secret redactions
+    THEN redacted is true and the secret is absent from both streams
+    """
+
+    result = _make_result(stdout=b"out topsecret", stderr=b"err topsecret")
+
+    safe = transform_output(
+        result,
+        max_stdout=1024,
+        max_stderr=1024,
+        secret_redactions=("topsecret",),
+    )
+
+    assert safe.redacted is True
+    assert SECRET_REDACTION.encode("utf-8") in safe.stdout
+    assert SECRET_REDACTION.encode("utf-8") in safe.stderr
+    assert b"topsecret" not in safe.stdout
+    assert b"topsecret" not in safe.stderr
 
 
 def test_sanitize_handles_invalid_utf8():

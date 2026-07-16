@@ -24,6 +24,7 @@ from star.actions.models.core import (
     OutputSource,
     OutputType,
     ParamType,
+    SecretDelivery,
 )
 from star.actions.models.security import BinaryPolicy
 from star.actions.runtime import file_manager
@@ -501,6 +502,115 @@ def test_render_command__accepts_valid_float_value():
     )
 
     assert render_command(spec, {"value": 3.5}) == ["echo", "3.5"]
+
+
+# ============================================================================
+# Secret Delivery
+# ============================================================================
+
+
+def test_render_command__delivers_secret_to_stdin_without_argv_leak():
+    """
+    GIVEN a secret argument with stdin delivery
+    WHEN render_command is called
+    THEN argv omits the secret and stdin_data receives the secret bytes
+    """
+
+    spec = _make_spec(
+        arg_defs={
+            "password": ArgDef(
+                type=ParamType.SECRET,
+                required=True,
+                delivery=SecretDelivery(type="stdin"),
+                description="password",
+            )
+        },
+        command_template=({"kind": "binary", "value": "cat"},),
+    )
+
+    rendered = render_command(spec, {"password": "topsecret"})
+
+    assert rendered.argv == ["cat"]
+    assert "topsecret" not in rendered.argv
+    assert rendered.stdin_data == b"topsecret\n"
+    assert rendered.secret_redactions == ("topsecret",)
+    assert "topsecret" not in repr(rendered)
+
+
+def test_render_command__honors_secret_delivery_without_newline():
+    """
+    GIVEN a secret argument with append_newline disabled
+    WHEN render_command is called
+    THEN stdin_data contains the exact secret bytes
+    """
+
+    spec = _make_spec(
+        arg_defs={
+            "password": ArgDef(
+                type=ParamType.SECRET,
+                required=True,
+                delivery=SecretDelivery(type="stdin", append_newline=False),
+                description="password",
+            )
+        },
+        command_template=({"kind": "binary", "value": "cat"},),
+    )
+
+    rendered = render_command(spec, {"password": "topsecret"})
+
+    assert rendered.stdin_data == b"topsecret"
+
+
+def test_render_command__rejects_secret_arg_token_at_runtime():
+    """
+    GIVEN a runtime ActionSpec that references a secret as an argv arg token
+    WHEN render_command is called
+    THEN ActionInvalidArgError is raised as defense in depth
+    """
+
+    spec = _make_spec(
+        arg_defs={
+            "password": ArgDef(
+                type=ParamType.SECRET,
+                required=True,
+                delivery=SecretDelivery(type="stdin"),
+                description="password",
+            )
+        },
+        command_template=(
+            {"kind": "binary", "value": "echo"},
+            {"kind": "arg", "name": "password"},
+        ),
+    )
+
+    with pytest.raises(ActionInvalidArgError, match="cannot be rendered as argv"):
+        render_command(spec, {"password": "topsecret"})
+
+
+def test_render_command__rejects_secret_const_placeholder_at_runtime():
+    """
+    GIVEN a runtime ActionSpec that interpolates a secret in a const token
+    WHEN render_command is called
+    THEN ActionInvalidArgError is raised as defense in depth
+    """
+
+    spec = _make_spec(
+        arg_defs={
+            "password": ArgDef(
+                type=ParamType.SECRET,
+                required=True,
+                delivery=SecretDelivery(type="stdin"),
+                description="password",
+            )
+        },
+        command_template=(
+            {"kind": "binary", "value": "echo"},
+            {"kind": "const", "value": "pass:{password}"},
+        ),
+    )
+
+    with pytest.raises(ActionInvalidArgError, match="cannot be rendered as argv"):
+        render_command(spec, {"password": "topsecret"})
 
 
 # ============================================================================

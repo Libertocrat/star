@@ -10,9 +10,12 @@ import unicodedata
 from typing import Any, cast
 from uuid import UUID
 
-from pydantic import UUID4
+from pydantic import UUID4, SecretStr
 
-from star.actions.engine_config import CONST_TEMPLATE_PLACEHOLDER_PATTERN
+from star.actions.engine_config import (
+    CONST_TEMPLATE_PLACEHOLDER_PATTERN,
+    MAX_SECRET_LENGTH,
+)
 from star.actions.exceptions import (
     ActionInvalidArgError,
     ActionRuntimeError,
@@ -73,8 +76,31 @@ def render_command(
                 raise ActionInvalidArgError(f"Param '{name}' cannot be None")
 
         resolved_arg_values: dict[str, list[str]] = {}
+        stdin_data: bytes | None = None
+        secret_redactions: list[str] = []
         for name, arg_def in spec.arg_defs.items():
             try:
+                if arg_def.type == ParamType.SECRET:
+                    secret_value = _resolve_secret_value(name, arg_def, resolved[name])
+                    if arg_def.delivery is None:
+                        raise ActionRuntimeRenderError(
+                            f"Secret param '{name}' has no delivery policy"
+                        )
+                    if arg_def.delivery.type == "stdin":
+                        if stdin_data is not None:
+                            raise ActionRuntimeRenderError(
+                                "Multiple stdin secret deliveries are not supported"
+                            )
+                        stdin_text = (
+                            f"{secret_value}\n"
+                            if arg_def.delivery.append_newline
+                            else secret_value
+                        )
+                        stdin_data = stdin_text.encode("utf-8")
+                        secret_redactions.append(secret_value)
+                    resolved_arg_values[name] = []
+                    continue
+
                 resolved_arg_values[name] = _resolve_arg(
                     arg_def,
                     resolved[name],
@@ -110,6 +136,10 @@ def render_command(
             if kind == "arg":
                 arg_token = cast(ArgCmd, token)
                 name = arg_token["name"]
+                if spec.arg_defs[name].type == ParamType.SECRET:
+                    raise ActionInvalidArgError(
+                        "secret params cannot be rendered as argv"
+                    )
                 argv.extend(resolved_arg_values[name])
                 continue
 
@@ -133,7 +163,12 @@ def render_command(
 
             raise ActionRuntimeRenderError(f"Unsupported command token kind: {kind}")
 
-        return RenderedAction(argv=argv, output_files=output_files)
+        return RenderedAction(
+            argv=argv,
+            output_files=output_files,
+            stdin_data=stdin_data,
+            secret_redactions=tuple(secret_redactions),
+        )
 
     except ActionRuntimeError:
         if "output_files" in locals() and output_files:
@@ -215,6 +250,9 @@ def _resolve_const_placeholder_value(name: str, arg_def: ArgDef, value: Any) -> 
     """
 
     constraints = arg_def.constraints or {}
+
+    if arg_def.type == ParamType.SECRET:
+        raise ActionInvalidArgError("secret params cannot be rendered as argv")
 
     if arg_def.type in {ParamType.INT, ParamType.FLOAT}:
         _validate_numeric_constraints(name, value, constraints)
@@ -321,6 +359,9 @@ def _resolve_arg(
         _validate_string_constraints("value", value, constraints)
         return [value]
 
+    if arg_def.type == ParamType.SECRET:
+        raise ActionInvalidArgError("secret params cannot be rendered as argv")
+
     if arg_def.type == ParamType.FILE_ID:
         file_uuid = _coerce_file_id("value", value)
         blob_path, metadata = _resolve_file_id_to_path(
@@ -360,6 +401,73 @@ def _resolve_arg(
         raise ActionInvalidArgError(f"unsupported list item type '{items_type}'")
 
     raise ActionInvalidArgError(f"unsupported argument type '{arg_def.type.value}'")
+
+
+def _resolve_secret_value(name: str, arg_def: ArgDef, value: Any) -> str:
+    """Validate and extract a runtime secret value.
+
+    Args:
+        name: Argument name.
+        arg_def: Runtime secret definition.
+        value: Runtime value, usually a Pydantic `SecretStr`.
+
+    Returns:
+        Plain secret string for in-memory delivery.
+
+    Raises:
+        ActionInvalidArgError: If the value is invalid for secret delivery.
+    """
+
+    if isinstance(value, SecretStr):
+        secret_value = value.get_secret_value()
+    elif isinstance(value, str):
+        secret_value = value
+    else:
+        raise ActionInvalidArgError(f"Param '{name}' must be a secret string")
+
+    constraints = arg_def.constraints or {}
+    _validate_secret_constraints(name, secret_value, constraints)
+    return secret_value
+
+
+def _validate_secret_constraints(
+    name: str,
+    value: str,
+    constraints: dict[str, Any],
+) -> None:
+    """Validate runtime secret constraints without argv-specific string rules.
+
+    Args:
+        name: Argument name.
+        value: Secret value.
+        constraints: Declared secret constraints.
+
+    Raises:
+        ActionInvalidArgError: If value is invalid.
+    """
+
+    if value == "":
+        raise ActionInvalidArgError(f"Param '{name}' cannot be empty")
+
+    if "\x00" in value:
+        raise ActionInvalidArgError(f"Param '{name}' cannot contain NULL bytes")
+
+    if _contains_control_characters(value):
+        raise ActionInvalidArgError(f"Param '{name}' cannot contain control characters")
+
+    min_length = constraints.get("min_length")
+    max_length = constraints.get("max_length", MAX_SECRET_LENGTH)
+
+    if len(value) > MAX_SECRET_LENGTH:
+        raise ActionInvalidArgError(
+            f"Param '{name}' must have length <= {MAX_SECRET_LENGTH}"
+        )
+
+    if min_length is not None and len(value) < min_length:
+        raise ActionInvalidArgError(f"Param '{name}' must have length >= {min_length}")
+
+    if max_length is not None and len(value) > max_length:
+        raise ActionInvalidArgError(f"Param '{name}' must have length <= {max_length}")
 
 
 def _resolve_single_file_id(

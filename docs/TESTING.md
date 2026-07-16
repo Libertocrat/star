@@ -20,6 +20,7 @@ The current tests cover:
 
 - DSL loader, validator, and builder behavior
 - runtime action rendering, execution, sanitization, and output building
+- sensitive action parameter handling, including secret delivery and redaction
 - public action catalog, public contracts, and serializers
 - settings loading and validation
 - request and response schemas
@@ -101,17 +102,17 @@ Unit tests cover isolated behavior in the DSL engine, runtime layers, presentati
 Current unit coverage includes:
 
 - `tests/actions/test_dispatcher.py` for action resolution, params validation, executor handoff, and propagated runtime policy errors
-- `tests/actions/test_registry.py` for registry construction from specs, namespace handling, lookup, membership, and sorted listing
+- `tests/actions/test_registry.py` for registry construction from specs, namespace handling, lookup, membership, sorted listing, and built-in action contract regressions
 - `tests/actions/build_engine/test_actions_loader.py` for YAML discovery, safety checks, parsing, and module loading
-- `tests/actions/build_engine/test_actions_validator.py` for semantic DSL rules, uniqueness checks, binary constraints, output rules, and template validation
-- `tests/actions/build_engine/test_actions_builder.py` for runtime `ActionSpec` compilation, generated params models, defaults, command templates, and output definitions
+- `tests/actions/build_engine/test_actions_validator.py` for semantic DSL rules, uniqueness checks, binary constraints, output rules, template validation, and rejection of unsafe secret usage
+- `tests/actions/build_engine/test_actions_builder.py` for runtime `ActionSpec` compilation, generated params models, defaults, command templates, sensitive delivery metadata, and output definitions
 - `tests/actions/presentation/test_actions_catalog.py` for grouped module discovery and filtering by `q`, `tags`, and `match`
-- `tests/actions/presentation/test_actions_contracts.py` for params contracts, params examples, response contracts, and response examples
-- `tests/actions/presentation/test_actions_serializers.py` for stable public action and module serialization
-- `tests/actions/runtime/test_actions_renderer.py` for runtime argument resolution, const template interpolation, file input resolution, and output placeholder creation
-- `tests/actions/runtime/test_actions_executor.py` for binary policy checks, subprocess execution, and timeout behavior
+- `tests/actions/presentation/test_actions_contracts.py` for params contracts, params examples, response contracts, response examples, and public `secret` contract shape
+- `tests/actions/presentation/test_actions_serializers.py` for stable public action and module serialization without leaking internal delivery policy
+- `tests/actions/runtime/test_actions_renderer.py` for runtime argument resolution, const template interpolation, file input resolution, secret stdin delivery, and output placeholder creation
+- `tests/actions/runtime/test_actions_executor.py` for binary policy checks, subprocess execution, stdin handoff, and timeout behavior
 - `tests/actions/runtime/test_actions_outputs_builder.py` for output payload shaping and file finalization
-- `tests/actions/runtime/test_actions_sanitizer.py` for stdout and stderr truncation, sensitive-prefix path redaction, and normalization
+- `tests/actions/runtime/test_actions_sanitizer.py` for stdout and stderr truncation, sensitive-prefix path redaction, invocation-secret redaction, and normalization
 - `tests/core/test_settings.py` for environment-backed settings, defaults, docs toggles, output byte limits, blocked binaries, and token loading rules
 - `tests/core/security/*` for path validation, secure file access helpers, HTTP validation helpers, and security headers
 
@@ -163,7 +164,9 @@ In `tests/actions/build_engine` and `tests/actions/runtime`, the current tests v
 - rejection of malformed or unsafe YAML specs
 - enforcement of binary policy rules
 - validation of command token structure and template placeholders
+- build-time and runtime rejection of secret values that would render into argv
 - runtime rejection of invalid params, forbidden binaries, and bad output declarations
+- redaction of invocation-provided secrets from sanitized subprocess output and omission of rejected input values from public validation errors
 
 In `tests/integration/middleware` and `tests/integration/routes`, the current tests validate:
 
