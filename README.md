@@ -280,6 +280,10 @@ Use the coordinated disclosure process documented in [SECURITY.md](SECURITY.md).
 
 ## License
 
-STAR is licensed under the Apache License 2.0. See [LICENSE](LICENSE) for the full text.
+STAR is licensed under the GNU Affero General Public License v3.0. See [LICENSE](LICENSE) for the full text.
+
+The AGPLv3 allows use, modification, distribution, private use, and commercial use under its terms. Those terms include preserving license and copyright notices, providing corresponding source when distributing covered versions, and making source available for modified versions that users interact with over a network.
+
+Commercial licenses may be available for proprietary use cases that cannot comply with the AGPLv3, including closed-source products or packaged commercial offerings based on STAR. Contact Libertocrat at <libertocrat@proton.me> to discuss a separate commercial license.
 
 ---

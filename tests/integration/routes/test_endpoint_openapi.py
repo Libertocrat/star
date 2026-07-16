@@ -426,8 +426,8 @@ def test_openapi_includes_global_metadata_from_app_settings(
     assert info["contact"]["url"] == "https://github.com/Libertocrat/"
     assert info["contact"]["email"] == "libertocrat@proton.me"
 
-    assert info["license"]["name"] == "Apache License 2.0"
-    assert info["license"]["url"] == "https://www.apache.org/licenses/LICENSE-2.0.html"
+    assert info["license"]["name"] == "GNU Affero General Public License v3.0"
+    assert info["license"]["url"] == "https://www.gnu.org/licenses/agpl-3.0.html"
 
     assert schema["externalDocs"]["url"] == "https://github.com/Libertocrat/star"
 

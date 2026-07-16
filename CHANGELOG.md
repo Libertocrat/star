@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added a DSL `secret` argument type for sensitive action params, with public contracts marking those params as sensitive password inputs while keeping internal delivery policy out of the public API.
 
+### Changed
+
+- Relicensed STAR from the Apache License 2.0 to the GNU Affero General Public License v3.0, and aligned the README, contribution policy, and OpenAPI metadata with the new license and commercial licensing path.
+
 ### Security
 
 - Changed the AES-256 encrypt/decrypt actions to pass OpenSSL passphrases through stdin instead of `-pass pass:...` argv, preventing direct argv/procfs exposure of those values.
