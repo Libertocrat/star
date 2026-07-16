@@ -111,8 +111,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "email": "libertocrat@proton.me",
         },
         license_info={
-            "name": "Apache License 2.0",
-            "url": "https://www.apache.org/licenses/LICENSE-2.0.html",
+            "name": "GNU Affero General Public License v3.0",
+            "url": "https://www.gnu.org/licenses/agpl-3.0.html",
         },
         docs_url=docs_url,
         redoc_url=redoc_url,

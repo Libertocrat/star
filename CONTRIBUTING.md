@@ -32,10 +32,17 @@ Once external contributions are enabled, the repository will publish explicit gu
 - testing expectations
 - DSL spec review expectations
 - security review requirements
+- contribution licensing terms
 
 Those rules are not defined yet and should not be assumed before they are documented.
 
-## 4. Providing Feedback
+## 4. License Expectations
+
+STAR is licensed under the GNU Affero General Public License v3.0. See [LICENSE](LICENSE) for the full license text.
+
+The project may offer separate commercial licenses for proprietary use cases that cannot comply with the AGPLv3. Because external code contributions can affect future dual-licensing options, external pull requests remain paused until the project publishes explicit contribution licensing terms.
+
+## 5. Providing Feedback
 
 Feedback is still welcome while the project is stabilizing.
 
@@ -49,7 +56,7 @@ Useful feedback includes:
 
 For non-security topics, use the GitHub issue tracker.
 
-## 5. Security Reporting
+## 6. Security Reporting
 
 Security vulnerabilities must be reported privately.
 
@@ -57,7 +64,7 @@ Do not disclose security issues through public GitHub issues.
 
 Follow the responsible disclosure process defined in [SECURITY.md](SECURITY.md).
 
-## 6. Development Documentation
+## 7. Development Documentation
 
 Developers who want to work with the codebase locally should use [DEVELOPMENT.md](DEVELOPMENT.md).
 
@@ -72,7 +79,7 @@ The development guide covers:
 - helper scripts in `scripts/`
 - troubleshooting
 
-## 7. Related Documentation
+## 8. Related Documentation
 
 The main technical and project documents are:
 
