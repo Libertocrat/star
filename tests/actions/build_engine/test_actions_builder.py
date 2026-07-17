@@ -418,7 +418,7 @@ def test_arg_defs_compile_secret_delivery(
             "password": {
                 "type": "secret",
                 "required": True,
-                "delivery": {"type": "stdin", "append_newline": False},
+                "delivery": {"type": "stdin"},
                 "constraints": {"min_length": 1, "max_length": 64},
                 "description": "password",
             }
@@ -434,6 +434,40 @@ def test_arg_defs_compile_secret_delivery(
     assert arg_def.required is True
     assert arg_def.delivery is not None
     assert arg_def.delivery.type == "stdin"
+    assert arg_def.delivery.append_newline is True
+    assert arg_def.constraints == {"min_length": 1, "max_length": 64}
+
+
+def test_arg_defs_compile_secret_file_delivery(
+    make_module_payload,
+    make_module_spec,
+    make_action_spec_input,
+):
+    """
+    GIVEN an action with a secret arg and file delivery
+    WHEN build_actions is called
+    THEN arg_defs preserve file delivery type and newline policy
+    """
+    action = make_action_spec_input(
+        args={
+            "password": {
+                "type": "secret",
+                "required": True,
+                "delivery": {"type": "file"},
+                "constraints": {"min_length": 1, "max_length": 64},
+                "description": "password",
+            }
+        },
+        command=[{"binary": "echo"}, "file:{password}"],
+    )
+    module = make_module_spec(make_module_payload(actions={"encrypt": action}))
+
+    spec = build_actions([module], _test_settings())["test_module.encrypt"]
+    arg_def = spec.arg_defs["password"]
+
+    assert arg_def.type == ParamType.SECRET
+    assert arg_def.delivery is not None
+    assert arg_def.delivery.type == "file"
     assert arg_def.delivery.append_newline is False
     assert arg_def.constraints == {"min_length": 1, "max_length": 64}
 

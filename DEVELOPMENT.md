@@ -297,7 +297,7 @@ The normal workflow is:
 
 This is important when reasoning about STAR locally: an action is a controlled command template with a fixed contract, not an arbitrary shell command accepted from the API.
 
-When an action needs a sensitive string such as a passphrase, declare the arg as `type: secret` instead of `type: string`. Secret args are still sent by clients inside the JSON `params` payload, but the DSL must define an internal delivery policy and command templates must not render them into argv with `arg: password` or const placeholders such as `pass:{password}`. The currently supported delivery path writes the secret to subprocess stdin for binaries that support that pattern.
+When an action needs a sensitive string such as a passphrase, declare the arg as `type: secret` instead of `type: string`. Clients still send the value as a JSON string in `params`, but the action spec must choose one of STAR's supported delivery modes with `delivery.type: stdin` or `delivery.type: file`. STAR then prevents the raw secret value from being rendered into argv, public validation details, logs, or sanitized subprocess output. For file delivery, `- arg: password` expands to an invocation-owned temporary file path, and command literals may use placeholders such as `file:{password}` when a binary needs command-specific syntax.
 
 ## 4. Environment Setup
 

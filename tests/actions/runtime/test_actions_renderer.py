@@ -29,9 +29,14 @@ from star.actions.models.core import (
 from star.actions.models.security import BinaryPolicy
 from star.actions.runtime import file_manager
 from star.actions.runtime.renderer import render_command
+from star.actions.runtime.secret_manager import cleanup_secret_files
 from star.core.config import Settings
 from star.core.schemas.files import FileMetadata
-from star.core.utils.file_storage import get_blob_path, load_file_metadata
+from star.core.utils.file_storage import (
+    get_blob_path,
+    get_secret_tmp_dir,
+    load_file_metadata,
+)
 
 
 def _make_metadata(file_id, *, size_bytes: int = 10) -> FileMetadata:
@@ -521,7 +526,7 @@ def test_render_command__delivers_secret_to_stdin_without_argv_leak():
             "password": ArgDef(
                 type=ParamType.SECRET,
                 required=True,
-                delivery=SecretDelivery(type="stdin"),
+                delivery=SecretDelivery(type="stdin", append_newline=True),
                 description="password",
             )
         },
@@ -559,6 +564,161 @@ def test_render_command__honors_secret_delivery_without_newline():
     rendered = render_command(spec, {"password": "topsecret"})
 
     assert rendered.stdin_data == b"topsecret"
+
+
+def test_render_command__delivers_secret_to_file_without_argv_leak(tmp_path: Path):
+    """
+    GIVEN a secret argument with file delivery
+    WHEN render_command is called
+    THEN argv receives a file reference and the secret file contains the secret
+    """
+
+    settings = _make_settings(tmp_path)
+    spec = _make_spec(
+        arg_defs={
+            "password": ArgDef(
+                type=ParamType.SECRET,
+                required=True,
+                delivery=SecretDelivery(type="file"),
+                description="password",
+            )
+        },
+        command_template=(
+            {"kind": "binary", "value": "echo"},
+            {"kind": "const", "value": "file:{password}"},
+        ),
+    )
+
+    rendered = render_command(spec, {"password": "topsecret"}, settings=settings)
+
+    try:
+        assert rendered.argv[0] == "echo"
+        assert rendered.argv[1].startswith("file:")
+        secret_path = Path(rendered.argv[1].removeprefix("file:"))
+        assert secret_path.parent == get_secret_tmp_dir(settings)
+        assert secret_path.read_text(encoding="utf-8") == "topsecret"
+        assert secret_path.stat().st_mode & 0o777 == 0o600
+        assert rendered.secret_files == (secret_path,)
+        assert rendered.secret_redactions == ("topsecret",)
+        assert rendered.stdin_data is None
+        assert "topsecret" not in rendered.argv[1]
+        assert "topsecret" not in repr(rendered)
+    finally:
+        cleanup_secret_files(rendered.secret_files, settings=settings)
+
+
+def test_render_command__file_secret_appends_newline_when_configured(
+    tmp_path: Path,
+):
+    """
+    GIVEN a file-delivered secret with append_newline enabled
+    WHEN render_command is called
+    THEN the materialized secret file ends with one newline
+    """
+
+    settings = _make_settings(tmp_path)
+    spec = _make_spec(
+        arg_defs={
+            "password": ArgDef(
+                type=ParamType.SECRET,
+                required=True,
+                delivery=SecretDelivery(type="file", append_newline=True),
+                description="password",
+            )
+        },
+        command_template=(
+            {"kind": "binary", "value": "echo"},
+            {"kind": "arg", "name": "password"},
+        ),
+    )
+
+    rendered = render_command(spec, {"password": "topsecret"}, settings=settings)
+
+    try:
+        secret_path = Path(rendered.argv[1])
+        assert secret_path.read_text(encoding="utf-8") == "topsecret\n"
+    finally:
+        cleanup_secret_files(rendered.secret_files, settings=settings)
+
+
+def test_render_command__supports_multiple_file_secret_deliveries(tmp_path: Path):
+    """
+    GIVEN two secret arguments with file delivery
+    WHEN render_command is called
+    THEN each secret receives a separate owned temp file
+    """
+
+    settings = _make_settings(tmp_path)
+    spec = _make_spec(
+        arg_defs={
+            "password": ArgDef(
+                type=ParamType.SECRET,
+                required=True,
+                delivery=SecretDelivery(type="file"),
+                description="password",
+            ),
+            "token": ArgDef(
+                type=ParamType.SECRET,
+                required=True,
+                delivery=SecretDelivery(type="file"),
+                description="token",
+            ),
+        },
+        command_template=(
+            {"kind": "binary", "value": "echo"},
+            {"kind": "arg", "name": "password"},
+            {"kind": "arg", "name": "token"},
+        ),
+    )
+
+    rendered = render_command(
+        spec,
+        {"password": "topsecret", "token": "othertopsecret"},
+        settings=settings,
+    )
+
+    try:
+        first_path = Path(rendered.argv[1])
+        second_path = Path(rendered.argv[2])
+        assert first_path != second_path
+        assert first_path.read_text(encoding="utf-8") == "topsecret"
+        assert second_path.read_text(encoding="utf-8") == "othertopsecret"
+        assert rendered.secret_files == (first_path, second_path)
+        assert rendered.secret_redactions == ("topsecret", "othertopsecret")
+    finally:
+        cleanup_secret_files(rendered.secret_files, settings=settings)
+
+
+def test_render_command__cleans_file_secret_when_render_later_fails(
+    tmp_path: Path,
+):
+    """
+    GIVEN a file-delivered secret and an invalid later command token
+    WHEN render_command fails after creating the secret file
+    THEN the owned secret file is cleaned up
+    """
+
+    settings = _make_settings(tmp_path)
+    spec = _make_spec(
+        arg_defs={
+            "password": ArgDef(
+                type=ParamType.SECRET,
+                required=True,
+                delivery=SecretDelivery(type="file"),
+                description="password",
+            )
+        },
+        command_template=(
+            {"kind": "binary", "value": "echo"},
+            {"kind": "arg", "name": "password"},
+            cast(CommandElement, {"kind": "unsupported"}),
+        ),
+    )
+
+    with pytest.raises(ActionRuntimeRenderError, match="Unsupported command token"):
+        render_command(spec, {"password": "topsecret"}, settings=settings)
+
+    assert list(get_secret_tmp_dir(settings).glob("secret_*.tmp")) == []
 
 
 def test_render_command__rejects_secret_arg_token_at_runtime():
@@ -605,7 +765,7 @@ def test_render_command__rejects_secret_const_placeholder_at_runtime():
         },
         command_template=(
             {"kind": "binary", "value": "echo"},
-            {"kind": "const", "value": "pass:{password}"},
+            {"kind": "const", "value": "secret:{password}"},
         ),
     )
 

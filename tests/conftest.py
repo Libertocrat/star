@@ -227,6 +227,23 @@ actions:
             - "-out"
             - output: cmd_out
             - "16"
+
+    hash_secret:
+        description: "Hash a sensitive string with SHA-256"
+        summary: "Hash secret"
+        tags: [secret, runtime, openssl, hash]
+        args:
+            password:
+                type: secret
+                required: true
+                delivery:
+                    type: file
+                description: "Secret string handled through temporary file delivery"
+        command:
+            - binary: openssl
+            - "dgst"
+            - "-sha256"
+            - arg: password
 """.strip(),
         encoding="utf-8",
     )
@@ -739,9 +756,7 @@ def file_factory(sandbox_file_factory):
         # ------------------------------------------------------------------
         if file_type == "python":
             py_bytes = (
-                b"#!/usr/bin/env python3\n"
-                b"import sys\n"
-                b"sys.stdout.write('STAR\\n')\n"
+                b"#!/usr/bin/env python3\nimport sys\nsys.stdout.write('STAR\\n')\n"
             )
             return sandbox_file_factory(name=name, content=py_bytes)
 

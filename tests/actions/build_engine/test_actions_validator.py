@@ -1029,11 +1029,11 @@ def test_validate_modules_rejects_secret_command_literal_placeholder(
                 "description": "password",
             }
         },
-        command=[{"binary": "echo"}, "pass:{password}"],
+        command=[{"binary": "echo"}, "secret:{password}"],
     )
     module = make_module_spec(make_module_payload(actions={"encrypt": action}))
 
-    with pytest.raises(ActionSpecsParseError, match="unsupported type 'secret'"):
+    with pytest.raises(ActionSpecsParseError, match="cannot be rendered directly"):
         validate_modules([module])
 
 
@@ -1644,6 +1644,36 @@ def test_validate_modules_accepts_required_secret_with_stdin_delivery(
     validate_modules([module])
 
 
+def test_validate_modules_accepts_required_secret_with_file_delivery(
+    make_module_payload,
+    make_action_payload,
+    make_module_spec,
+):
+    """
+    GIVEN a required secret arg consumed by file delivery
+    WHEN validate_modules is called
+    THEN validation succeeds with exactly one safe file placeholder reference
+    """
+    action = make_action_payload(
+        args={
+            "password": {
+                "type": "secret",
+                "required": True,
+                "delivery": {
+                    "type": "file",
+                    "append_newline": False,
+                },
+                "constraints": {"min_length": 1, "max_length": 64},
+                "description": "password",
+            }
+        },
+        command=[{"binary": "echo"}, "file:{password}"],
+    )
+    module = make_module_spec(make_module_payload(actions={"encrypt": action}))
+
+    validate_modules([module])
+
+
 def test_validate_modules_rejects_delivery_on_non_secret_arg(
     make_module_payload,
     make_action_payload,
@@ -1758,6 +1788,99 @@ def test_validate_modules_rejects_multiple_stdin_secret_deliveries(
 
     with pytest.raises(ActionSpecsParseError, match="only one secret arg"):
         validate_modules([module])
+
+
+def test_validate_modules_accepts_multiple_file_secret_deliveries(
+    make_module_payload,
+    make_action_payload,
+    make_module_spec,
+):
+    """
+    GIVEN an action with two different file-delivered secret args
+    WHEN validate_modules is called
+    THEN validation succeeds because file delivery has per-arg references
+    """
+    action = make_action_payload(
+        args={
+            "password": {
+                "type": "secret",
+                "required": True,
+                "delivery": {"type": "file"},
+                "description": "password",
+            },
+            "token": {
+                "type": "secret",
+                "required": True,
+                "delivery": {"type": "file"},
+                "description": "token",
+            },
+        },
+        command=[
+            {"binary": "echo"},
+            {"arg": "password"},
+            "file:{token}",
+        ],
+    )
+    module = make_module_spec(make_module_payload(actions={"encrypt": action}))
+
+    validate_modules([module])
+
+
+def test_validate_modules_rejects_file_secret_not_referenced(
+    make_module_payload,
+    make_action_payload,
+    make_module_spec,
+):
+    """
+    GIVEN a file-delivered secret arg without a command arg reference
+    WHEN validate_modules is called
+    THEN ActionSpecsParseError is raised
+    """
+    action = make_action_payload(
+        args={
+            "password": {
+                "type": "secret",
+                "required": True,
+                "delivery": {"type": "file"},
+                "description": "password",
+            }
+        },
+        command=[{"binary": "echo"}],
+    )
+    module = make_module_spec(make_module_payload(actions={"encrypt": action}))
+
+    with pytest.raises(ActionSpecsParseError, match="referenced at least once"):
+        validate_modules([module])
+
+
+def test_validate_modules_accepts_file_secret_referenced_multiple_times(
+    make_module_payload,
+    make_action_payload,
+    make_module_spec,
+):
+    """
+    GIVEN a file-delivered secret arg referenced multiple times in command
+    WHEN validate_modules is called
+    THEN validation succeeds because each reference renders the temp file path
+    """
+    action = make_action_payload(
+        args={
+            "password": {
+                "type": "secret",
+                "required": True,
+                "delivery": {"type": "file"},
+                "description": "password",
+            }
+        },
+        command=[
+            {"binary": "echo"},
+            {"arg": "password"},
+            "file:{password}",
+        ],
+    )
+    module = make_module_spec(make_module_payload(actions={"encrypt": action}))
+
+    validate_modules([module])
 
 
 # ============================================================================

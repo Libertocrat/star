@@ -71,6 +71,8 @@ The main implementation lives under `src/star`.
 | `tests` | Smoke, unit, and integration tests covering startup, settings, middleware, action build/runtime layers, file APIs, and OpenAPI behavior. |
 | `scripts` | Helper scripts for OpenAPI export, docs site generation, and local port forwarding. |
 
+Within `src/star/actions/runtime`, ownership stays split by execution phase. `renderer.py` resolves params and command templates, `secret_manager.py` creates and cleans invocation-owned secret files for file-delivered `secret` args, `executor.py` runs the rendered argv without a shell, `sanitizer.py` bounds and redacts subprocess output, and `outputs_builder.py` shapes declared outputs into response payloads or managed files.
+
 ## 3. FastAPI Application Layer
 
 The application is built in `src/star/app.py` by `create_app()`.
@@ -247,9 +249,9 @@ In STAR, an action is safer than direct command execution because the command sh
 
 ### Sensitive action parameters
 
-The DSL supports `secret` args for request values such as passphrases that must remain strings at the API boundary but must not be treated as ordinary argv text. A `secret` arg is required, cannot define a default, and must declare an internal delivery policy. The currently implemented delivery sink writes the secret to subprocess stdin and keeps the delivery detail out of public action contracts.
+The DSL supports `secret` args for request values such as passphrases that must remain strings at the API boundary but must not be treated as ordinary argv text. A `secret` arg is required, cannot define a default, and must declare an internal delivery policy. Supported internal delivery sinks write the secret to subprocess stdin or materialize it as an invocation-owned temporary file reference, while keeping delivery details out of public action contracts.
 
-Build-time validation rejects `secret` args referenced through direct command args or const-template placeholders such as `pass:{password}`. Runtime rendering repeats that check as defense in depth, produces argv without the secret value, and stores only invocation-local stdin bytes plus redaction values for the output sanitizer. The executor still runs the command without a shell; `stdin=PIPE` is used only when the rendered action has stdin data, otherwise stdin is connected to `DEVNULL`.
+Build-time validation rejects unsafe `secret` usage, including direct argv rendering unless the arg uses file delivery. For `delivery: file`, direct arg references and command-literal placeholders such as `file:{password}` expand to the temporary file path, not the secret value. Runtime rendering repeats those checks as defense in depth, produces argv without the secret value, and stores only invocation-local stdin bytes, temporary secret-file ownership, and redaction values for the output sanitizer. The executor still runs the command without a shell; `stdin=PIPE` is used only when the rendered action has stdin data, otherwise stdin is connected to `DEVNULL`.
 
 Public action contracts expose the parameter as `type: secret` with password-oriented metadata and a safe example placeholder. They do not expose the internal delivery policy.
 
@@ -275,6 +277,17 @@ The file API is UUID-based. Clients do not provide raw filesystem paths to retri
 `FileMetadata` is owned by `src/star/core/schemas/files.py` because the same validated model crosses persistence, storage, action-runtime, and public response boundaries. File route schemas re-export that model for compatibility, but reusable core helpers and action runtime code import it from `core`.
 
 Action outputs can also be materialized into STAR-managed storage. Declared `file + command` outputs use runtime placeholders created before subprocess execution and finalized into managed file records after successful output handling. Sanitized stdout can also be materialized into the reserved `outputs.stdout_file` entry when the client requests `stdout_as_file=true` and the selected action allows it.
+
+### Storage layout
+
+STAR keeps service-owned runtime data under `STAR_ROOT_DIR/data/` and separates persistent managed files from invocation-local runtime artifacts:
+
+| Path | Owner | Purpose |
+| --- | --- | --- |
+| `data/files/blobs/` | Managed file storage | Immutable uploaded files and materialized action-output blobs exposed through `/v1/files` by UUID. |
+| `data/files/meta/` | Managed file storage | Metadata sidecars for managed file records. |
+| `data/files/tmp/` | Managed file storage | Staging area for upload and managed-file write workflows before atomic promotion. |
+| `data/runtime/secrets/` | Action runtime | Invocation-owned temporary files used only for file-delivered `secret` args, cleaned after render failure, success, subprocess failure, timeout, or cancellation. |
 
 ### Filesystem security primitives
 

@@ -37,6 +37,7 @@ from star.actions.runtime.file_manager import (
     create_command_output_placeholders,
     resolve_output_blob_path,
 )
+from star.actions.runtime.secret_manager import cleanup_secret_files, create_secret_file
 from star.core.config import Settings
 from star.core.schemas.files import FileMetadata
 from star.core.utils.file_storage import get_blob_path, load_file_metadata
@@ -78,6 +79,7 @@ def render_command(
         resolved_arg_values: dict[str, list[str]] = {}
         stdin_data: bytes | None = None
         secret_redactions: list[str] = []
+        secret_files = []
         for name, arg_def in spec.arg_defs.items():
             try:
                 if arg_def.type == ParamType.SECRET:
@@ -98,6 +100,20 @@ def render_command(
                         )
                         stdin_data = stdin_text.encode("utf-8")
                         secret_redactions.append(secret_value)
+                    elif arg_def.delivery.type == "file":
+                        secret_path = create_secret_file(
+                            secret_value,
+                            append_newline=arg_def.delivery.append_newline,
+                            settings=settings,
+                        )
+                        secret_files.append(secret_path)
+                        resolved_arg_values[name] = [str(secret_path)]
+                        secret_redactions.append(secret_value)
+                        continue
+                    else:
+                        raise ActionRuntimeRenderError(
+                            f"Unsupported secret delivery: {arg_def.delivery.type}"
+                        )
                     resolved_arg_values[name] = []
                     continue
 
@@ -129,6 +145,7 @@ def render_command(
                         const_token["value"],
                         spec=spec,
                         resolved=resolved,
+                        resolved_arg_values=resolved_arg_values,
                     )
                 )
                 continue
@@ -136,7 +153,10 @@ def render_command(
             if kind == "arg":
                 arg_token = cast(ArgCmd, token)
                 name = arg_token["name"]
-                if spec.arg_defs[name].type == ParamType.SECRET:
+                arg_def = spec.arg_defs[name]
+                if arg_def.type == ParamType.SECRET and (
+                    arg_def.delivery is None or arg_def.delivery.type != "file"
+                ):
                     raise ActionInvalidArgError(
                         "secret params cannot be rendered as argv"
                     )
@@ -168,15 +188,20 @@ def render_command(
             output_files=output_files,
             stdin_data=stdin_data,
             secret_redactions=tuple(secret_redactions),
+            secret_files=tuple(secret_files),
         )
 
     except ActionRuntimeError:
         if "output_files" in locals() and output_files:
             cleanup_output_placeholders(output_files, settings=settings)
+        if "secret_files" in locals() and secret_files:
+            cleanup_secret_files(secret_files, settings=settings)
         raise
     except Exception as exc:
         if "output_files" in locals() and output_files:
             cleanup_output_placeholders(output_files, settings=settings)
+        if "secret_files" in locals() and secret_files:
+            cleanup_secret_files(secret_files, settings=settings)
         raise ActionRuntimeRenderError(
             "Unexpected failure while rendering command"
         ) from exc
@@ -187,6 +212,7 @@ def _render_const_literal(
     *,
     spec: ActionSpec,
     resolved: dict[str, Any],
+    resolved_arg_values: dict[str, list[str]],
 ) -> str:
     """Render one `const` command token with restricted placeholders.
 
@@ -194,6 +220,7 @@ def _render_const_literal(
         literal: Raw const token value from the command template.
         spec: Action runtime specification.
         resolved: Resolved runtime params after defaults + request params merge.
+        resolved_arg_values: Runtime-safe argv values resolved per arg.
 
     Returns:
         Final rendered const token value.
@@ -215,21 +242,67 @@ def _render_const_literal(
     for placeholder_name in placeholders:
         try:
             arg_def = spec.arg_defs[placeholder_name]
-            placeholder_value = resolved[placeholder_name]
         except KeyError as exc:
             raise ActionRuntimeRenderError(
                 "Unexpected const template resolution failure"
             ) from exc
 
-        replacement = _resolve_const_placeholder_value(
-            name=placeholder_name,
-            arg_def=arg_def,
-            value=placeholder_value,
-        )
+        if arg_def.type == ParamType.SECRET:
+            replacement = _resolve_secret_const_placeholder_value(
+                name=placeholder_name,
+                arg_def=arg_def,
+                resolved_arg_values=resolved_arg_values,
+            )
+        else:
+            try:
+                placeholder_value = resolved[placeholder_name]
+            except KeyError as exc:
+                raise ActionRuntimeRenderError(
+                    "Unexpected const template resolution failure"
+                ) from exc
+            replacement = _resolve_const_placeholder_value(
+                name=placeholder_name,
+                arg_def=arg_def,
+                value=placeholder_value,
+            )
         rendered = rendered.replace(f"{{{placeholder_name}}}", replacement)
 
     _validate_rendered_const_token(rendered)
     return rendered
+
+
+def _resolve_secret_const_placeholder_value(
+    *,
+    name: str,
+    arg_def: ArgDef,
+    resolved_arg_values: dict[str, list[str]],
+) -> str:
+    """Resolve a const placeholder for a file-delivered secret reference.
+
+    Args:
+        name: Placeholder/arg name.
+        arg_def: Runtime arg definition.
+        resolved_arg_values: Runtime-safe argv values resolved per arg.
+
+    Returns:
+        Temporary secret file path to inject into the command literal.
+
+    Raises:
+        ActionInvalidArgError: If the secret is not file-delivered.
+        ActionRuntimeRenderError: If the materialized file reference is missing
+            or ambiguous.
+    """
+
+    if arg_def.delivery is None or arg_def.delivery.type != "file":
+        raise ActionInvalidArgError("secret params cannot be rendered as argv")
+
+    values = resolved_arg_values.get(name)
+    if values is None or len(values) != 1:
+        raise ActionRuntimeRenderError(
+            f"Secret param '{name}' has no single file reference"
+        )
+
+    return values[0]
 
 
 def _resolve_const_placeholder_value(name: str, arg_def: ArgDef, value: Any) -> str:
@@ -265,7 +338,7 @@ def _resolve_const_placeholder_value(name: str, arg_def: ArgDef, value: Any) -> 
         return string_value
 
     raise ActionRuntimeRenderError(
-        ("Unexpected const template arg type " f"'{arg_def.type.value}' for '{name}'")
+        (f"Unexpected const template arg type '{arg_def.type.value}' for '{name}'")
     )
 
 

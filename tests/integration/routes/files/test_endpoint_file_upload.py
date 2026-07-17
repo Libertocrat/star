@@ -26,6 +26,7 @@ from star.core.utils.file_storage import (
     get_blob_path,
     get_meta_dir,
     get_meta_path,
+    get_secret_tmp_dir,
     get_tmp_dir,
     load_file_metadata,
 )
@@ -42,7 +43,7 @@ def test_files_startup_creates_storage_directories(
 
     GIVEN an isolated STAR_ROOT_DIR for the test app
     WHEN the application is created
-    THEN files/blobs, files/meta, and files/tmp directories exist.
+    THEN storage and runtime secret directories exist.
     """
 
     app = create_upload_app()
@@ -56,6 +57,9 @@ def test_files_startup_creates_storage_directories(
 
     assert get_tmp_dir(settings).exists()
     assert get_tmp_dir(settings).is_dir()
+
+    assert get_secret_tmp_dir(settings).exists()
+    assert get_secret_tmp_dir(settings).is_dir()
 
 
 # ============================================================================

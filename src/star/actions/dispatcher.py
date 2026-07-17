@@ -12,6 +12,7 @@ from star.actions.registry import ActionRegistry
 from star.actions.runtime import executor as runtime_executor
 from star.actions.runtime.file_manager import cleanup_output_placeholders
 from star.actions.runtime.renderer import render_command
+from star.actions.runtime.secret_manager import cleanup_secret_files
 from star.core.config import Settings
 
 
@@ -60,6 +61,8 @@ async def dispatch_action(
     except asyncio.CancelledError:
         cleanup_output_placeholders(rendered.output_files, settings=settings)
         raise
+    finally:
+        cleanup_secret_files(rendered.secret_files, settings=settings)
 
     return DispatchedActionResult(
         rendered=rendered, execution=execution, spec=action_spec

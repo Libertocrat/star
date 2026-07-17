@@ -119,14 +119,14 @@ actions:
     ],
     ids=["encrypt", "decrypt"],
 )
-def test_builtin_aes_actions_use_secret_stdin_instead_of_pass_argv(
+def test_builtin_aes_actions_do_not_render_passphrase_in_pass_argv(
     tmp_path,
     action_id: str,
 ):
     """
     GIVEN the built-in AES actions
     WHEN the default registry is built
-    THEN password is a secret delivered through stdin and never pass: argv
+    THEN password uses secret delivery and is never rendered through pass: argv
     """
     settings = Settings.model_validate(
         {
@@ -140,13 +140,23 @@ def test_builtin_aes_actions_use_secret_stdin_instead_of_pass_argv(
     const_values = [
         token["value"] for token in spec.command_template if token["kind"] == "const"
     ]
+    arg_refs = [
+        token["name"] for token in spec.command_template if token["kind"] == "arg"
+    ]
 
     assert password.type == ParamType.SECRET
     assert password.delivery is not None
-    assert password.delivery.type == "stdin"
     assert "-pass" in const_values
-    assert "stdin" in const_values
+    assert "password" not in arg_refs
     assert not any(value.startswith("pass:") for value in const_values)
+
+    if password.delivery.type == "file":
+        assert password.delivery.append_newline is False
+        assert "file:{password}" in const_values
+    elif password.delivery.type == "stdin":
+        assert "stdin" in const_values
+    else:
+        pytest.fail(f"unexpected AES password delivery: {password.delivery.type}")
 
 
 # ============================================================================
