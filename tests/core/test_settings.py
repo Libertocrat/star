@@ -19,6 +19,7 @@ from star.core.utils.file_storage import (
     get_blob_dir,
     get_data_root,
     get_meta_dir,
+    get_secret_tmp_dir,
     get_tmp_dir,
 )
 
@@ -104,6 +105,7 @@ def test_storage_dirs_created(tmp_path, minimal_safe_env, monkeypatch):
     assert get_blob_dir(settings).exists()
     assert get_meta_dir(settings).exists()
     assert get_tmp_dir(settings).exists()
+    assert get_secret_tmp_dir(settings).exists()
 
 
 # ============================================================================

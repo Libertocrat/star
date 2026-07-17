@@ -171,6 +171,7 @@ This directly reduces the blast radius of prompt-to-command style attacks.
 Implemented across:
 
 - [src/star/actions/runtime/renderer.py](../src/star/actions/runtime/renderer.py)
+- [src/star/actions/runtime/secret_manager.py](../src/star/actions/runtime/secret_manager.py)
 - [src/star/actions/runtime/executor.py](../src/star/actions/runtime/executor.py)
 - [src/star/actions/security/policy.py](../src/star/actions/security/policy.py)
 
@@ -179,6 +180,8 @@ Security effect:
 - command rendering is deterministic and token-based
 - `None` values are rejected
 - placeholder interpolation is constrained
+- sensitive action params use explicit `secret` delivery through stdin or invocation-owned files instead of raw argv values
+- invocation-owned secret files are stored under the runtime sandbox and cleaned after render or dispatch completion paths
 - binary paths are forbidden
 - blocked binaries are denied
 - only binaries on the per-action effective allowlist can execute
@@ -214,6 +217,7 @@ Security effect:
 - ANSI sequences are stripped
 - unsafe control characters are removed
 - internal sensitive filesystem prefixes, including the runtime `STAR_ROOT_DIR`, are redacted
+- invocation-provided secret values are redacted from sanitized stdout and stderr
 - stdout and stderr are size-bounded and truncatable
 
 This is especially relevant in agentic deployments where raw tool output may be fed back into an LLM context.

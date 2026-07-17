@@ -9,12 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Added a DSL `secret` argument type for sensitive action params, with public contracts marking those params as sensitive password inputs while keeping internal delivery policy out of the public API.
+- Added a DSL `secret` argument type for sensitive action params, including stdin and ephemeral file delivery, with public contracts marking those params as sensitive password inputs while keeping internal delivery policy out of the public API.
 
 ### Security
 
-- Changed the AES-256 encrypt/decrypt actions to pass OpenSSL passphrases through stdin instead of `-pass pass:...` argv, preventing direct argv/procfs exposure of those values.
-- Rejected `secret` args rendered through direct command args or const-template placeholders, redacted invocation secret values from sanitized subprocess output, and omitted rejected input values from public validation error details.
+- Changed the AES-256 encrypt/decrypt actions to pass OpenSSL passphrases through invocation-owned temporary secret files instead of `-pass pass:...` argv, preventing direct argv/procfs exposure of those values.
+- Enforced DSL `secret` delivery rules so sensitive parameter values are never rendered as raw argv tokens, redacted those invocation-provided values from sanitized subprocess output, and omitted rejected input values from public validation error details.
 
 ## [0.1.2] - 2026-07-08
 

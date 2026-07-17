@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 from uuid import UUID
 
 
@@ -58,12 +59,18 @@ class RenderedAction:
         output_files: Mapping of output name to STAR file id for `file + command`.
         stdin_data: Optional bytes written to subprocess stdin.
         secret_redactions: Secret values that must be redacted from output.
+        secret_files: Ephemeral secret file paths owned by this invocation.
     """
 
     argv: list[str]
     output_files: dict[str, UUID]
     stdin_data: bytes | None = field(default=None, repr=False, compare=False)
     secret_redactions: tuple[str, ...] = field(
+        default_factory=tuple,
+        repr=False,
+        compare=False,
+    )
+    secret_files: tuple[Path, ...] = field(
         default_factory=tuple,
         repr=False,
         compare=False,

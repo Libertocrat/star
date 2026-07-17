@@ -212,7 +212,11 @@ def _build_arg_defs(action: ActionSpecInput) -> dict[str, ArgDef]:
                 if arg_spec.delivery is None
                 else SecretDelivery(
                     type=arg_spec.delivery.type,
-                    append_newline=arg_spec.delivery.append_newline,
+                    append_newline=(
+                        arg_spec.delivery.append_newline
+                        if arg_spec.delivery.append_newline is not None
+                        else arg_spec.delivery.type == "stdin"
+                    ),
                 )
             ),
             description=arg_spec.description,

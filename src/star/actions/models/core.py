@@ -140,11 +140,11 @@ class SecretDelivery:
 
     Attributes:
         type: Delivery sink used to pass the secret to the process.
-        append_newline: Whether stdin delivery appends a trailing newline.
+        append_newline: Whether delivery appends a trailing newline.
     """
 
-    type: Literal["stdin"]
-    append_newline: bool = True
+    type: Literal["stdin", "file"]
+    append_newline: bool = False
 
 
 @dataclass(frozen=True, slots=True)

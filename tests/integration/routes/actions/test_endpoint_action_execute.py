@@ -8,6 +8,7 @@ and that responses follow the ResponseEnvelope contract.
 They do NOT test dispatcher internals or action business logic.
 """
 
+import hashlib
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -20,6 +21,7 @@ from star.actions.exceptions import (
     ActionBinaryPathForbiddenError,
 )
 from star.core.errors import StarError
+from star.core.utils.file_storage import get_secret_tmp_dir
 from star.routes.actions.handlers.execute_action import execute_action_handler
 from star.routes.actions.schemas import ExecuteActionRequest
 
@@ -106,6 +108,41 @@ def test_execute_uses_default_param_value(client, auth_headers, valid_registry):
     assert response.status_code == 200
     assert body["success"] is True
     assert "5" in body["data"]["stdout"]
+
+
+@pytest.mark.asyncio
+async def test_execute_handler_secret_file_delivery_omits_secret_and_path(
+    valid_registry,
+    settings,
+):
+    """
+    GIVEN the execute handler receives an action that hashes a secret
+    WHEN the handler executes the action
+    THEN sanitized output includes the digest without the secret or raw temp path
+    """
+
+    request = SimpleNamespace(
+        app=SimpleNamespace(
+            state=SimpleNamespace(
+                action_registry=valid_registry,
+                settings=settings,
+            )
+        )
+    )
+    payload = ExecuteActionRequest(params={"password": "topsecret"})
+
+    data = await execute_action_handler(
+        request,
+        "test_runtime.hash_secret",
+        payload,
+    )
+    expected_digest = hashlib.sha256(b"topsecret").hexdigest()
+
+    assert data.exit_code == 0
+    assert expected_digest in data.stdout
+    assert "topsecret" not in repr(data)
+    assert str(get_secret_tmp_dir(settings)) not in data.stdout
+    assert list(get_secret_tmp_dir(settings).glob("secret_*.tmp")) == []
 
 
 # ============================================================================

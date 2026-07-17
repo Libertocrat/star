@@ -194,10 +194,10 @@ Authentication coverage is as follows:
 
 - YAML specs are discovered deterministically and checked for file size, extension, UTF-8 safety, NUL bytes, disallowed control characters, and dangerous YAML patterns.
 - `validate_modules()` rejects unsupported DSL versions, duplicate module identities, invalid identifiers, blocked binaries, malformed action declarations, and host-path-like command literals except for narrow reviewed core exceptions.
-- `secret` args cannot define defaults, cannot be optional, cannot be rendered through direct argv args or const-template placeholders, and must use an explicit sensitive delivery policy.
+- `secret` args cannot define defaults, cannot be optional, cannot be rendered as raw argv values or const-template placeholders, and must use an explicit sensitive delivery policy.
 - `build_actions()` compiles only validated modules into immutable runtime `ActionSpec` objects.
 - The registry is an explicit in-memory allowlist built from validated DSL specs.
-- `render_command()` keeps secret values out of argv and delivers currently supported secret payloads through subprocess stdin bytes owned by the invocation.
+- `render_command()` keeps secret values out of argv and delivers currently supported secret payloads through subprocess stdin bytes or invocation-owned temporary secret files under the STAR root.
 - `execute_command()` rejects binary paths, blocked binaries, and non-allowlisted binaries before subprocess execution, applies configured runtime timeouts, and cleans the owned process group on timeout or cancellation where supported.
 
 ### Filesystem mitigations
@@ -213,6 +213,7 @@ Authentication coverage is as follows:
 
 - Stdout and stderr are transformed through the runtime sanitizer before they are returned, by redacting sensitive filesystem paths under static internal prefixes and the runtime `STAR_ROOT_DIR`.
 - Invocation-provided secret values are redacted from sanitized stdout and stderr before truncation and public response construction.
+- Invocation-owned temporary secret files are removed after success, failure, timeout, or cancellation.
 - Configurable stdout and stderr size limits can truncate returned output.
 - Declared file outputs are handled through runtime placeholder and output-builder logic instead of trusting client-supplied destination paths.
 

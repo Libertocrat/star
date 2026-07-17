@@ -15,7 +15,12 @@ import pytest
 from pydantic import BaseModel, SecretStr, ValidationError
 
 from star.actions.dispatcher import DispatchedActionResult, dispatch_action
-from star.actions.exceptions import ActionBinaryBlockedError, ActionNotFoundError
+from star.actions.exceptions import (
+    ActionBinaryBlockedError,
+    ActionExecutionTimeoutError,
+    ActionNotFoundError,
+    ActionRuntimeExecError,
+)
 from star.actions.models import (
     ActionExecutionResult,
     ActionSpec,
@@ -28,11 +33,53 @@ from star.actions.registry import ActionRegistry
 from star.actions.runtime.file_manager import (
     cleanup_output_placeholders as cleanup_real_output_placeholders,
 )
-from star.core.utils.file_storage import load_file_metadata
+from star.core.utils.file_storage import get_secret_tmp_dir, load_file_metadata
 
 # ============================================================================
 # Runtime Dispatch
 # ============================================================================
+
+
+def _make_file_secret_spec() -> ActionSpec:
+    """Build an action spec with one file-delivered secret param.
+
+    Returns:
+        ActionSpec that renders a secret as a temporary file argv reference.
+    """
+
+    class Params(BaseModel):
+        """Params model with a sensitive password field.
+
+        Attributes:
+            password: Secret password consumed by file delivery.
+        """
+
+        password: SecretStr
+
+    return ActionSpec(
+        name="secret_runtime.file_secret",
+        namespace=(),
+        module="secret_runtime",
+        action="file_secret",
+        version=1,
+        params_model=Params,
+        binary="cat",
+        command_template=(
+            {"kind": "binary", "value": "cat"},
+            {"kind": "const", "value": "file:{password}"},
+        ),
+        execution_policy=BinaryPolicy(allowed=("cat",), blocked=()),
+        arg_defs={
+            "password": ArgDef(
+                type=ParamType.SECRET,
+                required=True,
+                delivery=SecretDelivery(type="file"),
+                description="password",
+            )
+        },
+        flag_defs={},
+        defaults={},
+    )
 
 
 @pytest.mark.asyncio
@@ -154,7 +201,7 @@ async def test_dispatch_action_passes_secret_stdin_data_to_executor(monkeypatch)
             "password": ArgDef(
                 type=ParamType.SECRET,
                 required=True,
-                delivery=SecretDelivery(type="stdin"),
+                delivery=SecretDelivery(type="stdin", append_newline=True),
                 description="password",
             )
         },
@@ -195,6 +242,190 @@ async def test_dispatch_action_passes_secret_stdin_data_to_executor(monkeypatch)
 
     assert captured["argv"] == ["cat"]
     assert captured["stdin_data"] == b"topsecret\n"
+
+
+@pytest.mark.asyncio
+async def test_dispatch_action_cleans_file_secret_after_success(
+    monkeypatch,
+    settings,
+):
+    """
+    GIVEN a registered action with a file-delivered secret param
+    WHEN dispatch_action completes successfully
+    THEN the temporary secret file is removed after executor returns
+    """
+
+    spec = _make_file_secret_spec()
+    registry = ActionRegistry({"secret_runtime.file_secret": spec}, [])
+    captured: dict[str, object] = {}
+
+    async def _fake_execute(argv, _spec, **kwargs):
+        """Verify the secret file exists during execution."""
+        secret_ref = argv[1]
+        secret_path = get_secret_tmp_dir(settings) / secret_ref.removeprefix("file:")
+        captured["secret_path"] = secret_path
+        captured["stdin_data"] = kwargs.get("stdin_data")
+        assert secret_path.exists()
+        assert secret_path.read_text(encoding="utf-8") == "topsecret"
+        return ActionExecutionResult(
+            returncode=0,
+            stdout=b"ok",
+            stderr=b"",
+            exec_time=0.001,
+            pid=123,
+        )
+
+    monkeypatch.setattr(
+        "star.actions.dispatcher.runtime_executor.execute_command",
+        _fake_execute,
+    )
+
+    await dispatch_action(
+        registry,
+        "secret_runtime.file_secret",
+        {"password": "topsecret"},
+        settings=settings,
+    )
+
+    secret_path = captured["secret_path"]
+    assert captured["stdin_data"] is None
+    assert not secret_path.exists()
+
+
+@pytest.mark.asyncio
+async def test_dispatch_action_cleans_file_secret_after_nonzero_exit(
+    monkeypatch,
+    settings,
+):
+    """
+    GIVEN a file-delivered secret action whose process returns nonzero
+    WHEN dispatch_action receives the execution result
+    THEN the temporary secret file is still removed
+    """
+
+    spec = _make_file_secret_spec()
+    registry = ActionRegistry({"secret_runtime.file_secret": spec}, [])
+    captured: dict[str, object] = {}
+
+    async def _fake_execute(argv, _spec, **_kwargs):
+        """Return a deterministic nonzero result."""
+        secret_ref = argv[1]
+        secret_path = get_secret_tmp_dir(settings) / secret_ref.removeprefix("file:")
+        captured["secret_path"] = secret_path
+        assert secret_path.exists()
+        return ActionExecutionResult(
+            returncode=2,
+            stdout=b"",
+            stderr=b"failed",
+            exec_time=0.001,
+            pid=123,
+        )
+
+    monkeypatch.setattr(
+        "star.actions.dispatcher.runtime_executor.execute_command",
+        _fake_execute,
+    )
+
+    result = await dispatch_action(
+        registry,
+        "secret_runtime.file_secret",
+        {"password": "topsecret"},
+        settings=settings,
+    )
+
+    secret_path = captured["secret_path"]
+    assert result.execution.returncode == 2
+    assert not secret_path.exists()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("raised", "match"),
+    [
+        (ActionRuntimeExecError("failed"), "failed"),
+        (ActionExecutionTimeoutError("timed out"), "timed out"),
+    ],
+    ids=("exec_error", "timeout"),
+)
+async def test_dispatch_action_cleans_file_secret_after_executor_error(
+    monkeypatch,
+    settings,
+    raised,
+    match,
+):
+    """
+    GIVEN a file-delivered secret action whose executor raises
+    WHEN dispatch_action propagates the runtime error
+    THEN the temporary secret file is removed
+    """
+
+    spec = _make_file_secret_spec()
+    registry = ActionRegistry({"secret_runtime.file_secret": spec}, [])
+    captured: dict[str, object] = {}
+
+    async def _fake_execute(argv, _spec, **_kwargs):
+        """Raise after confirming the secret file exists."""
+        secret_ref = argv[1]
+        secret_path = get_secret_tmp_dir(settings) / secret_ref.removeprefix("file:")
+        captured["secret_path"] = secret_path
+        assert secret_path.exists()
+        raise raised
+
+    monkeypatch.setattr(
+        "star.actions.dispatcher.runtime_executor.execute_command",
+        _fake_execute,
+    )
+
+    with pytest.raises(type(raised), match=match):
+        await dispatch_action(
+            registry,
+            "secret_runtime.file_secret",
+            {"password": "topsecret"},
+            settings=settings,
+        )
+
+    secret_path = captured["secret_path"]
+    assert not secret_path.exists()
+
+
+@pytest.mark.asyncio
+async def test_dispatch_action_cleans_file_secret_after_cancellation(
+    monkeypatch,
+    settings,
+):
+    """
+    GIVEN a file-delivered secret action whose executor is cancelled
+    WHEN dispatch_action propagates cancellation
+    THEN the temporary secret file is removed
+    """
+
+    spec = _make_file_secret_spec()
+    registry = ActionRegistry({"secret_runtime.file_secret": spec}, [])
+    captured: dict[str, object] = {}
+
+    async def _fake_execute(argv, _spec, **_kwargs):
+        """Raise cancellation after confirming the secret file exists."""
+        secret_ref = argv[1]
+        secret_path = get_secret_tmp_dir(settings) / secret_ref.removeprefix("file:")
+        captured["secret_path"] = secret_path
+        assert secret_path.exists()
+        raise asyncio.CancelledError
+
+    monkeypatch.setattr(
+        "star.actions.dispatcher.runtime_executor.execute_command",
+        _fake_execute,
+    )
+
+    with pytest.raises(asyncio.CancelledError):
+        await dispatch_action(
+            registry,
+            "secret_runtime.file_secret",
+            {"password": "topsecret"},
+            settings=settings,
+        )
+
+    secret_path = captured["secret_path"]
+    assert not secret_path.exists()
 
 
 @pytest.mark.asyncio

@@ -154,6 +154,32 @@ def get_tmp_dir(settings: Settings | None = None) -> Path:
     return get_files_root(settings) / "tmp"
 
 
+def get_runtime_root(settings: Settings | None = None) -> Path:
+    """Return the root directory for internal runtime-owned files.
+
+    Args:
+        settings: Optional pre-loaded runtime settings.
+
+    Returns:
+        Path to the `data/runtime/` directory under STAR data root.
+    """
+
+    return get_data_root(settings) / "runtime"
+
+
+def get_secret_tmp_dir(settings: Settings | None = None) -> Path:
+    """Return the directory for ephemeral action secret files.
+
+    Args:
+        settings: Optional pre-loaded runtime settings.
+
+    Returns:
+        Path to the `data/runtime/secrets/` directory.
+    """
+
+    return get_runtime_root(settings) / "secrets"
+
+
 def get_blob_path(file_id: UUID, settings: Settings | None = None) -> Path:
     """Return the persisted blob path for a file id.
 
@@ -198,6 +224,12 @@ def ensure_storage_dirs(settings: Settings | None = None) -> None:
     get_blob_dir(cfg).mkdir(parents=True, exist_ok=True)
     get_meta_dir(cfg).mkdir(parents=True, exist_ok=True)
     get_tmp_dir(cfg).mkdir(parents=True, exist_ok=True)
+    secret_tmp_dir = get_secret_tmp_dir(cfg)
+    secret_tmp_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        secret_tmp_dir.chmod(0o700)
+    except OSError:
+        logger.exception("Failed to set restrictive permissions on secret tmp dir")
 
 
 def save_file_metadata(

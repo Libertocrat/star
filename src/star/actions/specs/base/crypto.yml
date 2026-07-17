@@ -95,8 +95,7 @@ actions:
         type: secret
         required: true
         delivery:
-          type: stdin
-          append_newline: true
+          type: file
         constraints:
           min_length: 1
           max_length: 4096
@@ -119,7 +118,7 @@ actions:
       - "-out"
       - output: encrypted_file
       - "-pass"
-      - "stdin"
+      - "file:{password}"
 
 
   decrypt_file_aes256:
@@ -137,8 +136,7 @@ actions:
         type: secret
         required: true
         delivery:
-          type: stdin
-          append_newline: true
+          type: file
         constraints:
           min_length: 1
           max_length: 4096
@@ -161,4 +159,4 @@ actions:
       - "-out"
       - output: decrypted_file
       - "-pass"
-      - "stdin"
+      - "file:{password}"

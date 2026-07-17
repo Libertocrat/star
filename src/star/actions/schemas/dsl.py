@@ -14,13 +14,13 @@ class SecretDeliverySpec(BaseModel):
 
     Attributes:
         type: Supported delivery sink for the secret value.
-        append_newline: Whether to append a newline when writing to stdin.
+        append_newline: Whether to append a newline when writing secret bytes.
     """
 
     model_config = ConfigDict(extra="forbid")
 
-    type: Literal["stdin"]
-    append_newline: bool = True
+    type: Literal["stdin", "file"]
+    append_newline: bool | None = None
 
 
 class ArgSpec(BaseModel):

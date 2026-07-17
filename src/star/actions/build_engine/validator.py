@@ -84,7 +84,7 @@ def _validate_unique_module_identities(modules: list[ModuleSpec]) -> None:
         if module_identity in seen:
             _raise_module_error(
                 ".".join(module_identity),
-                ("duplicate fully qualified module " f"'{'.'.join(module_identity)}'"),
+                (f"duplicate fully qualified module '{'.'.join(module_identity)}'"),
             )
         seen.add(module_identity)
 
@@ -685,6 +685,18 @@ def _validate_command_literal(
                 ),
             )
 
+        if arg_spec.type == ParamType.SECRET:
+            if _is_file_delivered_secret(arg_spec):
+                continue
+            _raise_action_error(
+                module.module,
+                action_name,
+                (
+                    "secret arg "
+                    f"'{placeholder_name}' cannot be rendered directly in argv"
+                ),
+            )
+
         if arg_spec.type not in CONST_TEMPLATE_ALLOWED_ARG_TYPES:
             _raise_action_error(
                 module.module,
@@ -831,16 +843,17 @@ def _validate_command_references(
                 action_name,
                 f"arg '{element.arg}' referenced in command but not defined",
             )
-        if (
-            isinstance(element, ArgCmd)
-            and element.arg in args
-            and args[element.arg].type == ParamType.SECRET
-        ):
-            _raise_action_error(
-                module_name,
-                action_name,
-                f"secret arg '{element.arg}' cannot be rendered directly in argv",
-            )
+        if isinstance(element, ArgCmd) and element.arg in args:
+            command_arg_spec = args[element.arg]
+            if command_arg_spec.type == ParamType.SECRET and (
+                command_arg_spec.delivery is None
+                or command_arg_spec.delivery.type != "file"
+            ):
+                _raise_action_error(
+                    module_name,
+                    action_name,
+                    f"secret arg '{element.arg}' cannot be rendered directly in argv",
+                )
 
         if isinstance(element, FlagCmd) and element.flag not in flags:
             _raise_action_error(
@@ -862,10 +875,13 @@ def _validate_command_references(
             except ValueError:
                 continue
             for placeholder_name in literal_placeholders:
+                placeholder_arg_spec = args.get(placeholder_name)
                 if (
-                    placeholder_name in args
-                    and args[placeholder_name].type == ParamType.SECRET
+                    placeholder_arg_spec is not None
+                    and placeholder_arg_spec.type == ParamType.SECRET
                 ):
+                    if _is_file_delivered_secret(placeholder_arg_spec):
+                        continue
                     _raise_action_error(
                         module_name,
                         action_name,
@@ -893,8 +909,7 @@ def _validate_unused_definitions(
     used_args = {
         element.arg for element in action.command if isinstance(element, ArgCmd)
     }
-    secret_stdin_args = _secret_stdin_arg_names(action)
-    used_args.update(secret_stdin_args)
+    used_args.update(_secret_delivery_arg_names(action))
     for element in action.command:
         if not isinstance(element, str):
             continue
@@ -952,6 +967,8 @@ def _validate_unused_definitions(
                     "must be referenced exactly once in command",
                 )
 
+    _validate_secret_delivery_command_usage(module_name, action_name, action)
+
 
 def _secret_stdin_arg_names(action: ActionSpecInput) -> set[str]:
     """Return secret argument names consumed by stdin delivery.
@@ -970,6 +987,82 @@ def _secret_stdin_arg_names(action: ActionSpecInput) -> set[str]:
         and arg_spec.delivery is not None
         and arg_spec.delivery.type == "stdin"
     }
+
+
+def _secret_delivery_arg_names(action: ActionSpecInput) -> set[str]:
+    """Return secret argument names consumed by any sensitive delivery.
+
+    Args:
+        action: Action specification.
+
+    Returns:
+        Set of secret argument names with delivery policy.
+    """
+
+    return {
+        arg_name
+        for arg_name, arg_spec in (action.args or {}).items()
+        if arg_spec.type == ParamType.SECRET and arg_spec.delivery is not None
+    }
+
+
+def _validate_secret_delivery_command_usage(
+    module_name: str,
+    action_name: str,
+    action: ActionSpecInput,
+) -> None:
+    """Validate command references required or forbidden by secret delivery.
+
+    Args:
+        module_name: Parent module name.
+        action_name: Action name.
+        action: Action specification.
+
+    Raises:
+        ActionSpecsParseError: If secret delivery usage is inconsistent.
+    """
+
+    arg_reference_counts: dict[str, int] = {}
+    for element in action.command:
+        if isinstance(element, ArgCmd):
+            arg_reference_counts[element.arg] = (
+                arg_reference_counts.get(element.arg, 0) + 1
+            )
+            continue
+
+        if not isinstance(element, str):
+            continue
+
+        try:
+            placeholder_names = _extract_command_literal_placeholders(element)
+        except ValueError:
+            continue
+
+        for placeholder_name in placeholder_names:
+            arg_reference_counts[placeholder_name] = (
+                arg_reference_counts.get(placeholder_name, 0) + 1
+            )
+
+    for arg_name, arg_spec in (action.args or {}).items():
+        if arg_spec.type != ParamType.SECRET or arg_spec.delivery is None:
+            continue
+
+        references = arg_reference_counts.get(arg_name, 0)
+        if arg_spec.delivery.type == "stdin" and references > 0:
+            _raise_action_error(
+                module_name,
+                action_name,
+                f"secret arg '{arg_name}' with stdin delivery must not be "
+                "referenced in command",
+            )
+
+        if arg_spec.delivery.type == "file" and references == 0:
+            _raise_action_error(
+                module_name,
+                action_name,
+                f"secret arg '{arg_name}' with file delivery must be referenced "
+                "at least once in command",
+            )
 
 
 def _validate_args(
@@ -1056,6 +1149,7 @@ def _validate_arg_secret_rules(
             action_name,
             f"arg '{arg_name}' with type 'secret' must define delivery",
         )
+        return
 
 
 def _validate_secret_delivery_uniqueness(
@@ -1081,6 +1175,23 @@ def _validate_secret_delivery_uniqueness(
             action_name,
             "only one secret arg may use stdin delivery",
         )
+
+
+def _is_file_delivered_secret(arg_spec: ArgSpec) -> bool:
+    """Return whether an arg is a secret materialized as a file reference.
+
+    Args:
+        arg_spec: Argument definition to inspect.
+
+    Returns:
+        True when the arg is a file-delivered secret.
+    """
+
+    return (
+        arg_spec.type == ParamType.SECRET
+        and arg_spec.delivery is not None
+        and arg_spec.delivery.type == "file"
+    )
 
 
 def _validate_arg_list_items_rules(
