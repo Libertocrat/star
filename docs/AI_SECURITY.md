@@ -232,11 +232,11 @@ Implemented across:
 
 Security effect:
 
-- bounded request concurrency pressure through token-bucket rate limiting
+- bounded request pressure through process-local per-client token-bucket rate limiting
 - hard request timeout ceiling
 - Prometheus counters, histograms, gauges, and request IDs for auditing and abuse detection
 
-The key limitation is that rate limiting is process-local rather than distributed.
+The key limitation is that rate limiting is per-client only within one STAR process, not distributed across workers or instances.
 
 ## OWASP Top 10 For LLM Applications 2025 Coverage Matrix
 
@@ -382,7 +382,7 @@ Implemented controls:
 
 Remaining limitation:
 
-- process-local rate limiting means horizontally scaled deployments need upstream or distributed quota enforcement to close the gap fully
+- process-local per-client rate limiting means horizontally scaled deployments need upstream or distributed quota enforcement to close the gap fully
 
 ## MITRE ATLAS Techniques Relevant To STAR
 
@@ -524,7 +524,7 @@ STAR does better than many secure tool-execution boundaries because it validates
 
 The service has meaningful availability controls in code. However:
 
-- rate limiting is process-local
+- per-client rate limiting is process-local
 - there is no distributed quota system
 - there is no per-principal throttling model
 
@@ -541,7 +541,7 @@ The codebase clearly documents that docs endpoints may remain unauthenticated wh
 - ensure all production-oriented deployment paths and release packages make docs-disabled behavior explicit and easy to verify
 - add action risk tiers so high-impact actions can be identified, documented, and later bound to stronger policies
 - add spec integrity verification for built-in and user-provided action bundles, initially through checksums and later signatures or provenance controls
-- improve per-client or per-token rate limiting beyond process-local global throttling
+- improve per-token or distributed rate limiting beyond process-local per-client throttling
 
 ### Medium priority
 

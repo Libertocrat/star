@@ -220,7 +220,7 @@ Authentication coverage is as follows:
 ### Denial of service mitigations
 
 - `RequestIntegrityMiddleware` enforces request body size limits using `star_max_file_bytes`.
-- `RateLimitMiddleware` applies a process-local token bucket using `star_rate_limit_rps`.
+- `RateLimitMiddleware` applies process-local per-client token buckets using `request.client.host` and `star_rate_limit_rps`.
 - `TimeoutMiddleware` aborts long running requests using `star_timeout_ms`.
 - Action subprocess execution also uses `star_timeout_ms` so process cleanup does not depend only on the outer HTTP timeout.
 - Upload and content-processing paths enforce size-aware behavior before persisting or returning data.
@@ -239,7 +239,7 @@ Some risks remain by design or by deployment assumption.
 
 - STAR relies on container isolation. If the container runtime is misconfigured or compromised, container-level protections may not hold.
 - STAR relies on correct storage root configuration. An incorrect `STAR_ROOT_DIR` mount target weakens the filesystem boundary.
-- `RateLimitMiddleware` is process-local. In multi-process or multi-instance deployments, each process keeps an independent token bucket.
+- `RateLimitMiddleware` is process-local. In multi-process or multi-instance deployments, each process keeps independent per-client token buckets, so upstream or distributed quota enforcement is still needed for horizontally scaled deployments.
 - `/health` and `/metrics` are intentionally unauthenticated. Docs endpoints are also unauthenticated while enabled and increase reachable surface inside the trusted network boundary.
 - Filesystem race conditions are reduced but not fully eliminated. The code explicitly notes TOCTOU limitations around some path-resolution patterns.
 - Service availability still depends on the underlying container host, mounted volume performance, and upstream request volume.

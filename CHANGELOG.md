@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Relicensed STAR from the Apache License 2.0 to the GNU Affero General Public License v3.0, and aligned the README, contribution policy, and OpenAPI metadata with the new license and commercial licensing path.
+- Changed `STAR_RATE_LIMIT_RPS` enforcement from a process-global bucket to process-local per-client host buckets, reducing cross-client blocking while preserving the existing 429 response contract.
 
 ### Security
 
