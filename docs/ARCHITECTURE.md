@@ -157,11 +157,11 @@ If security headers are disabled, the pipeline starts at `RequestIDMiddleware`.
 
 ### `RateLimitMiddleware`
 
-- Uses an in-memory async-safe token bucket.
-- Enforces a global requests-per-second limit from `star_rate_limit_rps`.
+- Uses in-memory async-safe token buckets keyed by `request.client.host`.
+- Enforces a process-local per-client requests-per-second limit from `star_rate_limit_rps`.
 - Exempts `/metrics` and, when docs are enabled, the docs endpoints.
 - Returns a structured 429 response with `Retry-After` when the bucket is empty.
-- Emits `star_rate_limited_total`.
+- Emits `star_rate_limited_total` without client identity labels to keep metric cardinality bounded.
 
 ### `TimeoutMiddleware`
 

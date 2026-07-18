@@ -118,7 +118,7 @@ class Settings(BaseSettings):
         star_max_stdout_bytes: Optional max bytes kept from sanitized stdout.
         star_max_stderr_bytes: Optional max bytes kept from sanitized stderr.
         star_timeout_ms: Per-request timeout (milliseconds).
-        star_rate_limit_rps: Rate limit in requests-per-second.
+        star_rate_limit_rps: Per-client rate limit in requests-per-second.
         star_app_version: Application semantic version (x.y.z).
         star_enable_docs: Enable OpenAPI docs endpoints. Disabled by default
             for security; enable only for local development or testing.
