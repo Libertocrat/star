@@ -13,7 +13,8 @@ from fastapi import APIRouter, Depends, File, Request, UploadFile
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import ValidationError
 
-from star.core.errors import StarError
+from star.core.errors import INVALID_REQUEST, StarError
+from star.core.responses import error_json_response, star_error_json_response
 from star.core.schemas.envelope import ResponseEnvelope
 from star.core.utils.file_storage import iter_file_chunks
 from star.routes.dependencies import get_runtime_settings
@@ -96,12 +97,11 @@ async def post_file(
                 algorithm="sha256",
             )
         except ValidationError as exc:
-            payload = ResponseEnvelope.failure(
-                code="INVALID_REQUEST",
+            return error_json_response(
+                INVALID_REQUEST,
                 message="Invalid checksum parameter.",
                 details={"errors": exc.errors()},
             )
-            return JSONResponse(status_code=400, content=payload.model_dump())
 
     try:
         settings = get_runtime_settings(request)
@@ -110,14 +110,9 @@ async def post_file(
             verify_checksum=verify_checksum,
             settings=settings,
         )
-        return ResponseEnvelope.success_response(UploadFileData(file=metadata))
+        return ResponseEnvelope.from_success(UploadFileData(file=metadata))
     except StarError as exc:
-        payload = ResponseEnvelope.failure(
-            code=exc.code,
-            message=exc.message,
-            details=exc.details,
-        )
-        return JSONResponse(status_code=exc.http_status, content=payload.model_dump())
+        return star_error_json_response(exc)
 
 
 get_metadata_description = (
@@ -166,14 +161,9 @@ async def get_file(
     try:
         settings = get_runtime_settings(request)
         metadata = await get_file_metadata_handler(file_id=id, settings=settings)
-        return ResponseEnvelope.success_response(UploadFileData(file=metadata))
+        return ResponseEnvelope.from_success(UploadFileData(file=metadata))
     except StarError as exc:
-        payload = ResponseEnvelope.failure(
-            code=exc.code,
-            message=exc.message,
-            details=exc.details,
-        )
-        return JSONResponse(status_code=exc.http_status, content=payload.model_dump())
+        return star_error_json_response(exc)
 
 
 list_files_description = (
@@ -213,14 +203,9 @@ async def list_files(
             extension=extension,
             settings=settings,
         )
-        return ResponseEnvelope.success_response(result)
+        return ResponseEnvelope.from_success(result)
     except StarError as exc:
-        payload = ResponseEnvelope.failure(
-            code=exc.code,
-            message=exc.message,
-            details=exc.details,
-        )
-        return JSONResponse(status_code=exc.http_status, content=payload.model_dump())
+        return star_error_json_response(exc)
 
 
 get_content_description = (
@@ -286,12 +271,7 @@ async def get_file_content(id: UUID, request: Request):
             headers=headers,
         )
     except StarError as exc:
-        payload = ResponseEnvelope.failure(
-            code=exc.code,
-            message=exc.message,
-            details=exc.details,
-        )
-        return JSONResponse(status_code=exc.http_status, content=payload.model_dump())
+        return star_error_json_response(exc)
 
 
 delete_description = (
@@ -319,11 +299,6 @@ async def delete_file(
     try:
         settings = get_runtime_settings(request)
         result = await delete_file_handler(file_id=id, settings=settings)
-        return ResponseEnvelope.success_response(DeleteFileData(file=result))
+        return ResponseEnvelope.from_success(DeleteFileData(file=result))
     except StarError as exc:
-        payload = ResponseEnvelope.failure(
-            code=exc.code,
-            message=exc.message,
-            details=exc.details,
-        )
-        return JSONResponse(status_code=exc.http_status, content=payload.model_dump())
+        return star_error_json_response(exc)

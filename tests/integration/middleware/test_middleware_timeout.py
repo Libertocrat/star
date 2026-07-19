@@ -5,7 +5,7 @@ These tests validate timeout enforcement as an HTTP-level contract.
 They ensure that:
 
 - Slow handlers are terminated with HTTP 504.
-- The ResponseEnvelope failure contract is preserved.
+- The ResponseEnvelope error contract is preserved.
 - X-Request-Id propagates correctly.
 - Metrics are incremented correctly.
 - Exempt endpoints bypass timeout.
@@ -133,7 +133,7 @@ def slow_health_endpoint(monkeypatch):
     async def slow_health():
         """Simulate delayed health response beyond timeout threshold."""
         await asyncio.sleep(0.2)
-        payload = ResponseEnvelope.success_response({"status": "ok"}).model_dump()
+        payload = ResponseEnvelope.from_success({"status": "ok"}).model_dump()
         return JSONResponse(payload)
 
     monkeypatch.setattr(

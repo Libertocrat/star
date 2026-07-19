@@ -14,7 +14,7 @@ from starlette.responses import JSONResponse, Response
 from starlette.types import ASGIApp
 
 from star.core.errors import TIMEOUT, StarError
-from star.core.schemas.envelope import ResponseEnvelope
+from star.core.responses import error_json_response
 from star.core.utils.http import normalize_metric_path
 
 logger = logging.getLogger("star.middleware.timeout")
@@ -138,16 +138,7 @@ class TimeoutMiddleware(BaseHTTPMiddleware):
         )
 
         headers: dict[str, str] = {"X-Request-Id": request_id} if request_id else {}
-        payload = ResponseEnvelope.failure(
-            code=TIMEOUT.code,
-            message=TIMEOUT.default_message,
-        ).model_dump()
-
-        return JSONResponse(
-            status_code=TIMEOUT.http_status,
-            content=payload,
-            headers=headers,
-        )
+        return error_json_response(TIMEOUT, headers=headers)
 
     def _is_exempt_path(self, request: Request) -> bool:
         """Return True when the request should skip timeout enforcement."""

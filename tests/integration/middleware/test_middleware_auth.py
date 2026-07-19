@@ -6,7 +6,7 @@ They ensure that:
 
 - Protected endpoints enforce Bearer token authentication.
 - Explicitly exempt endpoints ignore authentication entirely.
-- Unauthorized responses follow the ResponseEnvelope failure contract.
+- Unauthorized responses follow the ResponseEnvelope error contract.
 - Request IDs propagate correctly through authentication failures.
 
 They do NOT validate cryptographic correctness, token generation,
@@ -136,14 +136,14 @@ def test_protected_endpoint_allows_valid_auth(
 # ============================================================================
 
 
-def test_unauthorized_response_uses_response_envelope_failure(
+def test_unauthorized_response_uses_response_envelope_error(
     client,
     valid_registry,
 ):
     """
     GIVEN a protected endpoint
     WHEN authentication fails
-    THEN the response body follows the ResponseEnvelope failure contract
+    THEN the response body follows the ResponseEnvelope error contract
     """
     client.app.state.action_registry = valid_registry
 
@@ -154,7 +154,7 @@ def test_unauthorized_response_uses_response_envelope_failure(
     body = response.json()
     assert isinstance(body, dict)
 
-    # ResponseEnvelope failure invariants
+    # ResponseEnvelope error invariants
     assert body["success"] is False
     assert body["error"] is not None
     assert body["error"]["code"] == UNAUTHORIZED.code

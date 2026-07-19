@@ -5,7 +5,7 @@ Structural hygiene enforcement layer (NOT a WAF).
 
 Responsibilities:
 - Reject malformed / structurally invalid requests as early as possible.
-- Always return ResponseEnvelope.failure (never raw HTTPException).
+- Always return the standard error envelope (never raw HTTPException).
 - Always include X-Request-Id (preserve if present, otherwise generate).
 - Enforce:
   - Path sanity (NUL, backslash, control chars <0x20 except TAB)
@@ -24,11 +24,10 @@ import uuid
 from typing import Final
 
 from prometheus_client import Counter
-from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from star.core.errors import FILE_TOO_LARGE, INVALID_REQUEST, ErrorDef
-from star.core.schemas.envelope import ResponseEnvelope
+from star.core.responses import error_json_response
 from star.core.security.headers import find_header_integrity_violation
 from star.core.security.http_validation import (
     normalize_content_type,
@@ -474,12 +473,9 @@ class RequestIntegrityMiddleware:
             },
         )
 
-        payload = ResponseEnvelope.failure(
-            code=error.code, message=message
-        ).model_dump()
-        response = JSONResponse(
-            status_code=error.http_status,
-            content=payload,
+        response = error_json_response(
+            error,
+            message=message,
             headers={"X-Request-Id": request_id},
         )
         await response(scope, receive, send)
