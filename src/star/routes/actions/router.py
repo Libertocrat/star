@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 
 from star.core.errors import StarError
+from star.core.responses import star_error_json_response
 from star.core.schemas.envelope import ResponseEnvelope
 from star.routes.actions.handlers.execute_action import execute_action_handler
 from star.routes.actions.handlers.get_action_specs import get_action_specs_handler
@@ -51,14 +52,9 @@ async def list_actions(
 
     try:
         result = await list_actions_handler(request, req=req)
-        return ResponseEnvelope.success_response(result)
+        return ResponseEnvelope.from_success(result)
     except StarError as exc:
-        payload = ResponseEnvelope.failure(
-            code=exc.code,
-            message=exc.message,
-            details=exc.details,
-        )
-        return JSONResponse(status_code=exc.http_status, content=payload.model_dump())
+        return star_error_json_response(exc)
 
 
 @router.get(
@@ -82,14 +78,9 @@ async def get_action_specs(
 
     try:
         result = await get_action_specs_handler(request, action_id)
-        return ResponseEnvelope.success_response(result)
+        return ResponseEnvelope.from_success(result)
     except StarError as exc:
-        payload = ResponseEnvelope.failure(
-            code=exc.code,
-            message=exc.message,
-            details=exc.details,
-        )
-        return JSONResponse(status_code=exc.http_status, content=payload.model_dump())
+        return star_error_json_response(exc)
 
 
 @router.post(
@@ -106,11 +97,6 @@ async def execute_action(
 
     try:
         data = await execute_action_handler(request, action_id, req)
-        return ResponseEnvelope.success_response(data)
+        return ResponseEnvelope.from_success(data)
     except StarError as exc:
-        payload = ResponseEnvelope.failure(
-            code=exc.code,
-            message=exc.message,
-            details=exc.details,
-        )
-        return JSONResponse(status_code=exc.http_status, content=payload.model_dump())
+        return star_error_json_response(exc)

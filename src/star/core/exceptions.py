@@ -13,7 +13,6 @@ import logging
 from typing import Awaitable, Callable, cast
 
 from fastapi import Request
-from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import Response
 
@@ -30,7 +29,7 @@ from star.core.errors import (
     UNSUPPORTED_MEDIA_TYPE,
     ErrorDef,
 )
-from star.core.schemas.envelope import ResponseEnvelope
+from star.core.responses import error_json_response
 
 logger = logging.getLogger("star.exceptions")
 
@@ -77,14 +76,10 @@ async def _http_exception_handler(request: Request, exc: StarletteHTTPException)
         exc.status_code,
         exc.detail,
     )
-    payload = ResponseEnvelope.failure(
-        code=err_def.code,
-        message=err_def.default_message,
-    ).model_dump()
-    return JSONResponse(
-        status_code=exc.status_code,
-        content=payload,
+    return error_json_response(
+        err_def,
         headers=headers,
+        status_code=exc.status_code,
     )
 
 
@@ -119,7 +114,8 @@ async def generic_exception_handler(request: Request, exc: Exception):
     rid = getattr(request.state, "request_id", None)
     headers = {"X-Request-Id": rid} if rid else {}
     logger.exception("Unhandled exception (request_id=%s): %s", rid, exc)
-    payload = ResponseEnvelope.failure(
-        code="INTERNAL_ERROR", message="Internal Server Error"
-    ).model_dump()
-    return JSONResponse(status_code=500, content=payload, headers=headers)
+    return error_json_response(
+        INTERNAL_ERROR,
+        message="Internal Server Error",
+        headers=headers,
+    )

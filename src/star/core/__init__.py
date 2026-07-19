@@ -5,19 +5,23 @@ for example exception handlers, metrics helpers and global logging
 configuration.
 
 Exports:
-    http_exception_handler, generic_exception_handler
+    error_json_response, generic_exception_handler, http_exception_handler,
+    star_error_json_response
 """
 
 from .config import Settings, get_settings
 from .exceptions import generic_exception_handler, http_exception_handler
+from .responses import error_json_response, star_error_json_response
 from .schemas import envelope
 from .security import paths
 
 __all__ = [
     "Settings",
+    "error_json_response",
     "get_settings",
     "paths",
     "envelope",
     "generic_exception_handler",
     "http_exception_handler",
+    "star_error_json_response",
 ]

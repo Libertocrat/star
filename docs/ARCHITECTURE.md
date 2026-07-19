@@ -108,6 +108,8 @@ Two global handlers are installed:
 
 The route layer is intentionally thin. It resolves and type-validates runtime dependencies from application state, delegates to runtime or storage handlers, and maps domain exceptions to stable STAR error codes.
 
+Successful JSON routes return `ResponseEnvelope` Pydantic models, which FastAPI serializes through each route's declared response model. Error paths build the same envelope shape through centralized HTTP JSON response helpers when a non-success HTTP status or error-specific header is required.
+
 ## 4. Middleware Security Layer
 
 STAR applies several middleware layers in `src/star/middleware`. In `app.py`, middleware is added in reverse of the runtime execution order because Starlette runs the last added middleware first.

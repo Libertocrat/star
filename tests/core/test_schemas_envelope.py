@@ -53,15 +53,15 @@ def test_error_info_accepts_optional_details():
 # ============================================================================
 
 
-def test_success_response_factory_sets_success_true():
+def test_from_success_factory_sets_success_true():
     """
-    GIVEN ResponseEnvelope.success_response(data)
+    GIVEN ResponseEnvelope.from_success(data)
     WHEN the factory method is called
     THEN success=True, data is set, error is None
     """
     payload = {"result": "ok"}
 
-    env = ResponseEnvelope.success_response(payload)
+    env = ResponseEnvelope.from_success(payload)
 
     assert env.success is True
     assert env.data == payload
@@ -73,13 +73,13 @@ def test_success_response_factory_sets_success_true():
 # ============================================================================
 
 
-def test_failure_response_factory_sets_success_false():
+def test_from_error_factory_sets_success_false():
     """
-    GIVEN ResponseEnvelope.failure(code, message)
+    GIVEN ResponseEnvelope.from_error(code, message)
     WHEN the factory method is called
     THEN success=False, error is populated, data is None
     """
-    env = ResponseEnvelope.failure(
+    env = ResponseEnvelope.from_error(
         code="ERR_INVALID_INPUT",
         message="Invalid input provided",
     )
@@ -91,15 +91,15 @@ def test_failure_response_factory_sets_success_false():
     assert env.error.message == "Invalid input provided"
 
 
-def test_failure_response_includes_error_details():
+def test_from_error_includes_error_details():
     """
-    GIVEN ResponseEnvelope.failure(code, message, details)
+    GIVEN ResponseEnvelope.from_error(code, message, details)
     WHEN the factory method is called with details
     THEN error.details is preserved
     """
     details = {"field": "path", "reason": "traversal detected"}
 
-    env = ResponseEnvelope.failure(
+    env = ResponseEnvelope.from_error(
         code="ERR_SECURITY",
         message="Security violation",
         details=details,
@@ -119,16 +119,16 @@ def test_failure_response_includes_error_details():
 def test_response_envelope_has_stable_shape():
     """
     GIVEN any ResponseEnvelope
-    WHEN instances are created from success and failure factories
+    WHEN instances are created from success and error factories
     THEN fields success, data, and error always exist
     """
-    success_env = ResponseEnvelope.success_response(data={"ok": True})
-    failure_env = ResponseEnvelope.failure(
+    success_env = ResponseEnvelope.from_success(data={"ok": True})
+    error_env = ResponseEnvelope.from_error(
         code="ERR_TEST",
         message="Test error",
     )
 
-    for env in (success_env, failure_env):
+    for env in (success_env, error_env):
         assert hasattr(env, "success")
         assert hasattr(env, "data")
         assert hasattr(env, "error")

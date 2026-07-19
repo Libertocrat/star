@@ -46,7 +46,7 @@ class ResponseEnvelope(GenericModel, Generic[T]):
     )
 
     @classmethod
-    def success_response(cls, data: T) -> "ResponseEnvelope[T]":
+    def from_success(cls, data: T) -> "ResponseEnvelope[T]":
         """Build a success envelope.
 
         Args:
@@ -59,13 +59,13 @@ class ResponseEnvelope(GenericModel, Generic[T]):
         return cls(success=True, data=data, error=None)
 
     @classmethod
-    def failure(
+    def from_error(
         cls,
         code: str,
         message: str,
         details: Optional[Dict[str, Any]] = None,
     ) -> "ResponseEnvelope[Any]":
-        """Build a failure envelope.
+        """Build an error envelope.
 
         Args:
             code: Stable machine-readable error code.
@@ -73,7 +73,7 @@ class ResponseEnvelope(GenericModel, Generic[T]):
             details: Optional structured error details.
 
         Returns:
-            A failure response envelope with populated error information.
+            An error response envelope with populated error information.
         """
 
         return cls(

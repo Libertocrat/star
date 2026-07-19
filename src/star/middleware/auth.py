@@ -12,7 +12,8 @@ from starlette.status import HTTP_401_UNAUTHORIZED
 from starlette.types import ASGIApp
 
 from star.core.config import Settings
-from star.core.schemas.envelope import ResponseEnvelope
+from star.core.errors import UNAUTHORIZED
+from star.core.responses import error_json_response
 
 
 class AuthMiddleware(BaseHTTPMiddleware):
@@ -101,9 +102,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
         headers = {"WWW-Authenticate": "Bearer"}
         if request_id:
             headers["X-Request-Id"] = request_id
-        payload = ResponseEnvelope.failure(
-            code="UNAUTHORIZED", message=detail
-        ).model_dump()
-        return JSONResponse(
-            status_code=HTTP_401_UNAUTHORIZED, content=payload, headers=headers
+        return error_json_response(
+            UNAUTHORIZED,
+            message=detail,
+            headers=headers,
+            status_code=HTTP_401_UNAUTHORIZED,
         )

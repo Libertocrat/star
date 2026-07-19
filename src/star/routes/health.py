@@ -27,7 +27,7 @@ async def health() -> ResponseEnvelope[HealthResult]:
     Returns a minimal readiness payload as defined in the SRS.
 
     Returns:
-        A JSONResponse containing the readiness status, e.g. `{"status": "ok"}`.
+        A success envelope containing the readiness status.
     """
 
-    return ResponseEnvelope.success_response(HealthResult(status="ok"))
+    return ResponseEnvelope.from_success(HealthResult(status="ok"))

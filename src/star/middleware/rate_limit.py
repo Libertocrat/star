@@ -15,7 +15,7 @@ from starlette.responses import JSONResponse, Response
 from starlette.types import ASGIApp
 
 from star.core.errors import RATE_LIMITED
-from star.core.schemas.envelope import ResponseEnvelope
+from star.core.responses import error_json_response
 from star.core.utils.http import normalize_metric_path
 
 logger = logging.getLogger("star.middleware.rate_limit")
@@ -263,16 +263,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         headers: dict[str, str] = {"X-Request-Id": request_id} if request_id else {}
         if retry_after_seconds > 0:
             headers["Retry-After"] = str(math.ceil(retry_after_seconds))
-        payload = ResponseEnvelope.failure(
-            code=RATE_LIMITED.code,
-            message=RATE_LIMITED.default_message,
-        ).model_dump()
-
-        return JSONResponse(
-            status_code=RATE_LIMITED.http_status,
-            content=payload,
-            headers=headers,
-        )
+        return error_json_response(RATE_LIMITED, headers=headers)
 
     @staticmethod
     def _resolve_rate_limit_rps(app: ASGIApp, override: int | None) -> int:
