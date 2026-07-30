@@ -217,7 +217,7 @@ def test_openapi_execute_contract_includes_integrity_and_request_id_headers(
     integrity = post["x-star-integrity"]
     assert integrity["content_type_required"] == "application/json"
     assert integrity["enforced_by"] == "RequestIntegrityMiddleware"
-    assert isinstance(integrity["body_limit_bytes"], int)
+    assert integrity["body_limit_bytes"] == 1048576
 
     request_schema = post["requestBody"]["content"]["application/json"]["schema"]
     assert request_schema["$ref"] == "#/components/schemas/ExecuteActionRequest"
@@ -234,6 +234,31 @@ def test_openapi_execute_contract_includes_integrity_and_request_id_headers(
     retry_after_schema = post["responses"]["429"]["headers"]["Retry-After"]["schema"]
     assert retry_after_schema["type"] == "string"
     assert retry_after_schema["pattern"] == "^[0-9]+$"
+
+
+def test_openapi_request_body_operations_publish_integrity_body_limits(
+    minimal_safe_env,
+    monkeypatch,
+):
+    """Validate request-body size metadata across operation types.
+
+    GIVEN docs are enabled
+    WHEN generating the OpenAPI schema
+    THEN normal request bodies publish STAR_MAX_BODY_BYTES
+    AND multipart uploads publish STAR_MAX_FILE_BYTES.
+
+    Args:
+        minimal_safe_env: Fixture that provides required STAR environment vars.
+        monkeypatch: Pytest helper used to set test-only environment values.
+    """
+    schema = _openapi_document(minimal_safe_env, monkeypatch)
+
+    execute_post = schema["paths"]["/v1/actions/{action_id}"]["post"]
+    files_post = schema["paths"]["/v1/files"]["post"]
+
+    assert execute_post["x-star-integrity"]["body_limit_bytes"] == 1048576
+    assert files_post["x-star-integrity"]["body_limit_bytes"] == 104857600
+    assert "x-star-integrity" not in schema["paths"]["/v1/actions"]["get"]
 
 
 def test_openapi_execute_examples_include_enriched_markdown_and_params(

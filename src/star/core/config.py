@@ -113,6 +113,7 @@ class Settings(BaseSettings):
     Attributes:
         star_api_token: API token required for Bearer authentication.
         star_root_dir: Root directory acting as the single STAR filesystem sandbox.
+        star_max_body_bytes: Maximum allowed bytes for non-upload request bodies.
         star_max_file_bytes: Maximum allowed bytes for file operations.
         star_max_yml_bytes: Maximum allowed bytes per DSL YAML spec file.
         star_max_stdout_bytes: Optional max bytes kept from sanitized stdout.
@@ -134,6 +135,7 @@ class Settings(BaseSettings):
     # Loaded from Docker secret in `get_settings`, not from environment.
     star_api_token: str = Field("")
     star_root_dir: str = Field("/var/lib/star")
+    star_max_body_bytes: int = Field(1024 * 1024)
     star_max_file_bytes: int = Field(104857600)
     star_max_yml_bytes: int = Field(100 * 1024)
     star_max_stdout_bytes: int | None = Field(None)

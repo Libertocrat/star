@@ -127,7 +127,7 @@ These tests instantiate the application through `create_app()` and exercise the 
 Middleware integration coverage includes:
 
 - authentication enforcement and exempt endpoints in `test_middleware_auth.py`
-- request integrity checks for content type, duplicate headers, conflicting `Content-Length` and `Transfer-Encoding`, and body size limits in `test_middleware_request_integrity.py`
+- request integrity checks for content type, duplicate headers, conflicting `Content-Length` and `Transfer-Encoding`, bodyless method rejection, general body limits, and upload-specific body limits in `test_middleware_request_integrity.py`
 - per-client rate limiting behavior, `Retry-After`, exempt endpoints, and metric labels in `test_middleware_rate_limit.py`
 - timeout handling, exempt routes, and timeout metrics in `test_middleware_timeout.py`
 - request ID generation and propagation in `test_middleware_request_id.py`
@@ -175,8 +175,9 @@ In `tests/integration/middleware` and `tests/integration/routes`, the current te
 - correct behavior for public endpoints and configurable docs/metrics auth exemptions
 - rejection of duplicate `Authorization` headers
 - rejection of malformed request bodies and unsupported content types
+- rejection of request bodies on bodyless methods such as `GET` and `DELETE`
 - rejection of conflicting `Content-Length` and `Transfer-Encoding` headers
-- enforcement of body and upload size limits
+- enforcement of separate body and upload size limits
 - rate limiting under low per-client request budgets
 - timeout enforcement and timeout exemptions for `/health` and `/metrics`
 - request ID propagation on both successful and failing responses

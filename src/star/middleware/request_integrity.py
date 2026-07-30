@@ -11,22 +11,29 @@ Responsibilities:
   - Path sanity (NUL, backslash, control chars <0x20 except TAB)
   - Header integrity via raw headers (duplicate Authorization, whitespace in name,
     control chars in name/value)
-   - Content-Type for POST /v1/actions/{action_id} (application/json base type required)
-  - Body size enforcement using star_max_file_bytes:
+  - Content-Type for routes with declared content-type policies
+  - Body size enforcement using a default limit plus explicit route policies:
     - Strict Content-Length parsing when present
     - Streaming enforcement when Content-Length is absent
+  - Rejection of request bodies on methods that STAR treats as bodyless
 """
 
 from __future__ import annotations
 
 import logging
 import uuid
+from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Final
 
 from prometheus_client import Counter
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from star.core.errors import FILE_TOO_LARGE, INVALID_REQUEST, ErrorDef
+from star.core.errors import (
+    INVALID_REQUEST,
+    REQUEST_BODY_TOO_LARGE,
+    ErrorDef,
+)
 from star.core.responses import error_json_response
 from star.core.security.headers import find_header_integrity_violation
 from star.core.security.http_validation import (
@@ -35,7 +42,7 @@ from star.core.security.http_validation import (
     path_has_disallowed_characters,
 )
 from star.core.utils.http import normalize_metric_path
-from star.middleware.schemas import ContentTypePolicy
+from star.middleware.schemas import BodyLimitPolicy, ContentTypePolicy
 
 logger = logging.getLogger("star.middleware.request_integrity")
 
@@ -45,11 +52,21 @@ REQUEST_INTEGRITY_REJECTIONS_TOTAL = Counter(
     labelnames=("path", "method", "reason"),
 )
 
-_BODY_METHODS: Final[set[str]] = {"POST", "PUT", "PATCH", "DELETE"}
+_BODY_ALLOWED_METHODS: Final[set[str]] = {"POST", "PUT", "PATCH"}
+_BODY_NOT_ALLOWED_MESSAGE: Final[str] = "Request body is not allowed for this method"
 
 
-class _BodyTooLargeError(Exception):
-    """Internal sentinel used to short-circuit downstream processing."""
+@dataclass(frozen=True, slots=True)
+class _ResolvedBodyLimit:
+    """Resolved body limit and public error contract for one request.
+
+    Attributes:
+        max_bytes: Maximum number of accepted request body bytes.
+        error: Public error returned when the request exceeds the limit.
+    """
+
+    max_bytes: int
+    error: ErrorDef
 
 
 class RequestIntegrityMiddleware:
@@ -57,10 +74,13 @@ class RequestIntegrityMiddleware:
 
     Args:
         app: The ASGI application to wrap.
-        max_body_bytes: Optional explicit body size limit (falls back to
-            `star_max_file_bytes`).
+        max_body_bytes: Optional explicit default body size limit. This limit
+            applies to non-upload request bodies.
         content_type_policies: Optional collection of policies that restrict
             the allowed content types per method/path.
+        body_limit_policies: Optional collection of method/path-specific body
+            limits for routes that need an explicit override, such as multipart
+            upload endpoints.
     """
 
     def __init__(
@@ -68,12 +88,21 @@ class RequestIntegrityMiddleware:
         app: ASGIApp,
         max_body_bytes: int | None = None,
         content_type_policies: list[ContentTypePolicy] | None = None,
+        body_limit_policies: list[BodyLimitPolicy] | None = None,
     ) -> None:
-        """Configure the middleware body limit and content-type policies."""
+        """Configure body limits and content-type policies."""
 
         self.app = app
-        self._max_body_bytes = self._resolve_max_body_bytes(app, max_body_bytes)
-        self._content_type_policies = self._index_policies(content_type_policies or [])
+        self._default_body_limit = _ResolvedBodyLimit(
+            max_bytes=self._resolve_max_body_bytes(app, max_body_bytes),
+            error=REQUEST_BODY_TOO_LARGE,
+        )
+        self._content_type_policies = self._index_content_type_policies(
+            content_type_policies or []
+        )
+        self._body_limit_policies = self._index_body_limit_policies(
+            body_limit_policies or []
+        )
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         """Process an incoming ASGI request with hygiene checks.
@@ -91,7 +120,7 @@ class RequestIntegrityMiddleware:
         method = (scope.get("method") or "").upper()
         path = scope.get("path") or ""
 
-        # Ensure request id is always available for any rejection
+        # Ensure request id is always available for any rejection.
         request_id = self._get_or_create_request_id(scope)
 
         # ------------------------------------------------------------------
@@ -136,11 +165,10 @@ class RequestIntegrityMiddleware:
             return
 
         # ------------------------------------------------------------------
-        # 3) CL + TE smuggling mitigation
+        # 3) CL + TE smuggling mitigation and Content-Length parsing
         # ------------------------------------------------------------------
-        has_content_length = (
-            self._get_header_value(raw_headers, b"content-length") is not None
-        )
+        content_length_value = self._get_header_value(raw_headers, b"content-length")
+        has_content_length = content_length_value is not None
         has_transfer_encoding = (
             self._get_header_value(raw_headers, b"transfer-encoding") is not None
         )
@@ -157,8 +185,59 @@ class RequestIntegrityMiddleware:
             )
             return
 
+        declared_size: int | None = None
+        if content_length_value is not None:
+            try:
+                declared_size = parse_content_length_strict(content_length_value)
+            except ValueError:
+                await self._send_rejection(
+                    scope=scope,
+                    receive=receive,
+                    send=send,
+                    request_id=request_id,
+                    error=INVALID_REQUEST,
+                    message="Invalid Content-Length header",
+                    reason="invalid_content_length",
+                )
+                return
+
         # ------------------------------------------------------------------
-        # 4) Content-Type enforcement (policy-driven)
+        # 4) Reject bodies on methods that STAR treats as bodyless
+        # ------------------------------------------------------------------
+        if method not in _BODY_ALLOWED_METHODS:
+            has_declared_body = declared_size is not None and declared_size > 0
+            if has_declared_body or has_transfer_encoding:
+                await self._send_rejection(
+                    scope=scope,
+                    receive=receive,
+                    send=send,
+                    request_id=request_id,
+                    error=INVALID_REQUEST,
+                    message=_BODY_NOT_ALLOWED_MESSAGE,
+                    reason="body_not_allowed",
+                )
+                return
+
+            if declared_size is None:
+                first_message = await receive()
+                if self._request_message_has_body(first_message):
+                    await self._send_rejection(
+                        scope=scope,
+                        receive=receive,
+                        send=send,
+                        request_id=request_id,
+                        error=INVALID_REQUEST,
+                        message=_BODY_NOT_ALLOWED_MESSAGE,
+                        reason="body_not_allowed",
+                    )
+                    return
+                receive = self._prepend_receive(first_message, receive)
+
+            await self.app(scope, receive, send)
+            return
+
+        # ------------------------------------------------------------------
+        # 5) Content-Type enforcement (policy-driven)
         # ------------------------------------------------------------------
         policy = self._resolve_content_type_policy(method, path)
         if policy:
@@ -178,69 +257,65 @@ class RequestIntegrityMiddleware:
                 return
 
         # ------------------------------------------------------------------
-        # 5) Body size enforcement
+        # 6) Body size enforcement
         # ------------------------------------------------------------------
-        content_length = self._get_header_value(raw_headers, b"content-length")
-        if content_length is not None:
-            try:
-                declared_size = parse_content_length_strict(content_length)
-            except ValueError:
+        body_limit = self._resolve_body_limit_policy(method, path)
+        if declared_size is not None:
+            if declared_size > body_limit.max_bytes:
                 await self._send_rejection(
                     scope=scope,
                     receive=receive,
                     send=send,
                     request_id=request_id,
-                    error=INVALID_REQUEST,
-                    message="Invalid Content-Length header",
-                    reason="invalid_content_length",
-                )
-                return
-
-            if declared_size > self._max_body_bytes:
-                await self._send_rejection(
-                    scope=scope,
-                    receive=receive,
-                    send=send,
-                    request_id=request_id,
-                    error=FILE_TOO_LARGE,
-                    message=FILE_TOO_LARGE.default_message,
+                    error=body_limit.error,
+                    message=body_limit.error.default_message,
                     reason="content_length_exceeds_limit",
                 )
                 return
 
-            # Declared size is within limit: proceed normally
+            # Declared size is within limit: proceed normally.
             await self.app(scope, receive, send)
             return
 
-        # No Content-Length: enforce streaming size limit for body-capable methods.
-        if method in _BODY_METHODS:
-            limited_receive = self._wrap_receive_with_body_limit(
-                receive=receive,
-                max_bytes=self._max_body_bytes,
-            )
-            try:
-                await self.app(scope, limited_receive, send)
-            except _BodyTooLargeError:
-                await self._send_rejection(
-                    scope=scope,
-                    receive=receive,
-                    send=send,
-                    request_id=request_id,
-                    error=FILE_TOO_LARGE,
-                    message=FILE_TOO_LARGE.default_message,
-                    reason="body_exceeds_limit",
-                )
-            return
+        limited_receive, body_limit_exceeded = self._wrap_receive_with_body_limit(
+            receive=receive,
+            max_bytes=body_limit.max_bytes,
+        )
+        response_started = False
 
-        # Methods without body (or we don't care): proceed
-        await self.app(scope, receive, send)
+        async def guarded_send(message: Message) -> None:
+            """Suppress downstream responses after the body limit is exceeded."""
+
+            nonlocal response_started
+            if body_limit_exceeded():
+                return
+            if message.get("type") == "http.response.start":
+                response_started = True
+            await send(message)
+
+        try:
+            await self.app(scope, limited_receive, guarded_send)
+        except Exception:
+            if not body_limit_exceeded():
+                raise
+
+        if body_limit_exceeded() and not response_started:
+            await self._send_rejection(
+                scope=scope,
+                receive=receive,
+                send=send,
+                request_id=request_id,
+                error=body_limit.error,
+                message=body_limit.error.default_message,
+                reason="body_exceeds_limit",
+            )
 
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _index_policies(
+    def _index_content_type_policies(
         policies: list[ContentTypePolicy],
     ) -> list[tuple[str, str, frozenset[str]]]:
         """Normalize content type policies for lookup.
@@ -262,6 +337,28 @@ class RequestIntegrityMiddleware:
                     frozenset(ct.lower() for ct in p.allowed),
                 )
             )
+
+        return indexed
+
+    @staticmethod
+    def _index_body_limit_policies(
+        policies: list[BodyLimitPolicy],
+    ) -> list[tuple[str, str, int, ErrorDef]]:
+        """Normalize body limit policies for lookup.
+
+        Args:
+            policies: List of `BodyLimitPolicy` instances.
+
+        Returns:
+            List of `(method, path, max_bytes, error)` tuples.
+        """
+
+        indexed: list[tuple[str, str, int, ErrorDef]] = []
+
+        for p in policies:
+            if p.max_bytes <= 0:
+                continue
+            indexed.append((p.method.upper(), p.path, p.max_bytes, p.error))
 
         return indexed
 
@@ -326,6 +423,26 @@ class RequestIntegrityMiddleware:
 
         return None
 
+    def _resolve_body_limit_policy(self, method: str, path: str) -> _ResolvedBodyLimit:
+        """Resolve the body limit policy matching a method/path pair.
+
+        Args:
+            method: Incoming HTTP method.
+            path: Incoming request path.
+
+        Returns:
+            Matched body limit or the default body limit.
+        """
+
+        method_upper = method.upper()
+        for policy_method, policy_path, max_bytes, error in self._body_limit_policies:
+            if policy_method != method_upper:
+                continue
+            if self._path_matches_policy_path(policy_path, path):
+                return _ResolvedBodyLimit(max_bytes=max_bytes, error=error)
+
+        return self._default_body_limit
+
     @staticmethod
     def _get_raw_headers(scope: Scope) -> list[tuple[bytes, bytes]]:
         """Return the raw headers list from the ASGI scope.
@@ -362,7 +479,7 @@ class RequestIntegrityMiddleware:
         needle = name.lower()
         for k, v in raw_headers:
             if k.lower() == needle:
-                # Use latin-1 for safe round-trip of arbitrary bytes
+                # Use latin-1 for safe round-trip of arbitrary bytes.
                 return v.decode("latin-1")
         return None
 
@@ -391,7 +508,9 @@ class RequestIntegrityMiddleware:
         return rid
 
     @classmethod
-    def _wrap_receive_with_body_limit(cls, receive: Receive, max_bytes: int) -> Receive:
+    def _wrap_receive_with_body_limit(
+        cls, receive: Receive, max_bytes: int
+    ) -> tuple[Receive, Callable[[], bool]]:
         """Wrap `receive` to enforce a total body byte limit.
 
         Args:
@@ -399,16 +518,20 @@ class RequestIntegrityMiddleware:
             max_bytes: Maximum number of allowed body bytes.
 
         Returns:
-            Wrapped receive callable that raises `_BodyTooLargeError`
-            when the limit is exceeded.
+            Wrapped receive callable plus a predicate indicating whether the
+            limit was exceeded.
         """
 
         total = 0
+        exceeded = False
 
         async def limited_receive() -> Message:
-            """Track streamed request bytes and fail once the limit is exceeded."""
+            """Track streamed request bytes and disconnect after overflow."""
 
-            nonlocal total
+            nonlocal exceeded, total
+            if exceeded:
+                return {"type": "http.disconnect"}
+
             message = await receive()
 
             if message.get("type") != "http.request":
@@ -418,11 +541,57 @@ class RequestIntegrityMiddleware:
             if body:
                 total += len(body)
                 if total > max_bytes:
-                    raise _BodyTooLargeError()
+                    exceeded = True
+                    return {"type": "http.disconnect"}
 
             return message
 
-        return limited_receive
+        def limit_exceeded() -> bool:
+            """Return whether the request stream exceeded its body limit."""
+
+            return exceeded
+
+        return limited_receive, limit_exceeded
+
+    @staticmethod
+    def _request_message_has_body(message: Message) -> bool:
+        """Return whether an ASGI request message carries body data.
+
+        Args:
+            message: ASGI message to inspect.
+
+        Returns:
+            True when the message contains body bytes or continues a body stream.
+        """
+
+        if message.get("type") != "http.request":
+            return False
+        return bool(message.get("body", b"")) or bool(message.get("more_body"))
+
+    @staticmethod
+    def _prepend_receive(first_message: Message, receive: Receive) -> Receive:
+        """Return a receive callable that replays one already-read message.
+
+        Args:
+            first_message: Message already received from the original stream.
+            receive: Original receive callable for remaining messages.
+
+        Returns:
+            Receive callable that yields `first_message` once before delegating.
+        """
+
+        replay_first = True
+
+        async def replaying_receive() -> Message:
+            """Replay the first message before delegating to the original receive."""
+
+            nonlocal replay_first
+            if replay_first:
+                replay_first = False
+                return first_message
+            return await receive()
+
+        return replaying_receive
 
     async def _send_rejection(
         self,
@@ -482,10 +651,10 @@ class RequestIntegrityMiddleware:
 
     @staticmethod
     def _resolve_max_body_bytes(app: ASGIApp, override: int | None) -> int:
-        """Determine the allowed body size limit.
+        """Determine the allowed default body size limit.
 
         Args:
-            app: ASGI application whose settings may contain `star_max_file_bytes`.
+            app: ASGI application whose settings may contain `star_max_body_bytes`.
             override: Optional explicit override.
 
         Returns:
@@ -496,11 +665,11 @@ class RequestIntegrityMiddleware:
             return override
 
         settings = getattr(getattr(app, "state", None), "settings", None)
-        configured = getattr(settings, "star_max_file_bytes", None)
+        configured = getattr(settings, "star_max_body_bytes", None)
         if isinstance(configured, int) and configured > 0:
             return configured
 
-        # Safe fallback (should not normally be hit)
+        # Safe fallback (should not normally be hit).
         return 1024 * 1024
 
 

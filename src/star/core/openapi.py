@@ -81,7 +81,7 @@ MIDDLEWARE_ERROR_MAP = [
     errors.UNAUTHORIZED,
     errors.RATE_LIMITED,
     errors.TIMEOUT,
-    errors.FILE_TOO_LARGE,
+    errors.REQUEST_BODY_TOO_LARGE,
     errors.INVALID_REQUEST,
 ]
 
@@ -153,6 +153,7 @@ def build_openapi_schema(app: FastAPI) -> dict[str, Any]:
     _patch_files_contract(schema)
     _patch_actions_list_contract(schema, app)
     _patch_actions_get_contract(schema)
+    _inject_body_limit_extensions(schema, app)
     _inject_middleware_errors(schema, MIDDLEWARE_ERROR_MAP)
     _replace_default_422(schema)
     _inject_response_headers(schema)
@@ -939,9 +940,55 @@ def _patch_execute_contract(schema: dict[str, Any], app: FastAPI) -> None:
 
     post["x-star-integrity"] = {
         "content_type_required": "application/json",
-        "body_limit_bytes": getattr(app.state.settings, "star_max_file_bytes", None),
+        "body_limit_bytes": getattr(app.state.settings, "star_max_body_bytes", None),
         "enforced_by": "RequestIntegrityMiddleware",
     }
+
+
+def _inject_body_limit_extensions(schema: dict[str, Any], app: FastAPI) -> None:
+    """Annotate request-body operations with enforced body-size limits.
+
+    Args:
+        schema: Mutable OpenAPI schema document to patch in-place.
+        app: FastAPI app carrying runtime settings.
+    """
+
+    settings = getattr(app.state, "settings", None)
+    default_limit = getattr(settings, "star_max_body_bytes", None)
+    upload_limit = getattr(settings, "star_max_file_bytes", None)
+
+    paths = schema.get("paths", {})
+    for path_item in paths.values():
+        for method, operation in path_item.items():
+            if method not in {"post", "put", "patch", "delete"}:
+                continue
+            if "requestBody" not in operation:
+                continue
+
+            limit = (
+                upload_limit if _operation_uses_multipart(operation) else default_limit
+            )
+            if limit is None:
+                continue
+
+            integrity = operation.setdefault("x-star-integrity", {})
+            integrity.setdefault("enforced_by", "RequestIntegrityMiddleware")
+            integrity["body_limit_bytes"] = limit
+
+
+def _operation_uses_multipart(operation: dict[str, Any]) -> bool:
+    """Return whether an OpenAPI operation accepts multipart form data.
+
+    Args:
+        operation: OpenAPI operation object.
+
+    Returns:
+        True when the operation request body includes `multipart/form-data`.
+    """
+
+    request_body = operation.get("requestBody", {})
+    content = request_body.get("content", {})
+    return "multipart/form-data" in content
 
 
 def _patch_operation_contract(
@@ -1190,6 +1237,16 @@ def _middleware_errors_for_operation(
     if route_path.startswith("/metrics"):
         excluded_codes = {errors.RATE_LIMITED.code, errors.TIMEOUT.code}
         return [err for err in middleware_error_map if err.code not in excluded_codes]
+
+    if route_path == "/v1/files":
+        return [
+            (
+                errors.FILE_TOO_LARGE
+                if err.code == errors.REQUEST_BODY_TOO_LARGE.code
+                else err
+            )
+            for err in middleware_error_map
+        ]
 
     return middleware_error_map
 

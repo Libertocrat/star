@@ -101,7 +101,7 @@ The application exposes these HTTP entry points:
 Attack inputs include:
 
 - request headers, especially `Authorization`, `Content-Type`, `Content-Length`, `Transfer-Encoding`, and `X-Request-Id`
-- request body content sent to `POST /v1/actions/{action_id}` and multipart form uploads sent to `/v1/files`
+- request body content sent to body-capable endpoints, including `POST /v1/actions/{action_id}` and multipart form uploads sent to `/v1/files`
 - `action_id` path parameters on `GET /v1/actions/{action_id}` and `POST /v1/actions/{action_id}`
 - discovery query parameters such as `q`, `tags`, and `match` on `GET /v1/actions`
 - `file_id` path parameters and file query or filter parameters on `/v1/files` routes
@@ -184,7 +184,7 @@ Authentication coverage is as follows:
 
 ### Input validation mitigations
 
-- `RequestIntegrityMiddleware` rejects malformed paths, malformed raw headers, invalid `Content-Length`, unsupported content types, and oversized bodies.
+- `RequestIntegrityMiddleware` rejects malformed paths, malformed raw headers, invalid `Content-Length`, unsupported content types, request bodies on bodyless methods, and oversized bodies.
 - `ContentTypePolicy` restricts `POST /v1/actions/{action_id}` to `application/json` and `POST /v1/files` to `multipart/form-data`.
 - Action execution validates params against the action-specific generated `params_model`.
 - Runtime rendering rejects invalid placeholder values and `None` values before execution.
@@ -219,7 +219,7 @@ Authentication coverage is as follows:
 
 ### Denial of service mitigations
 
-- `RequestIntegrityMiddleware` enforces request body size limits using `star_max_file_bytes`.
+- `RequestIntegrityMiddleware` enforces `star_max_body_bytes` for non-upload request bodies and `star_max_file_bytes` for multipart file uploads.
 - `RateLimitMiddleware` applies process-local per-client token buckets using `request.client.host` and `star_rate_limit_rps`.
 - `TimeoutMiddleware` aborts long running requests using `star_timeout_ms`.
 - Action subprocess execution also uses `star_timeout_ms` so process cleanup does not depend only on the outer HTTP timeout.

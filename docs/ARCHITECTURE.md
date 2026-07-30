@@ -155,7 +155,8 @@ If security headers are disabled, the pipeline starts at `RequestIDMiddleware`.
 - Rejects malformed raw headers, including duplicate `Authorization` headers, whitespace in header names, and control characters in names or values.
 - Rejects requests that contain both `Content-Length` and `Transfer-Encoding`.
 - Enforces `application/json` for `POST /v1/actions/{action_id}` and `multipart/form-data` for `POST /v1/files`.
-- Enforces maximum body size through strict `Content-Length` parsing or streaming body counting when the header is absent.
+- Rejects request bodies on methods that normally do not carry one, such as `GET` and `DELETE`.
+- Enforces `STAR_MAX_BODY_BYTES` for non-upload request bodies and `STAR_MAX_FILE_BYTES` for multipart file uploads through strict `Content-Length` parsing or streaming body counting when the header is absent.
 - Emits rejection metrics through `star_request_integrity_rejections_total`.
 
 ### `RateLimitMiddleware`
@@ -339,6 +340,7 @@ Required settings include:
 
 Validated runtime controls include:
 
+- `STAR_MAX_BODY_BYTES`
 - `STAR_MAX_FILE_BYTES`
 - `STAR_MAX_YML_BYTES`
 - `STAR_TIMEOUT_MS`
