@@ -108,8 +108,9 @@ def test_request_id_is_present_across_endpoints(
     client.app.state.action_registry = valid_registry
 
     kwargs = {}
-    if path == f"/v1/actions/{TEST_ACTION_ID}":
+    if path in {"/metrics", f"/v1/actions/{TEST_ACTION_ID}"}:
         kwargs["headers"] = auth_headers
+    if path == f"/v1/actions/{TEST_ACTION_ID}":
         kwargs["json"] = {}
 
     response = (

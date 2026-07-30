@@ -248,6 +248,7 @@ def test_internal_server_error_increments_requests_duration_and_errors_5xx(
 )
 def test_metrics_endpoint_is_excluded_from_observability_instrumentation(
     client,
+    auth_headers,
     repetitions: int,
 ):
     """
@@ -262,7 +263,7 @@ def test_metrics_endpoint_is_excluded_from_observability_instrumentation(
     before_errors_5xx = errors_total_value("5xx")
 
     for _ in range(repetitions):
-        response = client.get("/metrics")
+        response = client.get("/metrics", headers=auth_headers)
         assert response.status_code == 200
 
     assert requests_total_value("GET", "/metrics", "200") == before_requests

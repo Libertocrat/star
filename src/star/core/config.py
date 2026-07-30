@@ -122,6 +122,10 @@ class Settings(BaseSettings):
         star_app_version: Application semantic version (x.y.z).
         star_enable_docs: Enable OpenAPI docs endpoints. Disabled by default
             for security; enable only for local development or testing.
+        star_docs_require_auth: Require Bearer authentication for docs
+            endpoints when docs are enabled.
+        star_metrics_require_auth: Require Bearer authentication for the
+            Prometheus metrics endpoint.
         star_enable_security_headers: Enable baseline response security headers.
         star_blocked_binaries_extra: Optional CSV string with extra blocked
             binaries merged into the default blocklist.
@@ -138,6 +142,8 @@ class Settings(BaseSettings):
     star_rate_limit_rps: int = Field(10)
     star_app_version: str = Field("0.1.2")
     star_enable_docs: bool = Field(False)
+    star_docs_require_auth: bool = Field(True)
+    star_metrics_require_auth: bool = Field(True)
     star_enable_security_headers: bool = Field(True)
     star_blocked_binaries_extra: str | None = Field(None)
 

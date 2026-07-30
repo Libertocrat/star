@@ -399,7 +399,7 @@ When validating action behavior locally, prefer these checks:
 - inspect one public contract with `GET /v1/actions/{action_id}`
 - execute one action with `POST /v1/actions/{action_id}` and set `stdout_as_file: true` when validating stdout-to-file materialization
 - upload or retrieve supporting files through `/v1/files`
-- in the source-tree Compose workflow, set `STAR_ENABLE_DOCS=true` only when you need to inspect `/openapi.json`, `/docs`, or `/redoc` during local development; the packaged `deploy/star` flow uses a different local default for exploration
+- in the source-tree Compose workflow, set `STAR_ENABLE_DOCS=true` only when you need to inspect `/openapi.json`, `/docs`, or `/redoc` during local development; keep `STAR_DOCS_REQUIRE_AUTH=true` unless you explicitly need browser-only unauthenticated docs, and keep `STAR_METRICS_REQUIRE_AUTH=true` unless testing a public scrape path
 
 ## 5. Dependency Sets
 
@@ -594,7 +594,7 @@ The script always prints:
 http://localhost:<PORT>/health
 ```
 
-When `STAR_ENABLE_DOCS=true`, it also prints:
+When `STAR_ENABLE_DOCS=true`, it also prints docs URLs. These docs require bearer auth unless `STAR_DOCS_REQUIRE_AUTH=false` is configured:
 
 ```text
 http://localhost:<PORT>/docs

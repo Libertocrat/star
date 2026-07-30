@@ -133,9 +133,10 @@ Implemented:
 
 Important caveats:
 
-- `/health` and `/metrics` are intentionally unauthenticated.
-- `/docs`, `/redoc`, and `/openapi.json` are also unauthenticated while docs are enabled.
-- This is acceptable only if STAR remains inside a trusted network boundary.
+- `/health` is intentionally unauthenticated.
+- `/metrics` requires bearer authentication by default and is public only when `STAR_METRICS_REQUIRE_AUTH=false`.
+- `/docs`, `/redoc`, and `/openapi.json` require bearer authentication by default when enabled and are public only when `STAR_DOCS_REQUIRE_AUTH=false`.
+- Public docs or metrics exposure is acceptable only if STAR remains inside a trusted network boundary.
 
 ### 2. Request-integrity gate
 
@@ -532,7 +533,7 @@ For multi-worker or horizontally scaled deployments, upstream ingress and distri
 
 ### 5. Docs endpoints remain a deliberate exposure tradeoff
 
-The codebase clearly documents that docs endpoints may remain unauthenticated when enabled. That is operationally convenient but increases reconnaissance value. In any semi-exposed deployment, disabling docs should be the default.
+The codebase supports unauthenticated docs only through an explicit `STAR_DOCS_REQUIRE_AUTH=false` opt-out. That is operationally convenient for local browser-based exploration but increases reconnaissance value. In any semi-exposed deployment, docs should stay disabled or authenticated.
 
 ## Hardening Roadmap
 

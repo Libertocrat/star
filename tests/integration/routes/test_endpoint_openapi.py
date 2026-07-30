@@ -43,6 +43,7 @@ def _openapi_document(
     """
 
     monkeypatch.setenv("STAR_ENABLE_DOCS", "true")
+    monkeypatch.setenv("STAR_DOCS_REQUIRE_AUTH", "false")
     app = create_app()
     if action_registry is not None:
         app.state.action_registry = action_registry
@@ -69,6 +70,7 @@ def test_openapi_is_valid_spec(minimal_safe_env, monkeypatch):
         monkeypatch: Pytest helper used to set test-only environment values.
     """
     monkeypatch.setenv("STAR_ENABLE_DOCS", "true")
+    monkeypatch.setenv("STAR_DOCS_REQUIRE_AUTH", "false")
     app = create_app()
     with TestClient(app) as client:
         response = client.get("/openapi.json")
@@ -92,7 +94,8 @@ def test_openapi_sets_security_for_private_and_public_routes(
     GIVEN docs are enabled
     WHEN generating the OpenAPI schema
     THEN global BearerAuth is enabled
-    AND health/metrics are explicitly public.
+    AND health is explicitly public
+    AND metrics inherits protected BearerAuth by default.
 
     Args:
         minimal_safe_env: Fixture that provides required STAR environment vars.
@@ -105,7 +108,33 @@ def test_openapi_sets_security_for_private_and_public_routes(
     health_get = schema["paths"]["/health"]["get"]
     metrics_get = schema["paths"]["/metrics"]["get"]
     assert health_get["security"] == []
+    assert metrics_get.get("security") != []
+    assert "401" in metrics_get["responses"]
+    assert "429" not in metrics_get["responses"]
+    assert "504" not in metrics_get["responses"]
+
+
+def test_openapi_marks_metrics_public_when_metrics_auth_is_disabled(
+    minimal_safe_env,
+    monkeypatch,
+):
+    """Validate optional public metrics auth exposure.
+
+    GIVEN docs are enabled and metrics auth is explicitly disabled
+    WHEN generating the OpenAPI schema
+    THEN metrics is marked as a public operation.
+
+    Args:
+        minimal_safe_env: Fixture that provides required STAR environment vars.
+        monkeypatch: Pytest helper used to set test-only environment values.
+    """
+    monkeypatch.setenv("STAR_METRICS_REQUIRE_AUTH", "false")
+
+    schema = _openapi_document(minimal_safe_env, monkeypatch)
+
+    metrics_get = schema["paths"]["/metrics"]["get"]
     assert metrics_get["security"] == []
+    assert "401" not in metrics_get["responses"]
 
 
 def test_openapi_actions_list_docs_describe_query_rules(
@@ -284,6 +313,7 @@ def test_openapi_execute_examples_omit_stdout_as_file_when_disallowed(
 
     del minimal_safe_env
     monkeypatch.setenv("STAR_ENABLE_DOCS", "true")
+    monkeypatch.setenv("STAR_DOCS_REQUIRE_AUTH", "false")
 
     app = create_app()
     app.state.action_registry = _build_outputs_registry(
@@ -332,6 +362,7 @@ def test_openapi_execute_response_examples_include_outputs_when_declared(
 
     del minimal_safe_env
     monkeypatch.setenv("STAR_ENABLE_DOCS", "true")
+    monkeypatch.setenv("STAR_DOCS_REQUIRE_AUTH", "false")
 
     app = create_app()
     app.state.action_registry = _build_outputs_registry(

@@ -110,6 +110,8 @@ def test_build_docs_settings_enables_docs_with_normalized_version(
     assert settings.star_app_version == "1.2.3"
     assert settings.star_root_dir == str(tmp_path / "star-docs")
     assert settings.star_enable_docs is True
+    assert settings.star_docs_require_auth is False
+    assert settings.star_metrics_require_auth is True
 
 
 def test_main_writes_deterministic_openapi_json(

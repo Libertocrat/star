@@ -74,6 +74,8 @@ def build_docs_settings() -> Settings:
         star_api_token="docs-token",  # noqa: S106 -- fixed token for documentation purposes only
         star_root_dir=get_docs_root_dir(),
         star_enable_docs=True,
+        star_docs_require_auth=False,
+        star_metrics_require_auth=True,
         star_max_file_bytes=1048576,
         star_max_yml_bytes=100 * 1024,
         star_max_stdout_bytes=None,

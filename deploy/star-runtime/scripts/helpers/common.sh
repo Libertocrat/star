@@ -484,6 +484,73 @@ is_int() {
     [[ "${value}" =~ ^-?[0-9]+$ ]]
 }
 
+# Return success when a value is a supported truthy boolean.
+is_truthy_bool() {
+    local value
+    value="$(trim "${1-}")"
+    value="${value,,}"
+
+    case "${value}" in
+        true | yes | y | 1)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+# Return success when a value is a supported falsey boolean.
+is_falsey_bool() {
+    local value
+    value="$(trim "${1-}")"
+    value="${value,,}"
+
+    case "${value}" in
+        false | no | n | 0)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+# Return the display state for docs exposure and auth policy.
+docs_access_state() {
+    local docs_enabled="${1:?docs enabled flag is required}"
+    local docs_require_auth="${2:?docs auth flag is required}"
+    local disabled_label="${3:?disabled label is required}"
+    local auth_label="${4:?auth label is required}"
+    local public_label="${5:?public label is required}"
+
+    if ! is_truthy_bool "${docs_enabled}"; then
+        printf '%s\n' "${disabled_label}"
+        return 0
+    fi
+
+    if is_falsey_bool "${docs_require_auth}"; then
+        printf '%s\n' "${public_label}"
+        return 0
+    fi
+
+    printf '%s\n' "${auth_label}"
+}
+
+# Return the display state for metrics auth policy.
+metrics_access_state() {
+    local metrics_require_auth="${1:?metrics auth flag is required}"
+    local protected_label="${2:?protected label is required}"
+    local public_label="${3:?public label is required}"
+
+    if is_falsey_bool "${metrics_require_auth}"; then
+        printf '%s\n' "${public_label}"
+        return 0
+    fi
+
+    printf '%s\n' "${protected_label}"
+}
+
 # Validate common boolean-like values.
 is_bool() {
     local value

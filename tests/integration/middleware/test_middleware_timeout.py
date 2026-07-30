@@ -368,14 +368,14 @@ def test_health_endpoint_is_exempt_from_timeout(low_timeout_client):
     assert response.status_code == 200
 
 
-def test_metrics_endpoint_is_exempt_from_timeout(low_timeout_client):
+def test_metrics_endpoint_is_exempt_from_timeout(low_timeout_client, auth_headers):
     """
     GIVEN a low timeout configuration
     WHEN /metrics is requested
     THEN it returns 200 and is not timed out
     """
 
-    response = low_timeout_client.get("/metrics")
+    response = low_timeout_client.get("/metrics", headers=auth_headers)
 
     assert response.status_code == 200
 
@@ -405,6 +405,7 @@ def test_slow_health_is_not_intercepted_by_timeout(
 def test_slow_metrics_is_not_intercepted_by_timeout(
     low_timeout_client,
     slow_metrics_endpoint,
+    auth_headers,
 ):
     """
     GIVEN a slow /metrics handler (> timeout)
@@ -414,7 +415,7 @@ def test_slow_metrics_is_not_intercepted_by_timeout(
 
     before = _timeout_metric_value("/metrics", "GET")
 
-    response = low_timeout_client.get("/metrics")
+    response = low_timeout_client.get("/metrics", headers=auth_headers)
 
     assert response.status_code == 200
     assert response.headers.get("content-type") == CONTENT_TYPE_LATEST

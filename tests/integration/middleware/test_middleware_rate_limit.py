@@ -153,6 +153,7 @@ def low_rps_docs_settings(api_token, star_root_dir) -> Settings:
             "star_root_dir": str(star_root_dir),
             "star_rate_limit_rps": 1,
             "star_enable_docs": True,
+            "star_docs_require_auth": False,
         }
     )
 
@@ -428,13 +429,13 @@ def test_metrics_endpoint_is_exempt_even_when_bucket_is_exhausted(
     """
     GIVEN an exhausted per-client rate-limit bucket
     WHEN the metrics endpoint is requested
-    THEN /metrics remains accessible because it is exempt
+    THEN /metrics remains accessible with auth because it is exempt
     """
     low_rps_client.post("/v1/actions/noop", json={}, headers=auth_headers)
     limited = low_rps_client.post("/v1/actions/noop", json={}, headers=auth_headers)
     assert limited.status_code == RATE_LIMITED.http_status
 
-    metrics = low_rps_client.get("/metrics")
+    metrics = low_rps_client.get("/metrics", headers=auth_headers)
     assert metrics.status_code == 200
 
 
