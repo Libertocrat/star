@@ -383,14 +383,14 @@ wait_for_health() {
 
 # Print a runtime summary after successful startup.
 print_final_output() {
-    local docs_state="disabled by STAR_ENABLE_DOCS=false"
+    local docs_state
+    local docs_url_value
     local secret_mode="default mode (644 while runtime is active)"
 
     [[ "${SILENT_MODE}" == "true" ]] && return 0
 
-    if [[ "${STAR_ENABLE_DOCS:-false}" == "true" ]]; then
-        docs_state="$(docs_url)"
-    fi
+    docs_url_value="$(docs_url)"
+    docs_state="$(docs_access_state "${STAR_ENABLE_DOCS:-false}" "${STAR_DOCS_REQUIRE_AUTH:-true}" "disabled by STAR_ENABLE_DOCS=false" "${docs_url_value} (auth required)" "${docs_url_value}")"
 
     if [[ "${PRODUCTION_MODE}" == "true" ]]; then
         secret_mode="production mode (640, group ${STAR_CONTAINER_GID})"

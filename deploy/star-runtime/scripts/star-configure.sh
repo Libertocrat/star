@@ -32,6 +32,8 @@ DEFAULT_STAR_RATE_LIMIT_RPS="10"
 DEFAULT_STAR_ENABLE_SECURITY_HEADERS="true"
 DEFAULT_STAR_BLOCKED_BINARIES_EXTRA=""
 DEFAULT_STAR_ENABLE_DOCS="true"
+DEFAULT_STAR_DOCS_REQUIRE_AUTH="false"
+DEFAULT_STAR_METRICS_REQUIRE_AUTH="true"
 
 # CLI mode flags.
 AUTO_MODE=false
@@ -48,6 +50,8 @@ STAR_HOST_PORT_VALUE="${DEFAULT_STAR_HOST_PORT}"
 STAR_PORT_VALUE="${DEFAULT_STAR_PORT}"
 STAR_DATA_VOLUME_VALUE=""
 STAR_ENABLE_DOCS_VALUE="${DEFAULT_STAR_ENABLE_DOCS}"
+STAR_DOCS_REQUIRE_AUTH_VALUE="${DEFAULT_STAR_DOCS_REQUIRE_AUTH}"
+STAR_METRICS_REQUIRE_AUTH_VALUE="${DEFAULT_STAR_METRICS_REQUIRE_AUTH}"
 STAR_IMAGE_VALUE=""
 
 # .env reuse mode keeps existing runtime values and skips .env rewrite.
@@ -137,9 +141,12 @@ set_selected_defaults() {
     # Production mode changes the default docs behavior.
     if [[ "${PRODUCTION_MODE}" == "true" ]]; then
         STAR_ENABLE_DOCS_VALUE="false"
+        STAR_DOCS_REQUIRE_AUTH_VALUE="true"
     else
         STAR_ENABLE_DOCS_VALUE="${DEFAULT_STAR_ENABLE_DOCS}"
+        STAR_DOCS_REQUIRE_AUTH_VALUE="${DEFAULT_STAR_DOCS_REQUIRE_AUTH}"
     fi
+    STAR_METRICS_REQUIRE_AUTH_VALUE="${DEFAULT_STAR_METRICS_REQUIRE_AUTH}"
 
     STAR_IMAGE_VALUE="ghcr.io/libertocrat/star:${STAR_VERSION_VALUE}"
     STAR_DATA_VOLUME_VALUE="${COMPOSE_PROJECT_NAME_VALUE}_star-data"
@@ -153,11 +160,11 @@ is_valid_star_version_tag() {
 
 # Show only beginner-facing recommended defaults.
 show_recommended_defaults() {
-    local docs_state="enabled"
+    local docs_state
+    local metrics_state
 
-    if [[ "${STAR_ENABLE_DOCS_VALUE}" != "true" ]]; then
-        docs_state="disabled"
-    fi
+    docs_state="$(docs_access_state "${STAR_ENABLE_DOCS_VALUE}" "${STAR_DOCS_REQUIRE_AUTH_VALUE}" "disabled" "enabled (auth required)" "enabled (public)")"
+    metrics_state="$(metrics_access_state "${STAR_METRICS_REQUIRE_AUTH_VALUE}" "protected" "public")"
 
     info "Recommended defaults:"
     printf '  %-27s %s\n' "STAR version:" "${STAR_VERSION_VALUE}"
@@ -166,6 +173,7 @@ show_recommended_defaults() {
     printf '  %-27s %s\n' "Localhost port:" "${DEFAULT_STAR_HOST_PORT} (auto-detected if busy)"
     printf '  %-27s %s\n' "Data volume:" "${STAR_DATA_VOLUME_VALUE}"
     printf '  %-27s %s\n' "Swagger / OpenAPI docs:" "${docs_state}"
+    printf '  %-27s %s\n' "Prometheus metrics:" "${metrics_state}"
 }
 
 # Prompt for a STAR version tag and keep asking until it is valid.
@@ -309,11 +317,11 @@ run_custom_prompts() {
 
 # Print custom configuration summary before write confirmation.
 show_custom_summary() {
-    local docs_state="disabled"
+    local docs_state
+    local metrics_state
 
-    if [[ "${STAR_ENABLE_DOCS_VALUE}" == "true" ]]; then
-        docs_state="enabled"
-    fi
+    docs_state="$(docs_access_state "${STAR_ENABLE_DOCS_VALUE}" "${STAR_DOCS_REQUIRE_AUTH_VALUE}" "disabled" "enabled (auth required)" "enabled (public)")"
+    metrics_state="$(metrics_access_state "${STAR_METRICS_REQUIRE_AUTH_VALUE}" "protected" "public")"
 
     section "Configuration Summary"
     printf '  %-27s %s\n' "STAR version" "${STAR_VERSION_VALUE}"
@@ -325,6 +333,7 @@ show_custom_summary() {
     printf '  %-27s %s\n' "Host port" "${STAR_HOST_PORT_VALUE}"
     #printf '  %-22s %s\n' "Internal port" "${DEFAULT_STAR_PORT}"
     printf '  %-27s %s\n' "Swagger / OpenAPI docs" "${docs_state}"
+    printf '  %-27s %s\n' "Prometheus metrics" "${metrics_state}"
     #printf '  %-22s %s\n' "User specs dir" "./user-specs"
     #printf '  %-22s %s\n' "STAR API token file" "./secrets/star_api_token.txt"
 }
@@ -372,6 +381,8 @@ load_existing_env_configuration() {
     STAR_HOST_PORT_VALUE="${STAR_HOST_PORT:-${DEFAULT_STAR_HOST_PORT}}"
     STAR_PORT_VALUE="${STAR_PORT:-${DEFAULT_STAR_PORT}}"
     STAR_ENABLE_DOCS_VALUE="${STAR_ENABLE_DOCS:-${DEFAULT_STAR_ENABLE_DOCS}}"
+    STAR_DOCS_REQUIRE_AUTH_VALUE="${STAR_DOCS_REQUIRE_AUTH:-${DEFAULT_STAR_DOCS_REQUIRE_AUTH}}"
+    STAR_METRICS_REQUIRE_AUTH_VALUE="${STAR_METRICS_REQUIRE_AUTH:-${DEFAULT_STAR_METRICS_REQUIRE_AUTH}}"
 }
 
 # Verify the host port from existing .env is still valid and available.
@@ -535,6 +546,8 @@ STAR_RATE_LIMIT_RPS=${DEFAULT_STAR_RATE_LIMIT_RPS}
 
 # API docs / runtime UI
 STAR_ENABLE_DOCS=${STAR_ENABLE_DOCS_VALUE}
+STAR_DOCS_REQUIRE_AUTH=${STAR_DOCS_REQUIRE_AUTH_VALUE}
+STAR_METRICS_REQUIRE_AUTH=${STAR_METRICS_REQUIRE_AUTH_VALUE}
 
 # Response security headers
 STAR_ENABLE_SECURITY_HEADERS=${DEFAULT_STAR_ENABLE_SECURITY_HEADERS}
@@ -543,11 +556,11 @@ EOF
 
 # Print final completion output in aligned table/spec style.
 print_final_output() {
-    local docs_state="disabled"
+    local docs_state
+    local metrics_state
 
-    if [[ "${STAR_ENABLE_DOCS_VALUE}" == "true" ]]; then
-        docs_state="enabled"
-    fi
+    docs_state="$(docs_access_state "${STAR_ENABLE_DOCS_VALUE}" "${STAR_DOCS_REQUIRE_AUTH_VALUE}" "disabled" "enabled (auth required)" "enabled (public)")"
+    metrics_state="$(metrics_access_state "${STAR_METRICS_REQUIRE_AUTH_VALUE}" "protected" "public")"
 
     section "STAR Runtime Configuration Complete"
     if [[ "${REUSE_EXISTING_ENV}" == "true" ]]; then
@@ -573,6 +586,7 @@ print_final_output() {
     printf '  %-27s %s\n' "Host port" "${STAR_HOST_PORT_VALUE}"
     printf '  %-27s %s\n' "Internal port" "${STAR_PORT_VALUE}"
     printf '  %-27s %s\n' "Swagger / OpenAPI docs" "${docs_state}"
+    printf '  %-27s %s\n' "Prometheus metrics" "${metrics_state}"
 
     printf '\nFiles and directories:\n'
     printf '  %-27s %s\n' ".env file" "$(path_relative_to_pwd "${ENV_FILE}")"
@@ -581,7 +595,7 @@ print_final_output() {
     printf '  %-27s %s\n' "STAR API token file" "$(path_relative_to_pwd "${SECRET_FILE}")"
 
     printf '\nSecurity note:\n'
-    if [[ "${STAR_ENABLE_DOCS_VALUE}" == "true" ]]; then
+    if is_truthy_bool "${STAR_ENABLE_DOCS_VALUE}"; then
         printf '  Swagger / OpenAPI docs are enabled for local testing and demos.\n'
         printf '  Disable them for production by setting STAR_ENABLE_DOCS=false.\n'
     else

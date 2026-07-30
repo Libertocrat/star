@@ -172,7 +172,7 @@ In `tests/actions/build_engine` and `tests/actions/runtime`, the current tests v
 In `tests/integration/middleware` and `tests/integration/routes`, the current tests validate:
 
 - authentication enforcement on protected endpoints
-- correct behavior for unauthenticated exempt endpoints
+- correct behavior for public endpoints and configurable docs/metrics auth exemptions
 - rejection of duplicate `Authorization` headers
 - rejection of malformed request bodies and unsupported content types
 - rejection of conflicting `Content-Length` and `Transfer-Encoding` headers

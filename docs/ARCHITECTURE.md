@@ -143,8 +143,9 @@ If security headers are disabled, the pipeline starts at `RequestIDMiddleware`.
 
 - Requires `Authorization: Bearer <token>` for protected endpoints.
 - Uses `hmac.compare_digest()` for token comparison.
-- Exempts `/health` and `/metrics`.
-- Also exempts `/docs`, `/redoc`, and `/openapi.json` when runtime docs are enabled.
+- Exempts `/health` unconditionally.
+- Exempts `/metrics` only when `star_metrics_require_auth` is false.
+- Exempts `/docs`, `/redoc`, and `/openapi.json` only when runtime docs are enabled and `star_docs_require_auth` is false.
 - Returns a 401 response envelope with `WWW-Authenticate: Bearer` on failure.
 
 ### `RequestIntegrityMiddleware`
@@ -161,7 +162,7 @@ If security headers are disabled, the pipeline starts at `RequestIDMiddleware`.
 
 - Uses in-memory async-safe token buckets keyed by `request.client.host`.
 - Enforces a process-local per-client requests-per-second limit from `star_rate_limit_rps`.
-- Exempts `/metrics` and, when docs are enabled, the docs endpoints.
+- Exempts `/metrics` and, when docs are enabled, the docs endpoints from rate-limit budget consumption. These exemptions do not bypass authentication.
 - Returns a structured 429 response with `Retry-After` when the bucket is empty.
 - Emits `star_rate_limited_total` without client identity labels to keep metric cardinality bounded.
 
@@ -344,6 +345,8 @@ Validated runtime controls include:
 - `STAR_RATE_LIMIT_RPS`
 - `STAR_APP_VERSION`
 - `STAR_ENABLE_DOCS`
+- `STAR_DOCS_REQUIRE_AUTH`
+- `STAR_METRICS_REQUIRE_AUTH`
 - `STAR_ENABLE_SECURITY_HEADERS`
 - `STAR_BLOCKED_BINARIES_EXTRA`
 
@@ -365,7 +368,7 @@ The API token is not read directly from the settings model. `get_settings()` cal
 - strict sandboxed storage root location
 - body size, timeout, and rate-limit controls
 - logging and application version
-- docs toggle and security-header toggle
+- docs mounting, docs auth, metrics auth, and security-header toggles
 
 ## 8. Observability and Metrics
 
@@ -373,7 +376,7 @@ Observability is implemented in `src/star/middleware/observability.py` and expos
 
 ### Prometheus exposure
 
-`/metrics` returns the output of `prometheus_client.generate_latest()` with Prometheus's content type. The route is intentionally small and does not build metrics itself.
+`/metrics` returns the output of `prometheus_client.generate_latest()` with Prometheus's content type. The route is intentionally small and does not build metrics itself. Metrics auth is required by default through `STAR_METRICS_REQUIRE_AUTH=true`; Prometheus can scrape protected STAR metrics by sending `Authorization: Bearer <STAR_API_TOKEN>`, preferably from a token file configured with `authorization.credentials_file`.
 
 ### Request instrumentation
 
@@ -410,7 +413,7 @@ STAR generates OpenAPI dynamically from the live application, the runtime action
 
 - adds tags and external documentation
 - injects a global bearer authentication scheme
-- marks `/health` and `/metrics` as public in the OpenAPI document
+- marks `/health` as public and marks `/metrics` public only when metrics auth is explicitly disabled
 - registers shared schemas such as `ResponseEnvelope` and `ErrorInfo`
 - enriches `POST /v1/actions/{action_id}` with action-specific examples and runtime response variants
 - marks secret params as sensitive password inputs while keeping internal delivery policy out of public examples and schemas
@@ -420,7 +423,7 @@ STAR generates OpenAPI dynamically from the live application, the runtime action
 - removes internal-only schemas from the published document
 - overrides the generated contracts for `/health` and `/metrics`
 
-The docs endpoints `/docs`, `/redoc`, and `/openapi.json` are controlled by `star_enable_docs` in `app.py`. Source-tree contributor deployments commonly leave them disabled unless they are actively needed, while the packaged `deploy/star` flow enables them by default for local exploration and `--production` flips that generated default for new runtime configs.
+The docs endpoints `/docs`, `/redoc`, and `/openapi.json` are mounted only when `star_enable_docs` is true. When mounted, they require bearer authentication by default through `star_docs_require_auth=true`. The packaged `deploy/star` local flow enables docs for exploration and sets `STAR_DOCS_REQUIRE_AUTH=false` so browser-based docs work without custom headers; `--production` disables docs and keeps docs auth enabled in generated configs.
 
 ### Export pipeline
 

@@ -14,7 +14,10 @@ or business logic.
 """
 
 import pytest
+from fastapi.testclient import TestClient
 
+from star.app import create_app
+from star.core.config import Settings
 from star.core.errors import UNAUTHORIZED
 
 TEST_ACTION_ID = "test_runtime.ping"
@@ -24,17 +27,6 @@ TEST_ACTION_ID = "test_runtime.ping"
 # ============================================================================
 
 
-@pytest.mark.parametrize(
-    "path",
-    [
-        "/health",
-        "/metrics",
-    ],
-    ids=[
-        "health",
-        "metrics",
-    ],
-)
 @pytest.mark.parametrize(
     "headers",
     [
@@ -48,20 +40,110 @@ TEST_ACTION_ID = "test_runtime.ping"
         "valid-auth",
     ],
 )
-def test_auth_is_ignored_for_exempt_endpoints(
+def test_auth_is_ignored_for_health_endpoint(
     client,
     auth_headers,
-    path,
     headers,
 ):
     """
-    GIVEN an endpoint that is explicitly exempt from authentication
+    GIVEN the health endpoint is unconditionally exempt from authentication
     WHEN it is called with missing, invalid, or valid Authorization headers
     THEN the request is allowed to proceed and returns a successful response
     """
     request_headers = auth_headers if headers is None else headers
 
-    response = client.get(path, headers=request_headers)
+    response = client.get("/health", headers=request_headers)
+
+    assert response.status_code == 200
+
+
+def test_metrics_endpoint_requires_auth_by_default(client, auth_headers):
+    """
+    GIVEN metrics auth is required by default
+    WHEN `/metrics` is called without auth, with invalid auth, and with valid auth
+    THEN only the valid authenticated request is allowed
+    """
+    missing = client.get("/metrics")
+    invalid = client.get("/metrics", headers={"Authorization": "Bearer invalid"})
+    valid = client.get("/metrics", headers=auth_headers)
+
+    assert missing.status_code == UNAUTHORIZED.http_status
+    assert invalid.status_code == UNAUTHORIZED.http_status
+    assert valid.status_code == 200
+
+
+def test_metrics_endpoint_can_be_public_when_auth_is_disabled(
+    api_token,
+    star_root_dir,
+):
+    """
+    GIVEN metrics auth is explicitly disabled
+    WHEN `/metrics` is called without auth
+    THEN the request is allowed to proceed
+    """
+    settings = Settings.model_validate(
+        {
+            "star_api_token": api_token,
+            "star_root_dir": str(star_root_dir),
+            "star_metrics_require_auth": False,
+        }
+    )
+    app = create_app(settings)
+
+    with TestClient(app) as client:
+        response = client.get("/metrics")
+
+    assert response.status_code == 200
+
+
+def test_docs_endpoints_require_auth_when_enabled_by_default(
+    api_token,
+    auth_headers,
+    star_root_dir,
+):
+    """
+    GIVEN docs are enabled and docs auth keeps its secure default
+    WHEN docs endpoints are called with and without auth
+    THEN only authenticated requests are allowed
+    """
+    settings = Settings.model_validate(
+        {
+            "star_api_token": api_token,
+            "star_root_dir": str(star_root_dir),
+            "star_enable_docs": True,
+        }
+    )
+    app = create_app(settings)
+
+    with TestClient(app) as client:
+        missing = client.get("/openapi.json")
+        valid = client.get("/openapi.json", headers=auth_headers)
+
+    assert missing.status_code == UNAUTHORIZED.http_status
+    assert valid.status_code == 200
+
+
+def test_docs_endpoints_can_be_public_when_docs_auth_is_disabled(
+    api_token,
+    star_root_dir,
+):
+    """
+    GIVEN docs are enabled and docs auth is explicitly disabled
+    WHEN `/openapi.json` is called without auth
+    THEN the docs endpoint is publicly reachable
+    """
+    settings = Settings.model_validate(
+        {
+            "star_api_token": api_token,
+            "star_root_dir": str(star_root_dir),
+            "star_enable_docs": True,
+            "star_docs_require_auth": False,
+        }
+    )
+    app = create_app(settings)
+
+    with TestClient(app) as client:
+        response = client.get("/openapi.json")
 
     assert response.status_code == 200
 

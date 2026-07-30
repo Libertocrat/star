@@ -37,9 +37,9 @@ sha256sum -c SHA256SUMS --ignore-missing
 >
 > You usually do not need to enter `star-runtime/` unless you want to adjust `.env`, inspect `secrets/star_api_token.txt`, or add custom YAML specs under `user-specs/`.
 
-In the default deploy flow, the generated STAR configuration enables Swagger / OpenAPI docs for local testing and demos.
+In the default deploy flow, the generated STAR configuration enables public Swagger / OpenAPI docs for local testing and demos. Metrics remain protected by bearer authentication by default.
 
-`--production` changes those defaults when STAR generates a new configuration, but an existing `star-runtime/.env` remains authoritative until you overwrite it or edit `STAR_ENABLE_DOCS` manually.
+`--production` changes those defaults when STAR generates a new configuration, but an existing `star-runtime/.env` remains authoritative until you overwrite it or edit `STAR_ENABLE_DOCS`, `STAR_DOCS_REQUIRE_AUTH`, or `STAR_METRICS_REQUIRE_AUTH` manually.
 
 ## Start
 
@@ -91,10 +91,12 @@ Useful explicit subcommands:
 
 ## Swagger / OpenAPI docs
 
-Swagger / OpenAPI docs are enabled by default in the standard local deploy flow so STAR is easier to explore and test.
+Swagger / OpenAPI docs are enabled by default in the standard local deploy flow so STAR is easier to explore and test from a browser. That local flow sets `STAR_DOCS_REQUIRE_AUTH=false`; source-tree and production-oriented defaults keep docs protected when they are mounted.
+
+`/metrics` remains protected by default in all generated modes. Prometheus can scrape it by sending `Authorization: Bearer <STAR_API_TOKEN>` through scrape configuration such as `authorization.credentials_file`.
 
 > [!WARNING]
-> For production-oriented deployments, prefer `./star configure --force --production` when you want to regenerate configuration with production-oriented defaults, or set `STAR_ENABLE_DOCS=false` manually in `.env`.
+> For production-oriented deployments, prefer `./star configure --force --production` when you want to regenerate configuration with production-oriented defaults, or set `STAR_ENABLE_DOCS=false` and keep `STAR_METRICS_REQUIRE_AUTH=true` manually in `.env`.
 
 If you use `--production`, configure with production-oriented settings, or manually disable docs in `.env`, you can re-check STAR status as follows:
 

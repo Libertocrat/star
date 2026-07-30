@@ -75,7 +75,8 @@ RESPONSE_CONTRACT_OVERRIDES = {
 # IMPORTANT:
 # - Do not include handler-specific errors here.
 # - Errors listed here should originate exclusively from middleware.
-# - Public endpoints (e.g. `/health`, `/metrics`) are excluded at runtime.
+# - Public endpoints (e.g. `/health`, and optionally `/metrics`) are excluded
+#   according to runtime settings.
 MIDDLEWARE_ERROR_MAP = [
     errors.UNAUTHORIZED,
     errors.RATE_LIMITED,
@@ -147,7 +148,7 @@ def build_openapi_schema(app: FastAPI) -> dict[str, Any]:
     # then response header enrichment.
     _patch_custom_schemas(schema)
     _inject_security(schema)
-    _patch_public_endpoints(schema)
+    _patch_public_endpoints(schema, app)
     _patch_execute_contract(schema, app)
     _patch_files_contract(schema)
     _patch_actions_list_contract(schema, app)
@@ -231,28 +232,48 @@ def _inject_security(schema: dict[str, Any]) -> None:
     schema["security"] = [{"BearerAuth": []}]
 
 
-def _patch_public_endpoints(schema: dict[str, Any]) -> None:
+def _patch_public_endpoints(schema: dict[str, Any], app: FastAPI) -> None:
     """Mark public endpoints as unauthenticated in OpenAPI.
 
     Args:
         schema: Mutable OpenAPI schema document.
+        app: FastAPI app carrying runtime settings for auth exposure.
     """
 
+    metrics_is_public = _metrics_is_public(app)
     paths = schema.get("paths", {})
     for path, methods in paths.items():
-        if path.startswith("/health") or path.startswith("/metrics"):
+        if path.startswith("/health"):
             for op in methods.values():
                 op["security"] = []
                 op["tags"] = ["Observability"]
 
         if path.startswith("/metrics"):
-            op["externalDocs"] = {
-                "description": "Prometheus scraping documentation",
-                "url": (
-                    "https://prometheus.io/docs/prometheus/latest/"
-                    "configuration/configuration/#scrape_config"
-                ),
-            }
+            for op in methods.values():
+                if metrics_is_public:
+                    op["security"] = []
+                op["tags"] = ["Observability"]
+                op["externalDocs"] = {
+                    "description": "Prometheus scraping documentation",
+                    "url": (
+                        "https://prometheus.io/docs/prometheus/latest/"
+                        "configuration/configuration/#scrape_config"
+                    ),
+                }
+
+
+def _metrics_is_public(app: FastAPI) -> bool:
+    """Return whether `/metrics` is unauthenticated for this app instance.
+
+    Args:
+        app: FastAPI app carrying runtime settings on state.
+
+    Returns:
+        `True` only when settings explicitly disable metrics auth.
+    """
+
+    settings = getattr(getattr(app, "state", None), "settings", None)
+    return getattr(settings, "star_metrics_require_auth", True) is False
 
 
 # ---------------------------------------------------------------------
@@ -1106,11 +1127,15 @@ def _inject_middleware_errors(
 
     paths = schema.get("paths", {})
 
-    errors_by_status: dict[int, list[ErrorDef]] = {}
-    for err in middleware_error_map:
-        errors_by_status.setdefault(err.http_status, []).append(err)
+    for route_path, path_item in paths.items():
+        operation_error_map = _middleware_errors_for_operation(
+            route_path,
+            middleware_error_map,
+        )
+        errors_by_status: dict[int, list[ErrorDef]] = {}
+        for err in operation_error_map:
+            errors_by_status.setdefault(err.http_status, []).append(err)
 
-    for path_item in paths.values():
         for method, operation in path_item.items():
             if method not in {"get", "post", "put", "patch", "delete"}:
                 continue
@@ -1146,6 +1171,27 @@ def _inject_middleware_errors(
                 }
 
                 json_content.pop("schema", None)
+
+
+def _middleware_errors_for_operation(
+    route_path: str,
+    middleware_error_map: list[ErrorDef],
+) -> list[ErrorDef]:
+    """Return middleware errors that can apply to one operation path.
+
+    Args:
+        route_path: OpenAPI route path.
+        middleware_error_map: Default middleware error definitions.
+
+    Returns:
+        Filtered error definitions for the route path.
+    """
+
+    if route_path.startswith("/metrics"):
+        excluded_codes = {errors.RATE_LIMITED.code, errors.TIMEOUT.code}
+        return [err for err in middleware_error_map if err.code not in excluded_codes]
+
+    return middleware_error_map
 
 
 def _patch_custom_schemas(schema: dict[str, Any]) -> None:
@@ -1195,8 +1241,8 @@ def _apply_response_contract_overrides(
 ) -> None:
     """Apply explicit response contract overrides to selected operations.
 
-    This function allows declarative replacement of automatically generated
-    OpenAPI response contracts. It is intended for endpoints whose runtime
+    This function allows declarative replacement of selected automatically
+    generated OpenAPI response entries. It is intended for endpoints whose runtime
     behavior (e.g., non-JSON media types, streaming responses, binary output)
     cannot be correctly inferred from FastAPI's default schema generation.
 
@@ -1220,8 +1266,8 @@ def _apply_response_contract_overrides(
             }
         }
 
-    Existing response definitions for the specified path + method
-    will be replaced with the provided structure.
+    Existing response definitions for matching status codes are replaced while
+    other middleware-injected responses are preserved.
 
     Args:
         schema: Mutable OpenAPI schema document.
@@ -1242,5 +1288,5 @@ def _apply_response_contract_overrides(
         if not operation:
             continue
 
-        # Replace entire responses section for determinism
-        operation["responses"] = responses_override
+        responses = operation.setdefault("responses", {})
+        responses.update(responses_override)

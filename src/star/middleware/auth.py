@@ -37,9 +37,10 @@ class AuthMiddleware(BaseHTTPMiddleware):
     ) -> Response:
         """Handle an incoming request, enforcing Bearer token auth.
 
-        The middleware exempts `/health`, `/metrics`, and documentation
-        endpoints only when runtime settings explicitly enable docs. If
-        authentication fails, a 401 response is returned. When available, the
+        The middleware exempts `/health` unconditionally. It exempts
+        `/metrics` and documentation endpoints only when runtime settings
+        explicitly make those surfaces public. If authentication fails, a 401
+        response is returned. When available, the
         request id stored on `request.state.request_id` is included in error
         responses for correlation.
 
@@ -52,14 +53,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
             A Starlette Response from downstream or a 401 JSONResponse when
             authentication fails.
         """
-        # Exempt health and metrics endpoints from auth. Use a list so
-        # additional prefixes can be appended without causing mypy/type
-        # incompatibilities when the collection grows.
-        exempt_prefixes: list[str] = ["/health", "/metrics"]
-        # Exempt docs endpoints only when typed runtime settings enable them.
         settings = getattr(request.app.state, "settings", None)
-        if isinstance(settings, Settings) and settings.star_enable_docs:
-            exempt_prefixes.extend(["/openapi.json", "/docs", "/redoc"])
+        exempt_prefixes = self._exempt_prefixes(settings)
 
         # Use prefix matching to allow for subpaths (e.g. /health/ready)
         if any(
@@ -108,3 +103,27 @@ class AuthMiddleware(BaseHTTPMiddleware):
             headers=headers,
             status_code=HTTP_401_UNAUTHORIZED,
         )
+
+    @staticmethod
+    def _exempt_prefixes(settings: object) -> tuple[str, ...]:
+        """Return auth-exempt prefixes for the active runtime settings.
+
+        Args:
+            settings: Runtime settings object stored on application state.
+
+        Returns:
+            Tuple of path prefixes that bypass Bearer authentication.
+        """
+
+        # Fail closed for docs and metrics if settings are unavailable or have
+        # an unexpected type; only health remains unconditionally public.
+        if not isinstance(settings, Settings):
+            return ("/health",)
+
+        prefixes = ["/health"]
+        if not settings.star_metrics_require_auth:
+            prefixes.append("/metrics")
+        if settings.star_enable_docs and not settings.star_docs_require_auth:
+            prefixes.extend(["/openapi.json", "/docs", "/redoc"])
+
+        return tuple(prefixes)

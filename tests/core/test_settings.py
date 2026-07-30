@@ -55,7 +55,24 @@ def test_settings_defaults_applied(minimal_safe_env):
     assert s.star_rate_limit_rps == 10
     assert s.star_app_version == "0.1.2"
     assert s.star_enable_docs is False
+    assert s.star_docs_require_auth is True
+    assert s.star_metrics_require_auth is True
     assert s.star_enable_security_headers is True
+
+
+def test_auth_surface_toggles_parse_from_env(minimal_safe_env, monkeypatch):
+    """
+    GIVEN auth-surface toggles are set in the environment
+    WHEN Settings are validated
+    THEN docs and metrics auth policy flags reflect those values
+    """
+    monkeypatch.setenv("STAR_DOCS_REQUIRE_AUTH", "false")
+    monkeypatch.setenv("STAR_METRICS_REQUIRE_AUTH", "false")
+
+    settings = Settings.model_validate({})
+
+    assert settings.star_docs_require_auth is False
+    assert settings.star_metrics_require_auth is False
 
 
 # ----------------------------------------------------------------------------
@@ -255,20 +272,54 @@ def test_docs_endpoints_disabled_by_default(client):
     assert resp_docs.status_code == 401
 
 
-def test_docs_endpoints_enabled_when_flag_true(minimal_safe_env, monkeypatch):
+def test_docs_endpoints_enabled_when_flag_true_require_auth_by_default(
+    minimal_safe_env,
+    monkeypatch,
+    auth_headers,
+):
     """
     GIVEN the required STAR environment variables and `STAR_ENABLE_DOCS=true`
     WHEN the application is created via the factory
-    THEN `/openapi.json` and `/docs` are exposed
+    THEN `/openapi.json` and `/docs` are mounted but require auth by default
     """
-    # minimal_safe_env ensures required vars are present; enable docs explicitly
     monkeypatch.setenv("STAR_ENABLE_DOCS", "true")
 
     from fastapi.testclient import TestClient
 
     from star.app import create_app
 
-    app = create_app()  # will read settings from the environment
+    app = create_app()
+    client = TestClient(app)
+
+    resp_openapi_unauthorized = client.get("/openapi.json")
+    assert resp_openapi_unauthorized.status_code == 401
+
+    resp_docs_unauthorized = client.get("/docs")
+    assert resp_docs_unauthorized.status_code == 401
+
+    resp_openapi = client.get("/openapi.json", headers=auth_headers)
+    assert resp_openapi.status_code == 200
+
+    resp_docs = client.get("/docs", headers=auth_headers)
+    assert resp_docs.status_code == 200
+
+
+def test_docs_endpoints_can_be_public_when_auth_is_disabled(
+    minimal_safe_env, monkeypatch
+):
+    """
+    GIVEN docs are enabled and docs auth is explicitly disabled
+    WHEN `/openapi.json` and `/docs` are requested without auth
+    THEN both documentation endpoints are publicly reachable
+    """
+    monkeypatch.setenv("STAR_ENABLE_DOCS", "true")
+    monkeypatch.setenv("STAR_DOCS_REQUIRE_AUTH", "false")
+
+    from fastapi.testclient import TestClient
+
+    from star.app import create_app
+
+    app = create_app()
     client = TestClient(app)
 
     resp_openapi = client.get("/openapi.json")
@@ -286,6 +337,7 @@ def test_openapi_version_reflects_star_app_version(minimal_safe_env, monkeypatch
     """
     monkeypatch.setenv("STAR_APP_VERSION", "7.8.9")
     monkeypatch.setenv("STAR_ENABLE_DOCS", "true")
+    monkeypatch.setenv("STAR_DOCS_REQUIRE_AUTH", "false")
 
     from fastapi.testclient import TestClient
 

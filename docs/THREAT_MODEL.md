@@ -95,8 +95,8 @@ The application exposes these HTTP entry points:
 - `/v1/files/{id}` via GET and DELETE. These endpoints handle managed file metadata retrieval and deletion by `file_id`.
 - `/v1/files/{id}/content` via GET. This endpoint streams file content by `file_id`.
 - `/health` via GET. This endpoint is unauthenticated.
-- `/metrics` via GET. This endpoint is unauthenticated.
-- `/docs`, `/redoc`, and `/openapi.json` while `star_enable_docs` is enabled. These endpoints are unauthenticated whenever exposed. Source-tree deployments often keep them off, while the packaged local deploy flow may enable them for localhost exploration, so they should stay disabled for wider or production-oriented exposure.
+- `/metrics` via GET. This endpoint requires bearer authentication by default and becomes unauthenticated only when `STAR_METRICS_REQUIRE_AUTH=false`.
+- `/docs`, `/redoc`, and `/openapi.json` while `star_enable_docs` is enabled. These endpoints require bearer authentication by default and become unauthenticated only when `STAR_DOCS_REQUIRE_AUTH=false`. Source-tree deployments often keep them off, while the packaged local deploy flow may enable unauthenticated docs for localhost exploration, so they should stay disabled or authenticated for wider or production-oriented exposure.
 
 Attack inputs include:
 
@@ -114,8 +114,8 @@ Authentication coverage is as follows:
 - `POST /v1/actions/{action_id}` requires bearer authentication
 - `/v1/files`, `/v1/files/{id}`, and `/v1/files/{id}/content` require bearer authentication
 - `/health` does not require authentication
-- `/metrics` does not require authentication
-- docs endpoints do not require authentication while they are enabled
+- `/metrics` requires authentication unless `STAR_METRICS_REQUIRE_AUTH=false`
+- docs endpoints require authentication while enabled unless `STAR_DOCS_REQUIRE_AUTH=false`
 
 ## 6. Threat Categories
 
@@ -124,7 +124,7 @@ Authentication coverage is as follows:
 - token guessing against the bearer token check
 - missing or malformed `Authorization` headers
 - duplicate `Authorization` headers intended to confuse downstream handling
-- exposure of unauthenticated endpoints such as `/health`, `/metrics`, and docs endpoints when they remain enabled
+- exposure of unauthenticated endpoints such as `/health`, and any metrics or docs surfaces explicitly configured as public
 - action enumeration through authenticated discovery routes
 - abuse of authenticated `/v1/files` endpoints through high-volume upload, listing, and download requests
 
@@ -165,7 +165,7 @@ Authentication coverage is as follows:
 - oversized request payloads
 - operations that block or run longer than the configured timeout
 - expensive upload, download, or file listing patterns
-- metrics scraping or docs access generating extra unauthenticated load
+- metrics scraping or docs access generating extra unauthenticated load when those surfaces are explicitly configured as public
 
 ### Request smuggling and parser confusion
 
@@ -235,12 +235,12 @@ Authentication coverage is as follows:
 Some risks remain by design or by deployment assumption.
 
 > [!WARNING]
-> `/health`, `/metrics`, and OpenAPI docs endpoints can be reached without authentication while docs are enabled. Keep STAR within trusted network boundaries, keep localhost-only publishing by default unless a wider bind is intentional, and disable docs for wider or production-oriented exposure even though local packaged deployments may enable them for exploration.
+> `/health` remains unauthenticated. `/metrics` and OpenAPI docs endpoints can also be reached without authentication only when their auth toggles are explicitly disabled. Keep STAR within trusted network boundaries, keep localhost-only publishing by default unless a wider bind is intentional, and disable or authenticate docs for wider or production-oriented exposure even though local packaged deployments may enable public docs for exploration.
 
 - STAR relies on container isolation. If the container runtime is misconfigured or compromised, container-level protections may not hold.
 - STAR relies on correct storage root configuration. An incorrect `STAR_ROOT_DIR` mount target weakens the filesystem boundary.
 - `RateLimitMiddleware` is process-local. In multi-process or multi-instance deployments, each process keeps independent per-client token buckets, so upstream or distributed quota enforcement is still needed for horizontally scaled deployments.
-- `/health` and `/metrics` are intentionally unauthenticated. Docs endpoints are also unauthenticated while enabled and increase reachable surface inside the trusted network boundary.
+- `/health` is intentionally unauthenticated. Metrics and docs endpoints increase reachable surface if operators explicitly configure them as public.
 - Filesystem race conditions are reduced but not fully eliminated. The code explicitly notes TOCTOU limitations around some path-resolution patterns.
 - Service availability still depends on the underlying container host, mounted volume performance, and upstream request volume.
 - `secret` params are still accepted as plaintext JSON request values. STAR reduces argv, public error, and output exposure for those values, but it does not provide client-side encryption, asymmetric encryption, persistent secret storage, or protection from highly privileged process or memory inspection.
@@ -254,7 +254,7 @@ The security model depends on these assumptions:
 - The API token secret is stored securely and mounted correctly at `/run/secrets/star_api_token`.
 - `STAR_ROOT_DIR` points to the intended mounted storage volume.
 - Upstream services and operators treat STAR as a trusted internal component and do not expose it directly to untrusted public traffic.
-- Operators leave docs endpoints disabled or localhost-scoped in environments where exposing them is not acceptable.
+- Operators leave docs endpoints disabled, authenticated, or localhost-scoped in environments where exposing them publicly is not acceptable.
 
 If these assumptions are violated, the practical security of the service is reduced even if the application code itself is unchanged.
 

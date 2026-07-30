@@ -72,7 +72,7 @@ After the forward starts, the local URLs printed by the script include:
 - `http://localhost:<PORT>/docs` when `STAR_ENABLE_DOCS=true`
 - `http://localhost:<PORT>/openapi.json` when `STAR_ENABLE_DOCS=true`
 
-The forwarding script does not enable docs endpoints by itself. It only forwards traffic to whatever the running STAR container currently exposes.
+The forwarding script does not enable docs endpoints or alter docs authentication by itself. It only forwards traffic to whatever the running STAR container currently exposes.
 
 ### Reference
 
@@ -101,7 +101,7 @@ Builds the STAR application and writes the generated OpenAPI schema to `docs/api
 ### export_openapi.py Behavior
 
 - The script strips a leading `v` before storing the version in settings
-- The generated settings set `star_enable_docs=True` explicitly so export behavior stays stable regardless of runtime defaults
+- The generated settings set `star_enable_docs=True`, public docs access, and protected metrics explicitly so export behavior stays stable regardless of runtime defaults
 - The script initializes STAR storage directories under `STAR_DOCS_ROOT_DIR` to satisfy app startup requirements during schema export
 - The output directory is created automatically if needed
 - The JSON file is written with indentation and a trailing newline
