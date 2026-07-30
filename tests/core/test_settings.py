@@ -49,6 +49,7 @@ def test_settings_defaults_applied(minimal_safe_env):
     """
     s = Settings.model_validate({})
 
+    assert s.star_max_body_bytes == 1048576
     assert s.star_max_file_bytes == 104857600
     assert s.star_max_yml_bytes == 102400
     assert s.star_timeout_ms == 5000
@@ -161,12 +162,14 @@ def test_missing_required_env_raises(minimal_safe_env, monkeypatch, missing_var)
 @pytest.mark.parametrize(
     "env_field",
     [
+        "STAR_MAX_BODY_BYTES",
         "STAR_MAX_FILE_BYTES",
         "STAR_MAX_YML_BYTES",
         "STAR_TIMEOUT_MS",
         "STAR_RATE_LIMIT_RPS",
     ],
     ids=[
+        "star_max_body_bytes",
         "star_max_file_bytes",
         "star_max_yml_bytes",
         "star_timeout_ms",
@@ -184,6 +187,19 @@ def test_int_fields_invalid_string(minimal_safe_env, monkeypatch, env_field):
 
     with pytest.raises(ValidationError):
         Settings.model_validate({})
+
+
+def test_star_max_body_bytes_parses_from_env(minimal_safe_env, monkeypatch):
+    """
+    GIVEN STAR_MAX_BODY_BYTES is configured in the environment
+    WHEN Settings are validated
+    THEN the general request body limit reflects that value
+    """
+    monkeypatch.setenv("STAR_MAX_BODY_BYTES", "2048")
+
+    settings = Settings.model_validate({})
+
+    assert settings.star_max_body_bytes == 2048
 
 
 def test_star_app_version_invalid_format_raises(minimal_safe_env, monkeypatch):

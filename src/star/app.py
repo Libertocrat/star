@@ -19,6 +19,7 @@ from star.core import (
     get_settings,
     http_exception_handler,
 )
+from star.core.errors import FILE_TOO_LARGE
 from star.core.openapi import build_openapi_schema
 from star.core.utils.file_storage import ensure_storage_dirs
 from star.middleware.auth import AuthMiddleware
@@ -26,7 +27,7 @@ from star.middleware.observability import ObservabilityMiddleware
 from star.middleware.rate_limit import RateLimitMiddleware
 from star.middleware.request_id import RequestIDMiddleware
 from star.middleware.request_integrity import RequestIntegrityMiddleware
-from star.middleware.schemas import ContentTypePolicy
+from star.middleware.schemas import BodyLimitPolicy, ContentTypePolicy
 from star.middleware.security_headers import SecurityHeadersMiddleware
 from star.middleware.timeout import TimeoutMiddleware
 from star.routes.actions.router import router as execute_router
@@ -145,7 +146,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_middleware(AuthMiddleware, api_token=settings.star_api_token)
     app.add_middleware(
         RequestIntegrityMiddleware,
-        max_body_bytes=settings.star_max_file_bytes,
+        max_body_bytes=settings.star_max_body_bytes,
         content_type_policies=[
             ContentTypePolicy(
                 method="POST",
@@ -156,6 +157,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 method="POST",
                 path="/v1/files",
                 allowed=frozenset({"multipart/form-data"}),
+            ),
+        ],
+        body_limit_policies=[
+            BodyLimitPolicy(
+                method="POST",
+                path="/v1/files",
+                max_bytes=settings.star_max_file_bytes,
+                error=FILE_TOO_LARGE,
             ),
         ],
     )

@@ -7,7 +7,8 @@ They ensure that:
 - Unsupported content types are rejected on protected JSON endpoints.
 - Header-integrity violations are rejected before downstream middleware.
 - Conflicting `Content-Length` and `Transfer-Encoding` headers are rejected.
-- Body size limits are enforced using `Content-Length`.
+- Body size limits are enforced using `Content-Length` and streaming reads.
+- Request bodies are rejected on methods that STAR treats as bodyless.
 - Rejections preserve envelope/headers and increment expected metrics.
 
 They do NOT unit-test middleware internals.
@@ -15,12 +16,14 @@ They do NOT unit-test middleware internals.
 
 from __future__ import annotations
 
+import json
+
 import pytest
 from fastapi.testclient import TestClient
 
 from star.app import create_app
 from star.core.config import Settings
-from star.core.errors import FILE_TOO_LARGE, INVALID_REQUEST
+from star.core.errors import INVALID_REQUEST, REQUEST_BODY_TOO_LARGE
 from star.middleware.request_integrity import REQUEST_INTEGRITY_REJECTIONS_TOTAL
 
 # ============================================================================
@@ -54,6 +57,77 @@ def _integrity_metric_value(path: str, method: str, reason: str) -> float:
     return total
 
 
+async def _call_asgi_streaming_request(
+    app,
+    *,
+    method: str,
+    path: str,
+    headers: dict[str, str],
+    chunks: list[bytes],
+):
+    """Call an ASGI app with explicit streamed request-body chunks.
+
+    This helper intentionally bypasses `TestClient` because `TestClient` and
+    HTTPX normalize many requests and may provide `Content-Length`. These tests
+    need direct control over the ASGI `receive()` stream to exercise the
+    middleware branch used when `Content-Length` is absent.
+
+    Args:
+        app: ASGI application under test.
+        method: HTTP method to place in the ASGI scope.
+        path: Request path to place in the ASGI scope.
+        headers: HTTP headers to include in the ASGI scope.
+        chunks: Body chunks yielded as separate `http.request` messages.
+
+    Returns:
+        ASGI response messages emitted by the application.
+    """
+    pending_chunks = list(chunks)
+    sent_messages = []
+    raw_headers = [
+        (name.lower().encode("latin-1"), value.encode("latin-1"))
+        for name, value in headers.items()
+    ]
+
+    async def receive():
+        """Return streamed request chunks without `Content-Length`."""
+
+        if pending_chunks:
+            return {
+                "type": "http.request",
+                "body": pending_chunks.pop(0),
+                "more_body": bool(pending_chunks),
+            }
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    async def send(message):
+        """Capture ASGI response messages."""
+
+        sent_messages.append(message)
+
+    await app(
+        {
+            "type": "http",
+            "asgi": {"version": "3.0", "spec_version": "2.3"},
+            "http_version": "1.1",
+            "method": method.upper(),
+            "scheme": "http",
+            "path": path,
+            "raw_path": path.encode("ascii"),
+            "query_string": b"",
+            "headers": raw_headers,
+            "raw_headers": raw_headers,
+            "client": ("testclient", 50000),
+            "server": ("testserver", 80),
+            "state": {},
+        },
+        receive,
+        send,
+    )
+
+    return sent_messages
+
+
 # ============================================================================
 # Fixtures
 # ============================================================================
@@ -61,7 +135,7 @@ def _integrity_metric_value(path: str, method: str, reason: str) -> float:
 
 @pytest.fixture
 def low_max_bytes_settings(api_token, star_root_dir) -> Settings:
-    """Return settings with a strict body-size limit for deterministic tests.
+    """Return settings with strict body-size limits for deterministic tests.
 
     Args:
         api_token: Authentication token fixture.
@@ -74,17 +148,18 @@ def low_max_bytes_settings(api_token, star_root_dir) -> Settings:
         {
             "star_api_token": api_token,
             "star_root_dir": str(star_root_dir),
-            "star_max_file_bytes": 16,
+            "star_max_body_bytes": 16,
+            "star_max_file_bytes": 100_000,
         }
     )
 
 
 @pytest.fixture
 def low_max_bytes_app(low_max_bytes_settings):
-    """Create app configured with a small `star_max_file_bytes` value.
+    """Create app configured with small general body size limit.
 
     Args:
-        low_max_bytes_settings: Settings fixture with strict body-size limit.
+        low_max_bytes_settings: Settings fixture with strict body-size limits.
 
     Returns:
         FastAPI application configured for integrity size-limit tests.
@@ -292,9 +367,9 @@ def test_invalid_content_length_is_rejected(low_max_bytes_client, auth_headers):
 
 def test_content_length_exceeding_limit_is_rejected(low_max_bytes_client, auth_headers):
     """
-    GIVEN a strict star_max_file_bytes limit
-    WHEN Content-Length declares a value above the limit
-    THEN middleware rejects with FILE_TOO_LARGE
+    GIVEN a strict STAR_MAX_BODY_BYTES limit
+    WHEN Content-Length declares a value above the general body limit
+    THEN middleware rejects with REQUEST_BODY_TOO_LARGE
     AND the star_request_integrity_rejections_total metric is incremented
     """
     reason = "content_length_exceeds_limit"
@@ -310,12 +385,152 @@ def test_content_length_exceeding_limit_is_rejected(low_max_bytes_client, auth_h
         },
     )
 
-    assert response.status_code == FILE_TOO_LARGE.http_status
+    assert response.status_code == REQUEST_BODY_TOO_LARGE.http_status
     body = response.json()
     assert body["success"] is False
     assert body["error"] is not None
-    assert body["error"]["code"] == FILE_TOO_LARGE.code
+    assert body["error"]["code"] == REQUEST_BODY_TOO_LARGE.code
     assert "X-Request-Id" in response.headers
 
     after = _integrity_metric_value("/v1/actions/noop", "POST", reason)
+    assert after == before + 1.0
+
+
+@pytest.mark.asyncio
+async def test_execute_streaming_body_exceeding_limit_is_rejected(
+    low_max_bytes_app,
+    auth_headers,
+):
+    """
+    GIVEN a strict STAR_MAX_BODY_BYTES limit and no Content-Length header
+    WHEN a streamed action request exceeds the general body limit
+    THEN middleware rejects with REQUEST_BODY_TOO_LARGE
+    AND the star_request_integrity_rejections_total metric is incremented
+    """
+    reason = "body_exceeds_limit"
+    before = _integrity_metric_value("/v1/actions/noop", "POST", reason)
+
+    sent_messages = await _call_asgi_streaming_request(
+        low_max_bytes_app,
+        method="POST",
+        path="/v1/actions/noop",
+        headers={
+            "Authorization": auth_headers["Authorization"],
+            "Content-Type": "application/json",
+        },
+        chunks=[b'{"params":{"path":"', b"A" * 32, b'"}}'],
+    )
+
+    start = next(
+        message for message in sent_messages if message["type"] == "http.response.start"
+    )
+    response_body = b"".join(
+        message.get("body", b"")
+        for message in sent_messages
+        if message["type"] == "http.response.body"
+    )
+    body = json.loads(response_body.decode("utf-8"))
+
+    assert start["status"] == REQUEST_BODY_TOO_LARGE.http_status
+    assert body["success"] is False
+    assert body["error"] is not None
+    assert body["error"]["code"] == REQUEST_BODY_TOO_LARGE.code
+    assert any(
+        name.lower() == b"x-request-id" for name, _value in start.get("headers", [])
+    )
+
+    after = _integrity_metric_value("/v1/actions/noop", "POST", reason)
+    assert after == before + 1.0
+
+
+def test_multipart_upload_uses_file_limit_instead_of_general_body_limit(
+    low_max_bytes_client,
+    auth_headers,
+):
+    """
+    GIVEN STAR_MAX_BODY_BYTES is smaller than a normal multipart request
+    WHEN POST /v1/files uploads a small file below STAR_MAX_FILE_BYTES
+    THEN the multipart request is accepted by request-integrity body limits
+    """
+    response = low_max_bytes_client.post(
+        "/v1/files",
+        headers=auth_headers,
+        files={
+            "file": (
+                "small.txt",
+                b"hello",
+                "text/plain",
+            )
+        },
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["success"] is True
+    assert body["error"] is None
+
+
+def test_get_with_body_is_rejected(client, auth_headers):
+    """
+    GIVEN GET endpoints in STAR do not accept request bodies
+    WHEN a GET request carries a non-empty body
+    THEN middleware rejects with INVALID_REQUEST
+    AND the star_request_integrity_rejections_total metric is incremented
+    """
+    reason = "body_not_allowed"
+    before = _integrity_metric_value("/v1/actions", "GET", reason)
+
+    response = client.request(
+        "GET",
+        "/v1/actions",
+        content=b'{"unexpected":true}',
+        headers={
+            **auth_headers,
+            "Content-Type": "application/json",
+        },
+    )
+
+    assert response.status_code == INVALID_REQUEST.http_status
+    body = response.json()
+    assert body["success"] is False
+    assert body["error"] is not None
+    assert body["error"]["code"] == INVALID_REQUEST.code
+    assert body["error"]["message"] == "Request body is not allowed for this method"
+    assert "X-Request-Id" in response.headers
+
+    after = _integrity_metric_value("/v1/actions", "GET", reason)
+    assert after == before + 1.0
+
+
+def test_delete_with_body_is_rejected(client, auth_headers):
+    """
+    GIVEN DELETE endpoints in STAR do not accept request bodies
+    WHEN a DELETE request carries a non-empty body
+    THEN middleware rejects with INVALID_REQUEST
+    AND the star_request_integrity_rejections_total metric is incremented
+    """
+    file_id = "00000000-0000-0000-0000-000000000000"
+    path = f"/v1/files/{file_id}"
+    reason = "body_not_allowed"
+    before = _integrity_metric_value(path, "DELETE", reason)
+
+    response = client.request(
+        "DELETE",
+        path,
+        content=b'{"unexpected":true}',
+        headers={
+            **auth_headers,
+            "Content-Type": "application/json",
+        },
+    )
+
+    assert response.status_code == INVALID_REQUEST.http_status
+    body = response.json()
+    assert body["success"] is False
+    assert body["error"] is not None
+    assert body["error"]["code"] == INVALID_REQUEST.code
+    assert body["error"]["message"] == "Request body is not allowed for this method"
+    assert "X-Request-Id" in response.headers
+
+    after = _integrity_metric_value(path, "DELETE", reason)
     assert after == before + 1.0

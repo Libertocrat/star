@@ -167,6 +167,12 @@ FILE_TOO_LARGE = ErrorDef(
     default_message="File exceeds maximum allowed size.",
 )
 
+REQUEST_BODY_TOO_LARGE = ErrorDef(
+    code="REQUEST_BODY_TOO_LARGE",
+    http_status=413,
+    default_message="Request body exceeds maximum allowed size.",
+)
+
 UNSUPPORTED_MEDIA_TYPE = ErrorDef(
     code="UNSUPPORTED_MEDIA_TYPE",
     http_status=415,
@@ -219,6 +225,7 @@ PUBLIC_HTTP_ERRORS = [
     METHOD_NOT_ALLOWED,
     CONFLICT,
     FILE_TOO_LARGE,
+    REQUEST_BODY_TOO_LARGE,
     UNSUPPORTED_MEDIA_TYPE,
     UNPROCESSABLE_ENTITY,
     RATE_LIMITED,
@@ -250,6 +257,7 @@ __all__ = [
     "METHOD_NOT_ALLOWED",
     "CONFLICT",
     "FILE_TOO_LARGE",
+    "REQUEST_BODY_TOO_LARGE",
     "UNSUPPORTED_MEDIA_TYPE",
     "UNPROCESSABLE_ENTITY",
     "RATE_LIMITED",

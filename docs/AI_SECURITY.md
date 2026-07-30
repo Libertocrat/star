@@ -67,7 +67,7 @@ Controls:
 - bearer authentication in `AuthMiddleware`
 - duplicate `Authorization` rejection in request-integrity checks
 - strict request path, header, `Content-Length`, `Transfer-Encoding`, and content-type validation
-- request body size enforcement
+- request body size enforcement and upload-specific size enforcement
 - timeout and rate limiting
 
 ### Boundary 2: STAR API layer to action registry and renderer
@@ -147,7 +147,7 @@ Implemented in [src/star/middleware/request_integrity.py](../src/star/middleware
 - duplicate `Authorization` rejection
 - `Content-Length` parsing and `Content-Length` plus `Transfer-Encoding` conflict rejection
 - endpoint-specific content-type policy enforcement
-- streaming and declared-size request body limits
+- streaming and declared-size request body limits, with a separate multipart upload limit
 
 This is one of the strongest defenses in the repo because it rejects bad traffic before it reaches route logic.
 
