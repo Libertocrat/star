@@ -1,17 +1,21 @@
 """
 Header security helpers.
 
-These helpers operate on raw ASGI headers (bytes) and enforce structural
-integrity rules:
-- Reject duplicate Authorization headers
-- Reject whitespace in header names (space/tab)
-- Reject control characters (< 0x20) in header names/values, with TAB (0x09)
-  allowed only in values (names are rejected for whitespace anyway)
+Incoming helpers operate on raw ASGI headers and enforce structural integrity
+rules. Outgoing helpers build reviewed HTTP header values without interpolating
+untrusted text directly into public responses.
 """
 
 from __future__ import annotations
 
+import unicodedata
+from urllib.parse import quote
+
 RawHeader = tuple[bytes, bytes]
+
+_CONTENT_DISPOSITION_FALLBACK = "download"
+_RFC5987_SAFE_CHARS = "!#$&+-.^_`|~"
+_AMBIGUOUS_FILENAME_CHARS = {'"', "\\", ";", "/"}
 
 
 def _has_illegal_ctrl_bytes(data: bytes, *, allow_tab: bool) -> bool:
@@ -67,7 +71,101 @@ def find_header_integrity_violation(raw_headers: list[RawHeader]) -> str | None:
     return None
 
 
+def _is_control_char(ch: str) -> bool:
+    """Return whether a string character is an HTTP-unsafe control char.
+
+    Args:
+        ch: Single character to inspect.
+
+    Returns:
+        True when `ch` is a C0 control or DEL character.
+    """
+
+    codepoint = ord(ch)
+    return codepoint < 0x20 or codepoint == 0x7F
+
+
+def _ascii_content_disposition_filename(filename: str) -> str:
+    """Return a safe ASCII fallback for the `filename` parameter.
+
+    Args:
+        filename: Candidate display filename.
+
+    Returns:
+        ASCII filename safe for use inside a quoted `filename` parameter.
+    """
+
+    normalized = unicodedata.normalize("NFKD", filename or "")
+    ascii_text = normalized.encode("ascii", "ignore").decode("ascii")
+
+    chars: list[str] = []
+    for ch in ascii_text:
+        if _is_control_char(ch) or ch in _AMBIGUOUS_FILENAME_CHARS:
+            chars.append("_")
+        else:
+            chars.append(ch)
+
+    fallback = "".join(chars).strip().strip(".")
+    if fallback and any(ch.isalnum() for ch in fallback):
+        return fallback
+    return _CONTENT_DISPOSITION_FALLBACK
+
+
+def _extended_content_disposition_filename(filename: str, *, fallback: str) -> str:
+    """Return a filename source safe for RFC 5987 encoding.
+
+    Args:
+        filename: Candidate display filename.
+        fallback: Fallback returned when no usable filename remains.
+
+    Returns:
+        Filename string to percent-encode for `filename*`.
+    """
+
+    chars: list[str] = []
+    for ch in filename or "":
+        if _is_control_char(ch) or ch in {"/", "\\"}:
+            chars.append("_")
+        else:
+            chars.append(ch)
+
+    extended = "".join(chars).strip().strip(".")
+    if extended and any(ch.isalnum() for ch in extended):
+        return extended
+    return fallback
+
+
+def content_disposition_attachment(filename: str) -> str:
+    """Build a safe `Content-Disposition: attachment` header value.
+
+    Args:
+        filename: Download display filename.
+
+    Returns:
+        Header value with a safe ASCII `filename` fallback and, when needed,
+        an RFC 5987 `filename*` parameter preserving the UTF-8 filename.
+    """
+
+    fallback = _ascii_content_disposition_filename(filename)
+    extended_source = _extended_content_disposition_filename(
+        filename,
+        fallback=fallback,
+    )
+    encoded = quote(
+        extended_source,
+        safe=_RFC5987_SAFE_CHARS,
+        encoding="utf-8",
+        errors="strict",
+    )
+
+    header = f'attachment; filename="{fallback}"'
+    if encoded != fallback:
+        header = f"{header}; filename*=UTF-8''{encoded}"
+    return header
+
+
 __all__ = [
     "RawHeader",
+    "content_disposition_attachment",
     "find_header_integrity_violation",
 ]

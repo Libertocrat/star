@@ -16,6 +16,7 @@ from pydantic import ValidationError
 from star.core.errors import INVALID_REQUEST, StarError
 from star.core.responses import error_json_response, star_error_json_response
 from star.core.schemas.envelope import ResponseEnvelope
+from star.core.security.headers import content_disposition_attachment
 from star.core.utils.file_storage import iter_file_chunks
 from star.routes.dependencies import get_runtime_settings
 from star.routes.files.handlers.delete_file import delete_file_handler
@@ -259,7 +260,7 @@ async def get_file_content(id: UUID, request: Request):
         descriptor = await get_file_content_handler(file_id=id, settings=settings)
 
         headers = {
-            "Content-Disposition": f'attachment; filename="{descriptor.filename}"',
+            "Content-Disposition": content_disposition_attachment(descriptor.filename),
         }
 
         if descriptor.size_bytes is not None:

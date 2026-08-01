@@ -315,6 +315,70 @@ def test_files_content_get_sets_content_disposition_header(
     assert "report.txt" in header
 
 
+def test_files_content_get_escapes_ambiguous_content_disposition_filename(
+    create_upload_app,
+    auth_headers,
+):
+    """
+    GIVEN a file uploaded with parameter delimiters in its name
+    WHEN GET /v1/files/{id}/content is called
+    THEN Content-Disposition uses a safe ASCII fallback
+    AND preserves the original value only through filename* percent-encoding
+    """
+
+    app = create_upload_app()
+    payload = b"ambiguous filename content\n"
+
+    with TestClient(app) as client:
+        file_id = _upload_file_and_get_id(
+            client,
+            auth_headers,
+            filename="evil; foo=bar.txt",
+            content=payload,
+            content_type="text/plain",
+        )
+
+        response = client.get(f"/v1/files/{file_id}/content", headers=auth_headers)
+
+    assert response.status_code == 200
+    header = response.headers["content-disposition"]
+    assert header == (
+        'attachment; filename="evil_ foo=bar.txt"; '
+        "filename*=UTF-8''evil%3B%20foo%3Dbar.txt"
+    )
+
+
+def test_files_content_get_emits_filename_star_for_unicode_filename(
+    create_upload_app,
+    auth_headers,
+):
+    """
+    GIVEN a file uploaded with a Unicode filename
+    WHEN GET /v1/files/{id}/content is called
+    THEN Content-Disposition includes an ASCII fallback and UTF-8 filename*
+    """
+
+    app = create_upload_app()
+    payload = b"unicode filename content\n"
+
+    with TestClient(app) as client:
+        file_id = _upload_file_and_get_id(
+            client,
+            auth_headers,
+            filename="résumé.txt",
+            content=payload,
+            content_type="text/plain",
+        )
+
+        response = client.get(f"/v1/files/{file_id}/content", headers=auth_headers)
+
+    assert response.status_code == 200
+    header = response.headers["content-disposition"]
+    assert header == (
+        'attachment; filename="resume.txt"; ' "filename*=UTF-8''r%C3%A9sum%C3%A9.txt"
+    )
+
+
 def test_files_content_get_sets_content_length(
     create_upload_app,
     auth_headers,

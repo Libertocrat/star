@@ -8,6 +8,7 @@ import pytest
 
 from star.core.security.headers import (
     _has_illegal_ctrl_bytes,
+    content_disposition_attachment,
     find_header_integrity_violation,
 )
 
@@ -184,3 +185,73 @@ def test_find_header_integrity_violation_valid_headers_return_none(raw_headers):
     violation = find_header_integrity_violation(raw_headers)
 
     assert violation is None
+
+
+# ============================================================================
+# Content-Disposition Construction
+# ============================================================================
+
+
+def test_content_disposition_attachment_preserves_safe_ascii_filename():
+    """
+    GIVEN a safe ASCII download filename
+    WHEN Content-Disposition attachment value is built
+    THEN the quoted filename parameter preserves the filename
+    """
+    header = content_disposition_attachment("report.txt")
+
+    assert header == 'attachment; filename="report.txt"'
+
+
+def test_content_disposition_attachment_replaces_ambiguous_ascii_chars():
+    """
+    GIVEN a filename with quoted-string and parameter delimiters
+    WHEN Content-Disposition attachment value is built
+    THEN ambiguous characters are replaced in the ASCII fallback
+    AND filename* preserves the UTF-8 value through percent-encoding
+    """
+    header = content_disposition_attachment('evil"; foo="bar.txt')
+
+    assert header == (
+        'attachment; filename="evil__ foo=_bar.txt"; '
+        "filename*=UTF-8''evil%22%3B%20foo%3D%22bar.txt"
+    )
+
+
+def test_content_disposition_attachment_preserves_unicode_with_filename_star():
+    """
+    GIVEN a Unicode download filename
+    WHEN Content-Disposition attachment value is built
+    THEN filename contains an ASCII fallback
+    AND filename* contains the UTF-8 percent-encoded filename
+    """
+    header = content_disposition_attachment("résumé 2026.txt")
+
+    assert header == (
+        'attachment; filename="resume 2026.txt"; '
+        "filename*=UTF-8''r%C3%A9sum%C3%A9%202026.txt"
+    )
+
+
+def test_content_disposition_attachment_removes_raw_path_separators():
+    """
+    GIVEN a path-like filename
+    WHEN Content-Disposition attachment value is built
+    THEN raw path separators are not emitted in filename parameters
+    """
+    header = content_disposition_attachment("nested/report.txt")
+
+    assert header == 'attachment; filename="nested_report.txt"'
+    assert "/" not in header
+    assert "\\" not in header
+
+
+def test_content_disposition_attachment_uses_fallback_for_empty_filename():
+    """
+    GIVEN a filename that has no usable display characters
+    WHEN Content-Disposition attachment value is built
+    THEN a deterministic fallback filename is emitted
+    """
+    header = content_disposition_attachment("\x00/\\;")
+
+    assert header == 'attachment; filename="download"'
