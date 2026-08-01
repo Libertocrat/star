@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- Hardened file download `Content-Disposition` headers with safe ASCII filename fallbacks and UTF-8 `filename*` parameters.
 - Added `STAR_MAX_BODY_BYTES` for non-upload request bodies, kept multipart uploads governed by `STAR_MAX_FILE_BYTES`, and rejected request bodies on methods such as `GET` and `DELETE` before route handling.
 - Added configurable auth gates for runtime docs and Prometheus metrics, with `/metrics` and enabled docs requiring Bearer auth by default unless explicitly made public through environment settings.
 - Changed the AES-256 encrypt/decrypt actions to pass OpenSSL passphrases through invocation-owned temporary secret files instead of `-pass pass:...` argv, preventing direct argv/procfs exposure of those values.

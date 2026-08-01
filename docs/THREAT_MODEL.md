@@ -208,6 +208,7 @@ Authentication coverage is as follows:
 - Existing symlink path components are rejected during sandbox resolution.
 - `safe_open_no_follow()` uses `O_NOFOLLOW` when available and verifies that the opened target is a regular file.
 - Storage helpers keep blobs and metadata rooted under `STAR_ROOT_DIR`.
+- File download responses construct `Content-Disposition` through dedicated header helpers instead of interpolating stored filenames directly.
 
 ### Action output mitigations
 

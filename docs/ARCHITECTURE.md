@@ -276,7 +276,7 @@ STAR supports two related file surfaces:
 - `GET /v1/files/{id}/content` streams persisted blob content
 - `DELETE /v1/files/{id}` deletes a managed file
 
-The file API is UUID-based. Clients do not provide raw filesystem paths to retrieve stored content. Uploaded files are persisted as immutable blobs with metadata sidecars under storage rooted at `STAR_ROOT_DIR`.
+The file API is UUID-based. Clients do not provide raw filesystem paths to retrieve stored content. Uploaded files are persisted as immutable blobs with metadata sidecars under storage rooted at `STAR_ROOT_DIR`. Download responses build `Content-Disposition` through core header security helpers so display filenames are serialized with a safe ASCII fallback and UTF-8 `filename*` when needed.
 
 `FileMetadata` is owned by `src/star/core/schemas/files.py` because the same validated model crosses persistence, storage, action-runtime, and public response boundaries. File route schemas re-export that model for compatibility, but reusable core helpers and action runtime code import it from `core`.
 
