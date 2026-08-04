@@ -4,24 +4,17 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Mapping
 
 from star.actions.models.core import ActionSpec, OutputSource, OutputType
 from star.core.config import Settings
-from star.core.schemas.files import FileMetadata
-from star.core.utils.file_storage import (
-    EMPTY_SHA256,
-    compute_sha256_for_file,
-    create_placeholder_file_metadata,
+from star.core.files import (
+    LocalManagedFileStore,
     delete_blob_file,
     delete_metadata_file,
-    detect_mime_for_file,
-    ensure_storage_dirs,
-    get_blob_path,
-    save_file_metadata,
 )
+from star.core.schemas.files import FileMetadata
 
 logger = logging.getLogger("star.actions.runtime.file_manager")
 
@@ -41,6 +34,7 @@ def create_command_output_placeholders(
     """
 
     output_files: dict[str, uuid.UUID] = {}
+    store: LocalManagedFileStore | None = None
 
     for output_name, output_def in spec.outputs.items():
         if output_def.type != OutputType.FILE:
@@ -48,9 +42,10 @@ def create_command_output_placeholders(
         if output_def.source != OutputSource.COMMAND:
             continue
 
-        metadata = create_placeholder_file_metadata(
+        if store is None:
+            store = LocalManagedFileStore(settings)
+        metadata = store.create_pending_output(
             original_filename=f"{spec.action}.{output_name}.bin",
-            settings=settings,
         )
         output_files[output_name] = metadata.id
 
@@ -71,7 +66,8 @@ def resolve_output_blob_path(
         Absolute blob path string.
     """
 
-    return str(get_blob_path(file_id, settings).resolve())
+    blob_path = LocalManagedFileStore(settings).resolve_local_blob_path(file_id)
+    return str(blob_path.resolve())
 
 
 def cleanup_output_placeholders(
@@ -139,45 +135,10 @@ def finalize_command_output_file(
         ValueError: If metadata payload becomes invalid.
     """
 
-    from star.core.utils.file_storage import load_file_metadata
-
-    metadata = load_file_metadata(file_id, settings)
-    if metadata is None:
-        raise FileNotFoundError(f"Output metadata '{file_id}' was not found")
-
-    blob_path = get_blob_path(file_id, settings)
-    if not blob_path.exists():
-        blob_path.parent.mkdir(parents=True, exist_ok=True)
-        blob_path.write_bytes(b"")
-
-    now_utc = datetime.now(UTC)
-    unverified = metadata.model_copy(
-        update={
-            "status": "unverified",
-            "updated_at": now_utc,
-        }
+    return LocalManagedFileStore(settings).finalize_generated_file(
+        file_id=file_id,
+        original_filename=f"{action_name}.{output_name}.bin",
     )
-    save_file_metadata(unverified, settings)
-
-    size_bytes = blob_path.stat().st_size
-    sha256 = compute_sha256_for_file(blob_path)
-    mime_type = "application/octet-stream"
-    if size_bytes > 0:
-        mime_type = detect_mime_for_file(blob_path)
-
-    final_metadata = unverified.model_copy(
-        update={
-            "original_filename": f"{action_name}.{output_name}.bin",
-            "mime_type": mime_type,
-            "extension": ".bin",
-            "size_bytes": size_bytes,
-            "sha256": sha256 if size_bytes > 0 else EMPTY_SHA256,
-            "status": "ready",
-            "updated_at": datetime.now(UTC),
-        }
-    )
-    save_file_metadata(final_metadata, settings)
-    return final_metadata
 
 
 def create_ready_file_from_bytes(
@@ -193,7 +154,7 @@ def create_ready_file_from_bytes(
     Args:
         original_filename: Public original filename.
         content: Blob content to persist.
-        extension: Public extension metadata (e.g. `.txt`).
+        extension: Public extension metadata.
         mime_type: Public MIME metadata.
         settings: Optional pre-loaded runtime settings.
 
@@ -201,29 +162,12 @@ def create_ready_file_from_bytes(
         Persisted ready file metadata.
     """
 
-    cfg = settings
-    ensure_storage_dirs(cfg)
-
-    file_id = uuid.uuid4()
-    blob_path = get_blob_path(file_id, cfg)
-    blob_path.parent.mkdir(parents=True, exist_ok=True)
-    blob_path.write_bytes(content)
-
-    now_utc = datetime.now(UTC)
-    metadata = FileMetadata(
-        id=file_id,
+    return LocalManagedFileStore(settings).create_ready_file_from_bytes(
         original_filename=original_filename,
-        stored_filename=f"file_{file_id}.bin",
-        mime_type=mime_type,
+        content=content,
         extension=extension,
-        size_bytes=len(content),
-        sha256=(compute_sha256_for_file(blob_path) if content else EMPTY_SHA256),
-        created_at=now_utc,
-        updated_at=now_utc,
-        status="ready",
+        mime_type=mime_type,
     )
-    save_file_metadata(metadata, cfg)
-    return metadata
 
 
 def blob_exists_for_file(file_id: uuid.UUID, settings: Settings | None = None) -> bool:
@@ -237,7 +181,7 @@ def blob_exists_for_file(file_id: uuid.UUID, settings: Settings | None = None) -
         True if the blob path exists.
     """
 
-    return get_blob_path(file_id, settings).exists()
+    return LocalManagedFileStore(settings).blob_exists(file_id)
 
 
 def create_empty_blob_for_file(
@@ -254,8 +198,4 @@ def create_empty_blob_for_file(
         Blob path.
     """
 
-    blob_path = get_blob_path(file_id, settings)
-    blob_path.parent.mkdir(parents=True, exist_ok=True)
-    if not blob_path.exists():
-        blob_path.write_bytes(b"")
-    return blob_path
+    return LocalManagedFileStore(settings).create_empty_blob(file_id)

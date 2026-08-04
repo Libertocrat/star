@@ -20,8 +20,8 @@ from star.core import (
     http_exception_handler,
 )
 from star.core.errors import FILE_TOO_LARGE
+from star.core.files import ensure_storage_dirs
 from star.core.openapi import build_openapi_schema
-from star.core.utils.file_storage import ensure_storage_dirs
 from star.middleware.auth import AuthMiddleware
 from star.middleware.observability import ObservabilityMiddleware
 from star.middleware.rate_limit import RateLimitMiddleware

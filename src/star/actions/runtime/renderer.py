@@ -39,8 +39,8 @@ from star.actions.runtime.file_manager import (
 )
 from star.actions.runtime.secret_manager import cleanup_secret_files, create_secret_file
 from star.core.config import Settings
+from star.core.files import get_blob_path, load_file_metadata
 from star.core.schemas.files import FileMetadata
-from star.core.utils.file_storage import get_blob_path, load_file_metadata
 
 
 def render_command(

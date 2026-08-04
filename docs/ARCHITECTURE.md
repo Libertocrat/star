@@ -66,7 +66,7 @@ The main implementation lives under `src/star`.
 | `src/star/actions/presentation` | Public action catalog, request/response contract generation, and OpenAPI-facing serializers. |
 | `src/star/actions/specs` | Built-in YAML action modules that define the shipped action catalog. |
 | `src/star/middleware` | Authentication, request integrity, request ID, observability, rate limiting, timeout, and optional security headers. |
-| `src/star/core` | Settings, errors, OpenAPI generation, storage utilities, security helpers, and shared response/file schemas. |
+| `src/star/core` | Settings, errors, OpenAPI generation, managed file APIs, security helpers, and shared response/file schemas. |
 | `src/star/routes` | Thin HTTP handlers for `/v1/actions`, `/v1/files`, `/health`, and `/metrics`. |
 | `tests` | Smoke, unit, and integration tests covering startup, settings, middleware, action build/runtime layers, file APIs, and OpenAPI behavior. |
 | `scripts` | Helper scripts for OpenAPI export, docs site generation, and local port forwarding. |
@@ -82,7 +82,7 @@ The application is built in `src/star/app.py` by `create_app()`.
 Key startup behaviors are:
 
 - load `Settings` through `get_settings()` unless a test provides one explicitly
-- create storage directories through `ensure_storage_dirs(settings)`
+- create managed file and runtime file directories through `ensure_storage_dirs(settings)`
 - register `/docs`, `/redoc`, and `/openapi.json` only when `star_enable_docs` is true
 - build the immutable runtime action registry through `build_registry_from_specs(settings)`
 - attach typed runtime dependencies (`settings` and `action_registry`) to `app.state`
@@ -268,7 +268,7 @@ STAR supports two related file surfaces:
 
 ### Managed file API
 
-`src/star/routes/files/router.py` exposes the supported external file lifecycle:
+The storage lifecycle is owned by `src/star/core/files`, which exposes a transport-neutral `ManagedFileStore` Protocol and a local filesystem implementation. `src/star/routes/files/router.py` exposes the supported external file lifecycle:
 
 - `POST /v1/files` uploads a file, validates it, and persists blob plus metadata
 - `GET /v1/files` lists files with cursor pagination and filtering
@@ -276,9 +276,9 @@ STAR supports two related file surfaces:
 - `GET /v1/files/{id}/content` streams persisted blob content
 - `DELETE /v1/files/{id}` deletes a managed file
 
-The file API is UUID-based. Clients do not provide raw filesystem paths to retrieve stored content. Uploaded files are persisted as immutable blobs with metadata sidecars under storage rooted at `STAR_ROOT_DIR`. Download responses build `Content-Disposition` through core header security helpers so display filenames are serialized with a safe ASCII fallback and UTF-8 `filename*` when needed.
+The file API is UUID-based. Clients do not provide raw filesystem paths to retrieve stored content. Uploaded files are persisted as immutable blobs with metadata sidecars under storage rooted at `STAR_ROOT_DIR`. Routes delegate upload, listing, metadata lookup, deletion, generated-output lifecycle, and local content resolution to `core/files` instead of calling primitive filesystem helpers directly. Download responses build `Content-Disposition` through core header security helpers so display filenames are serialized with a safe ASCII fallback and UTF-8 `filename*` when needed.
 
-`FileMetadata` is owned by `src/star/core/schemas/files.py` because the same validated model crosses persistence, storage, action-runtime, and public response boundaries. File route schemas re-export that model for compatibility, but reusable core helpers and action runtime code import it from `core`.
+`FileMetadata` is owned by `src/star/core/schemas/files.py` because the same validated model crosses persistence, storage, action-runtime, and public response boundaries. `core/files` owns storage descriptors and domain exceptions; route handlers map those failures to public `StarError` values. File route schemas re-export `FileMetadata` for compatibility, but reusable core helpers and action runtime code import it from `core`.
 
 Action outputs can also be materialized into STAR-managed storage. Declared `file + command` outputs use runtime placeholders created before subprocess execution and finalized into managed file records after successful output handling. Sanitized stdout can also be materialized into the reserved `outputs.stdout_file` entry when the client requests `stdout_as_file=true` and the selected action allows it.
 
