@@ -2,20 +2,12 @@
 
 from __future__ import annotations
 
-import uuid
-
 from star.core.config import Settings, get_settings
-from star.core.errors import FILE_NOT_FOUND, INTERNAL_ERROR, INVALID_REQUEST, StarError
-from star.core.schemas.files import FileMetadata
-from star.core.utils.file_listing import (
-    apply_filters,
-    apply_pagination,
-    apply_sort,
-    decode_cursor,
-)
-from star.core.utils.file_storage import get_meta_path, logger
+from star.core.errors import INTERNAL_ERROR, INVALID_REQUEST, StarError
+from star.core.files import decode_cursor
+from star.core.files.layout import logger
 from star.routes.files.schemas import FileListData, Pagination
-from star.routes.files.utils import safe_load_metadata
+from star.routes.files.utils import get_file_store, map_managed_file_error
 
 
 async def list_files_handler(
@@ -78,58 +70,19 @@ async def list_files_handler(
             raise StarError(INVALID_REQUEST, "Invalid cursor.") from exc
 
     try:
-        meta_dir = get_meta_path(uuid.uuid4(), cfg).parent
-
-        items: list[FileMetadata] = []
-        for meta_path in sorted(meta_dir.glob("file_*.json")):
-            stem = meta_path.stem
-            prefix = "file_"
-            if not stem.startswith(prefix):
-                continue
-
-            raw_id = stem[len(prefix) :]
-            try:
-                file_id = uuid.UUID(raw_id)
-            except ValueError:
-                logger.warning(
-                    "file.list.skipped_metadata",
-                    extra={"reason": "invalid_filename", "meta_path": str(meta_path)},
-                )
-                continue
-
-            try:
-                metadata = safe_load_metadata(file_id, cfg)
-            except StarError as exc:
-                if exc.code == FILE_NOT_FOUND.code:
-                    continue
-                if exc.code == INVALID_REQUEST.code:
-                    logger.warning(
-                        "file.list.skipped_metadata",
-                        extra={"reason": "invalid_metadata", "file_id": str(file_id)},
-                    )
-                    continue
-                raise
-
-            items.append(metadata)
-
-        filtered = apply_filters(
-            items,
-            status=status,
-            mime_type=mime_type,
-            extension=extension,
-        )
-        sorted_items = apply_sort(filtered, order=order)
-        page, next_cursor = apply_pagination(
-            sorted_items,
+        page = get_file_store(cfg).list_files(
             limit=limit,
             cursor=cursor_tuple,
             order=order,
+            status=status,
+            mime_type=mime_type,
+            extension=extension,
         )
 
         logger.info(
             "file.list.succeeded",
             extra={
-                "count": len(page),
+                "count": len(page.files),
                 "limit": limit,
                 "cursor": cursor,
                 "filters": {
@@ -141,14 +94,16 @@ async def list_files_handler(
         )
 
         return FileListData(
-            files=page,
+            files=page.files,
             pagination=Pagination(
-                count=len(page),
-                next_cursor=next_cursor,
+                count=len(page.files),
+                next_cursor=page.next_cursor,
             ),
         )
     except StarError:
         raise
     except Exception as exc:
-        logger.exception("file.list.failed")
-        raise StarError(INTERNAL_ERROR, "Failed to list files.") from exc
+        mapped = map_managed_file_error(exc)
+        if mapped.code == INTERNAL_ERROR.code:
+            logger.exception("file.list.failed")
+        raise mapped from exc

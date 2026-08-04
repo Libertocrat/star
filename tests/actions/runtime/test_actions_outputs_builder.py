@@ -300,7 +300,9 @@ def test_outputs_builder__file_command_sets_unverified_before_ready(
     blob.write_bytes(_minimal_png_bytes())
 
     statuses: list[str] = []
-    original_save = file_manager.save_file_metadata
+    from star.core.files import storage as file_storage_module
+
+    original_save = file_storage_module.save_file_metadata
 
     def _capture_status(metadata: FileMetadata, settings=None):
         """Capture status transitions while persisting metadata."""
@@ -309,9 +311,7 @@ def test_outputs_builder__file_command_sets_unverified_before_ready(
             statuses.append(metadata.status)
         return original_save(metadata, settings)
 
-    monkeypatch.setattr(
-        "star.actions.runtime.file_manager.save_file_metadata", _capture_status
-    )
+    monkeypatch.setattr("star.core.files.storage.save_file_metadata", _capture_status)
 
     spec = _make_spec(
         outputs={

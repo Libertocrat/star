@@ -75,8 +75,9 @@ def _blob_path_for(tmp_path: Path, file_id: UUID) -> Path:
 def force_path_stat_failure(monkeypatch):
     """Patch blob path resolution to simulate an OSError on stat().
 
-    This fixture replaces the `get_blob_path` function used by the file content
-    handler so that it returns a wrapped Path-like object. The wrapped object:
+    This fixture replaces the `get_blob_path` function used by the local
+    managed file store so that it returns a wrapped Path-like object. The
+    wrapped object:
 
     - Preserves normal behavior for:
         - exists()
@@ -95,9 +96,9 @@ def force_path_stat_failure(monkeypatch):
         monkeypatch: pytest fixture used to patch runtime behavior.
     """
 
-    from star.routes.files.handlers import get_file_content as files_handler
+    from star.core.files import storage as storage_module
 
-    original_get_blob_path = files_handler.get_blob_path
+    original_get_blob_path = storage_module.get_blob_path
 
     def _patched_get_blob_path(file_id, cfg):
         """Return a wrapped Path object that fails on stat()."""
@@ -144,7 +145,7 @@ def force_path_stat_failure(monkeypatch):
         return WrappedPath(real_path)
 
     monkeypatch.setattr(
-        files_handler,
+        storage_module,
         "get_blob_path",
         _patched_get_blob_path,
     )
@@ -881,7 +882,7 @@ def test_files_content_get_handles_metadata_read_os_error(
             raise OSError("read failure")
 
         monkeypatch.setattr(
-            "star.routes.files.utils.load_file_metadata",
+            "star.core.files.storage.load_file_metadata",
             _raise_os_error,
         )
 

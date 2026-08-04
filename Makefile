@@ -14,7 +14,7 @@ SHELL_FILES := $(shell find . \
 	-not -path './.venv/*' \
 	-not -path './venv/*' \
 	-not -path './node_modules/*' \
-	-not -path './private/*')
+	-not -path './.internal/*')
 REQ_RUNTIME = requirements/runtime.txt
 REQ_DEV = requirements/dev.txt
 REQ_TESTING = requirements/testing.txt

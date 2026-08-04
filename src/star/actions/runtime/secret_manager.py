@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Iterable
 
 from star.core.config import Settings
-from star.core.utils.file_storage import ensure_storage_dirs, get_secret_tmp_dir
+from star.core.files import ensure_storage_dirs, get_secret_tmp_dir
 
 logger = logging.getLogger("star.actions.runtime.secret_manager")
 
