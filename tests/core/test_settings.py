@@ -14,7 +14,7 @@ from star.core.config import (
     load_star_api_token,
     validate_api_token,
 )
-from star.core.utils.file_storage import (
+from star.core.files import (
     ensure_storage_dirs,
     get_blob_dir,
     get_data_root,

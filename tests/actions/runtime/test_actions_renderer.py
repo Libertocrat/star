@@ -31,12 +31,12 @@ from star.actions.runtime import file_manager
 from star.actions.runtime.renderer import render_command
 from star.actions.runtime.secret_manager import cleanup_secret_files
 from star.core.config import Settings
-from star.core.schemas.files import FileMetadata
-from star.core.utils.file_storage import (
+from star.core.files import (
     get_blob_path,
     get_secret_tmp_dir,
     load_file_metadata,
 )
+from star.core.schemas.files import FileMetadata
 
 
 def _make_metadata(file_id, *, size_bytes: int = 10) -> FileMetadata:

@@ -8,13 +8,9 @@ import pytest
 
 from star.core.files import (
     LocalManagedFileStore,
-    create_placeholder_file_metadata,
-    ensure_storage_dirs,
     get_blob_path,
-    get_secret_tmp_dir,
     load_file_metadata,
 )
-from star.core.utils import file_storage as legacy_file_storage
 
 
 def test_local_store_creates_pending_and_finalizes_generated_file(settings):
@@ -65,29 +61,6 @@ def test_local_store_resolves_content_descriptor_for_ready_file(settings):
     assert descriptor.mime_type == "text/plain"
     assert descriptor.filename == "report.txt"
     assert descriptor.size_bytes == 5
-
-
-def test_legacy_file_storage_exports_delegate_to_core_files(settings):
-    """
-    GIVEN the temporary compatibility module for legacy file storage imports
-    WHEN callers use old helpers during the migration window
-    THEN they resolve the same layout and metadata as the new core/files API
-    """
-
-    ensure_storage_dirs(settings)
-
-    metadata = create_placeholder_file_metadata(
-        original_filename="placeholder.bin",
-        settings=settings,
-    )
-
-    assert legacy_file_storage.get_secret_tmp_dir(settings) == get_secret_tmp_dir(
-        settings
-    )
-    assert legacy_file_storage.get_blob_path(metadata.id, settings) == get_blob_path(
-        metadata.id, settings
-    )
-    assert legacy_file_storage.load_file_metadata(metadata.id, settings) == metadata
 
 
 def test_local_store_missing_metadata_raises_domain_error(settings):

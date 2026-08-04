@@ -20,8 +20,7 @@ from star.core.errors import (
     UNAUTHORIZED,
     UNSUPPORTED_MEDIA_TYPE,
 )
-from star.core.schemas.files import FileMetadata
-from star.core.utils.file_storage import (
+from star.core.files import (
     get_blob_dir,
     get_blob_path,
     get_meta_dir,
@@ -30,6 +29,7 @@ from star.core.utils.file_storage import (
     get_tmp_dir,
     load_file_metadata,
 )
+from star.core.schemas.files import FileMetadata
 
 # ============================================================================
 # Startup / initialization

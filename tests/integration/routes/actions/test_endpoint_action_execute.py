@@ -21,7 +21,7 @@ from star.actions.exceptions import (
     ActionBinaryPathForbiddenError,
 )
 from star.core.errors import StarError
-from star.core.utils.file_storage import get_secret_tmp_dir
+from star.core.files import get_secret_tmp_dir
 from star.routes.actions.handlers.execute_action import execute_action_handler
 from star.routes.actions.schemas import ExecuteActionRequest
 
