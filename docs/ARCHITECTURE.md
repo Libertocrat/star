@@ -479,7 +479,7 @@ Testing is organized by scope:
 
 - `tests/test_app_smoke.py` covers basic application startup and health behavior.
 - `tests/actions` covers registry construction, DSL loader and validator behavior, runtime dispatch, presentation helpers, and execution-related slices.
-- `tests/core` covers schemas, settings, OpenAPI helpers, and security utilities.
+- `tests/core` covers schemas, settings, OpenAPI helpers, managed file primitives, and security utilities.
 - `tests/integration/middleware` exercises middleware behavior end to end.
 - `tests/integration/routes` exercises route-level behavior for `/v1/actions`, `/v1/files`, `/health`, `/metrics`, and `/openapi.json`.
 

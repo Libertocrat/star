@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 
 from star.core.files import (
     LocalManagedFileStore,
     get_blob_path,
+    iter_file_chunks,
     load_file_metadata,
+    sanitize_download_filename,
 )
 
 
@@ -76,3 +78,59 @@ def test_local_store_missing_metadata_raises_domain_error(settings):
 
     with pytest.raises(ManagedFileNotFoundError):
         store.require_metadata(uuid4())
+
+
+def test_sanitize_download_filename_strips_path_and_control_characters():
+    """
+    GIVEN persisted filename metadata containing path and control characters
+    WHEN the download filename is sanitized for response headers
+    THEN only a safe basename display value is returned
+    """
+
+    file_id = UUID("00000000-0000-0000-0000-000000000123")
+
+    filename = sanitize_download_filename("../bad\x00name.txt", file_id)
+
+    assert filename == "badname.txt"
+
+
+def test_sanitize_download_filename_uses_deterministic_fallback_for_empty_names():
+    """
+    GIVEN missing or unusable persisted filename metadata
+    WHEN the download filename is sanitized for response headers
+    THEN a deterministic UUID-based fallback filename is returned
+    """
+
+    file_id = UUID("00000000-0000-0000-0000-000000000123")
+
+    assert sanitize_download_filename("...", file_id) == f"file_{file_id}.bin"
+    assert sanitize_download_filename(None, file_id) == f"file_{file_id}.bin"
+
+
+def test_iter_file_chunks_yields_fixed_size_chunks(tmp_path):
+    """
+    GIVEN a local file and an explicit chunk size
+    WHEN managed file chunks are iterated
+    THEN bytes are yielded in deterministic fixed-size chunks until EOF
+    """
+
+    path = tmp_path / "stream.bin"
+    path.write_bytes(b"abcdefg")
+
+    chunks = list(iter_file_chunks(path, chunk_size=3))
+
+    assert chunks == [b"abc", b"def", b"g"]
+
+
+def test_iter_file_chunks_rejects_non_positive_chunk_size(tmp_path):
+    """
+    GIVEN a local file and an invalid chunk size
+    WHEN managed file chunks are iterated
+    THEN the helper rejects the invalid streaming configuration
+    """
+
+    path = tmp_path / "stream.bin"
+    path.write_bytes(b"abcdefg")
+
+    with pytest.raises(ValueError, match="chunk_size must be > 0"):
+        list(iter_file_chunks(path, chunk_size=0))
