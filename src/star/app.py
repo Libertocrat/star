@@ -22,12 +22,12 @@ from star.core import (
 from star.core.errors import FILE_TOO_LARGE
 from star.core.files import ensure_storage_dirs
 from star.core.openapi import build_openapi_schema
+from star.core.security.http_policies import BodyLimitPolicy, ContentTypePolicy
 from star.middleware.auth import AuthMiddleware
 from star.middleware.observability import ObservabilityMiddleware
 from star.middleware.rate_limit import RateLimitMiddleware
 from star.middleware.request_id import RequestIDMiddleware
 from star.middleware.request_integrity import RequestIntegrityMiddleware
-from star.middleware.schemas import BodyLimitPolicy, ContentTypePolicy
 from star.middleware.security_headers import SecurityHeadersMiddleware
 from star.middleware.timeout import TimeoutMiddleware
 from star.routes.actions.router import router as execute_router

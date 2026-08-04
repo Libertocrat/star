@@ -25,6 +25,7 @@ The current tests cover:
 - settings loading and validation
 - request and response schemas
 - middleware enforcement
+- unit-level HTTP/ASGI security helpers used by request-integrity middleware
 - file API behavior and STAR-managed storage lifecycle
 - unit-level managed file layout, metadata, listing, MIME policy, and storage helpers
 - runtime OpenAPI generation
@@ -116,7 +117,7 @@ Current unit coverage includes:
 - `tests/actions/runtime/test_actions_sanitizer.py` for stdout and stderr truncation, sensitive-prefix path redaction, invocation-secret redaction, and normalization
 - `tests/core/test_settings.py` for environment-backed settings, defaults, docs toggles, output byte limits, blocked binaries, and token loading rules
 - `tests/core/files/*` for managed file layout derivation, metadata sidecars, listing cursors and pagination, MIME policy validation, local storage helpers, streaming chunks, and safe download filename normalization
-- `tests/core/security/*` for path validation, secure file access helpers, HTTP validation helpers, and security headers
+- `tests/core/security/*` for path validation, secure file access helpers, HTTP validation helpers, request body and integrity policy helpers, and security headers
 
 The unit suite does not assume a fixed public action catalog. Most action-specific tests build temporary DSL specs and compile deterministic registries inside the test process.
 
@@ -171,6 +172,7 @@ In `tests/core/security`, the current tests validate:
 - symlink rejection during path resolution
 - safe opening of regular files without following symlinks
 - strict `Content-Length` parsing and content type normalization
+- ASGI request body detection, bodyless-method policy, streaming body counting, content-type policy matching, and default versus upload-specific body-limit resolution
 
 In `tests/actions/build_engine` and `tests/actions/runtime`, the current tests validate:
 
