@@ -66,10 +66,12 @@ The main implementation lives under `src/star`.
 | `src/star/actions/presentation` | Public action catalog, request/response contract generation, and OpenAPI-facing serializers. |
 | `src/star/actions/specs` | Built-in YAML action modules that define the shipped action catalog. |
 | `src/star/middleware` | Authentication, request integrity, request ID, observability, rate limiting, timeout, and optional security headers. |
-| `src/star/core` | Settings, errors, OpenAPI generation, managed file APIs, security helpers, and shared response/file schemas. |
+| `src/star/core` | Settings, errors, OpenAPI generation, managed file APIs, reusable security helpers, and shared response/file schemas. |
 | `src/star/routes` | Thin HTTP handlers for `/v1/actions`, `/v1/files`, `/health`, and `/metrics`. |
 | `tests` | Smoke, unit, and integration tests covering startup, settings, middleware, action build/runtime layers, file APIs, and OpenAPI behavior. |
 | `scripts` | Helper scripts for OpenAPI export, docs site generation, and local port forwarding. |
+
+`src/star/core/security` owns reusable HTTP, ASGI body, header, path, MIME, and file-access security helpers. Concrete middleware such as `RequestIntegrityMiddleware` remains responsible for ASGI orchestration, rejection envelopes, request IDs, metrics, and logs.
 
 Within `src/star/actions/runtime`, ownership stays split by execution phase. `renderer.py` resolves params and command templates, `secret_manager.py` creates and cleans invocation-owned secret files for file-delivered `secret` args, `executor.py` runs the rendered argv without a shell, `sanitizer.py` bounds and redacts subprocess output, and `outputs_builder.py` shapes declared outputs into response payloads or managed files.
 
@@ -150,7 +152,7 @@ If security headers are disabled, the pipeline starts at `RequestIDMiddleware`.
 
 ### `RequestIntegrityMiddleware`
 
-- Operates at ASGI level.
+- Operates at ASGI level and delegates reusable body, policy, header, and path checks to `src/star/core/security`.
 - Rejects malformed request paths containing NUL bytes, backslashes, or disallowed control characters.
 - Rejects malformed raw headers, including duplicate `Authorization` headers, whitespace in header names, and control characters in names or values.
 - Rejects requests that contain both `Content-Length` and `Transfer-Encoding`.

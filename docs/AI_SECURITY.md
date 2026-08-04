@@ -140,7 +140,7 @@ Important caveats:
 
 ### 2. Request-integrity gate
 
-Implemented in [src/star/middleware/request_integrity.py](../src/star/middleware/request_integrity.py):
+Implemented by [src/star/middleware/request_integrity.py](../src/star/middleware/request_integrity.py), using reusable HTTP/ASGI helpers under [src/star/core/security](../src/star/core/security):
 
 - path sanity validation
 - header integrity validation on raw headers
