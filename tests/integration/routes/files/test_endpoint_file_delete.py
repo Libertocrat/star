@@ -18,7 +18,7 @@ from star.core.errors import (
     INVALID_REQUEST,
     UNAUTHORIZED,
 )
-from star.core.files import storage as file_storage_module
+from star.core.files import storage as storage_module
 
 # ============================================================================
 # Helpers
@@ -175,7 +175,7 @@ def test_files_delete_preserves_artifacts_when_metadata_delete_fails(
         raise OSError("metadata delete failed")
 
     monkeypatch.setattr(
-        file_storage_module,
+        storage_module,
         "delete_metadata_file",
         _fail_delete_metadata,
     )
@@ -219,7 +219,7 @@ def test_files_delete_succeeds_when_blob_cleanup_fails_after_metadata_delete(
         raise OSError("blob delete failed")
 
     monkeypatch.setattr(
-        file_storage_module,
+        storage_module,
         "delete_blob_file",
         _fail_delete_blob,
     )

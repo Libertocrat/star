@@ -33,7 +33,7 @@ from star.actions.registry import ActionRegistry
 from star.actions.runtime.file_manager import (
     cleanup_output_placeholders as cleanup_real_output_placeholders,
 )
-from star.core.utils.file_storage import get_secret_tmp_dir, load_file_metadata
+from star.core.files import get_secret_tmp_dir, load_file_metadata
 
 # ============================================================================
 # Runtime Dispatch

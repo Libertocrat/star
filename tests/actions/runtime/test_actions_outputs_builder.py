@@ -27,8 +27,7 @@ from star.actions.models.security import BinaryPolicy
 from star.actions.runtime import file_manager
 from star.actions.runtime.outputs_builder import _cleanup_known_outputs, build_outputs
 from star.core.config import Settings
-from star.core.schemas.files import FileMetadata
-from star.core.utils.file_storage import (
+from star.core.files import (
     EMPTY_SHA256,
     compute_sha256_for_file,
     create_placeholder_file_metadata,
@@ -36,6 +35,7 @@ from star.core.utils.file_storage import (
     get_meta_path,
     load_file_metadata,
 )
+from star.core.schemas.files import FileMetadata
 
 
 def _make_settings(tmp_path: Path) -> Settings:
@@ -300,9 +300,9 @@ def test_outputs_builder__file_command_sets_unverified_before_ready(
     blob.write_bytes(_minimal_png_bytes())
 
     statuses: list[str] = []
-    from star.core.files import storage as file_storage_module
+    from star.core.files import storage as storage_module
 
-    original_save = file_storage_module.save_file_metadata
+    original_save = storage_module.save_file_metadata
 
     def _capture_status(metadata: FileMetadata, settings=None):
         """Capture status transitions while persisting metadata."""

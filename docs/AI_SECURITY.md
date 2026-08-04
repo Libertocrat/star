@@ -194,7 +194,7 @@ This is the strongest direct mitigation against command-injection style escalati
 
 Implemented across:
 
-- [src/star/core/utils/file_storage.py](../src/star/core/utils/file_storage.py)
+- [src/star/core/files](../src/star/core/files)
 - [src/star/core/security/paths.py](../src/star/core/security/paths.py)
 - [src/star/core/security/file_access.py](../src/star/core/security/file_access.py)
 - [src/star/routes/files/handlers/upload_file.py](../src/star/routes/files/handlers/upload_file.py)
