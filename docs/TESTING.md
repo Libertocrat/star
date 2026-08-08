@@ -117,6 +117,7 @@ Current unit coverage includes:
 - `tests/actions/runtime/test_actions_sanitizer.py` for stdout and stderr truncation, sensitive-prefix path redaction, invocation-secret redaction, and normalization
 - `tests/core/test_settings.py` for environment-backed settings, defaults, docs toggles, output byte limits, blocked binaries, and token loading rules
 - `tests/core/files/*` for managed file layout derivation, metadata sidecars, listing cursors and pagination, MIME policy validation, local storage helpers, streaming chunks, and safe download filename normalization
+- `tests/core/test_error_details.py` and `tests/core/test_responses.py` for allowlisted, bounded public error details and centralized HTTP error response helpers
 - `tests/core/security/*` for path validation, secure file access helpers, HTTP validation helpers, request body and integrity policy helpers, and security headers
 
 The unit suite does not assume a fixed public action catalog. Most action-specific tests build temporary DSL specs and compile deterministic registries inside the test process.
@@ -182,7 +183,7 @@ In `tests/actions/build_engine` and `tests/actions/runtime`, the current tests v
 - build-time and runtime rejection of secret values that would render into argv
 - materialization and cleanup of invocation-owned secret temp files
 - runtime rejection of invalid params, forbidden binaries, and bad output declarations
-- redaction of invocation-provided secrets from sanitized subprocess output and omission of rejected input values from public validation errors
+- redaction of invocation-provided secrets from sanitized subprocess output and allowlisted omission of unsafe public error details, including rejected validation inputs
 
 In `tests/integration/middleware` and `tests/integration/routes`, the current tests validate:
 

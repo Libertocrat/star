@@ -188,7 +188,7 @@ Authentication coverage is as follows:
 - `ContentTypePolicy` restricts `POST /v1/actions/{action_id}` to `application/json` and `POST /v1/files` to `multipart/form-data`.
 - Action execution validates params against the action-specific generated `params_model`.
 - Runtime rendering rejects invalid placeholder values and `None` values before execution.
-- Pydantic validation errors are mapped without rejected input values in public `StarError` details.
+- Public `StarError` details are allowlisted and bounded before serialization; Pydantic validation errors retain only `type`, `loc`, and `msg`, while rejected input values, context, and external documentation URLs are omitted.
 
 ### DSL build and execution mitigations
 
