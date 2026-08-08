@@ -7,6 +7,7 @@ from typing import Any
 
 from starlette.responses import JSONResponse
 
+from star.core.error_details import sanitize_error_details
 from star.core.errors import ErrorDef, StarError
 from star.core.schemas.envelope import ResponseEnvelope
 
@@ -36,10 +37,11 @@ def error_json_response(
         A JSONResponse containing the standard STAR error envelope.
     """
 
+    safe_details = sanitize_error_details(details, error_code=error.code)
     payload = ResponseEnvelope.from_error(
         code=error.code,
         message=message or error.default_message,
-        details=details,
+        details=safe_details,
     )
     return JSONResponse(
         status_code=status_code if status_code is not None else error.http_status,

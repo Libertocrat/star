@@ -19,6 +19,7 @@ from star.actions.exceptions import (
     ActionBinaryBlockedError,
     ActionBinaryNotAllowedError,
     ActionBinaryPathForbiddenError,
+    ActionRuntimeExecError,
 )
 from star.core.errors import StarError
 from star.core.files import get_secret_tmp_dir
@@ -250,6 +251,45 @@ def test_execute_returns_internal_error_when_runtime_settings_are_invalid(
     assert body["error"]["message"] == "Runtime settings are not available."
 
 
+def test_execute_omits_internal_error_reason_from_runtime_failure(
+    client,
+    auth_headers,
+    valid_registry,
+    monkeypatch,
+):
+    """
+    GIVEN action dispatch raises an internal runtime execution failure
+    WHEN the endpoint maps the failure to INTERNAL_ERROR
+    THEN raw diagnostic reason details are omitted from the public envelope
+    """
+    client.app.state.action_registry = valid_registry
+
+    async def _raise_runtime_error(*_args, **_kwargs):
+        """Raise a deterministic runtime execution failure."""
+
+        raise ActionRuntimeExecError("raw runtime secret detail")
+
+    monkeypatch.setattr(
+        "star.routes.actions.handlers.execute_action.dispatch_action",
+        _raise_runtime_error,
+    )
+
+    response = client.post(
+        "/v1/actions/test_runtime.ping",
+        headers=auth_headers,
+        json={"params": {}},
+    )
+    body = response.json()
+
+    assert response.status_code == 500
+    assert body["success"] is False
+    assert body["data"] is None
+    assert body["error"]["code"] == "INTERNAL_ERROR"
+    assert body["error"]["details"] == {}
+    assert "reason" not in body["error"]["details"]
+    assert "raw runtime secret detail" not in response.text
+
+
 def test_execute_invalid_param_type_maps_to_invalid_params(
     client, auth_headers, valid_registry
 ):
@@ -257,6 +297,7 @@ def test_execute_invalid_param_type_maps_to_invalid_params(
     GIVEN an action expecting an integer parameter
     WHEN a non-integer value is provided
     THEN the endpoint returns INVALID_PARAMS error
+    AND Pydantic error sensitive fields are sanitized
     """
     client.app.state.action_registry = valid_registry
 
@@ -276,7 +317,16 @@ def test_execute_invalid_param_type_maps_to_invalid_params(
     assert response.status_code == 400
     assert body["success"] is False
     assert body["error"]["code"] == "INVALID_PARAMS"
-    assert "errors" in body["error"]["details"]
+
+    error_details = body["error"]["details"]
+    assert set(error_details) == {"errors"}
+    assert error_details["errors"]
+    for error in error_details["errors"]:
+        assert set(error) <= {"type", "loc", "msg"}
+        assert "input" not in error
+        assert "ctx" not in error
+        assert "url" not in error
+    assert "not-an-int" not in response.text
 
 
 def test_execute_missing_required_param_maps_to_invalid_params(

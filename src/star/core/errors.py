@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from star.core.error_details import sanitize_error_details
+
 
 @dataclass(slots=True)
 class StarError(Exception):
@@ -55,7 +57,7 @@ class StarError(Exception):
         self.http_status = error.http_status
 
         self.message = message or error.default_message
-        self.details = dict(details or {})
+        self.details = sanitize_error_details(details, error_code=error.code) or {}
 
         Exception.__init__(self, self.message)
 
