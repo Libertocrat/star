@@ -98,6 +98,8 @@ Swagger / OpenAPI docs are enabled by default in the standard local deploy flow 
 > [!WARNING]
 > For production-oriented deployments, prefer `./star configure --force --production` when you want to regenerate configuration with production-oriented defaults, or set `STAR_ENABLE_DOCS=false` and keep `STAR_METRICS_REQUIRE_AUTH=true` manually in `.env`.
 
+Default local startup keeps the token host-owned and uses the least permissive mode that remains readable by Docker Compose file-based secrets: `0640` when the token group already matches `STAR_CONTAINER_GID`, otherwise `0644`. Production startup explicitly prepares `0640` with the container group before starting.
+
 If you use `--production`, configure with production-oriented settings, or manually disable docs in `.env`, you can re-check STAR status as follows:
 
 1. Safely stop STAR with `./star down`

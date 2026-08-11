@@ -10,6 +10,7 @@ PULL_MODE=false
 WAIT_MODE=true
 SILENT_MODE=false
 PRODUCTION_MODE=false
+DEFAULT_TOKEN_PERMISSION_MODE="644"
 
 # Print CLI usage and examples.
 usage() {
@@ -205,37 +206,43 @@ apply_secret_permissions_with_sudo_prompt() {
     return 0
 }
 
-# Default mode: keep host ownership and allow container reads via others-read.
+# Default mode: keep host ownership and prefer group-read when already viable.
 set_secret_file_permissions_default() {
-    local current_uid
+    local _current_uid
     local current_gid
     local current_mode
+    local expected_mode="644"
     local secret_path_display
 
     secret_path_display="$(path_relative_to_pwd "${STAR_SECRET_FILE}")"
 
-    if ! read -r current_uid current_gid current_mode < <(read_file_state "${STAR_SECRET_FILE}"); then
+    if ! read -r _current_uid current_gid current_mode < <(read_file_state "${STAR_SECRET_FILE}"); then
         error "Failed to inspect STAR API token file permissions."
         return 1
     fi
 
-    if [[ "${current_mode}" == "644" ]]; then
-        say_success "${SILENT_MODE}" "STAR API token permissions already match default runtime mode (644)."
+    if [[ "${current_gid}" == "${STAR_CONTAINER_GID}" ]]; then
+        expected_mode="640"
+    fi
+    DEFAULT_TOKEN_PERMISSION_MODE="${expected_mode}"
+
+    if [[ "${current_mode}" == "${expected_mode}" ]]; then
+        say_success "${SILENT_MODE}" "STAR API token permissions already match default runtime mode (${expected_mode})."
         return 0
     fi
 
     if [[ "${DRY_RUN:-false}" == "true" ]]; then
-        run chmod 644 "${secret_path_display}"
+        run chmod "${expected_mode}" "${secret_path_display}"
         return 0
     fi
 
-    if ! chmod 644 "${STAR_SECRET_FILE}" 2> /dev/null; then
-        error "Failed to set STAR API token permissions to 644 for default startup."
-        error "Run: chmod 644 ${secret_path_display}"
+    if ! chmod "${expected_mode}" "${STAR_SECRET_FILE}" 2> /dev/null; then
+        error "Failed to set STAR API token permissions to ${expected_mode} for default startup."
+        error "Run: chmod ${expected_mode} ${secret_path_display}"
         return 1
     fi
 
-    say_success "${SILENT_MODE}" "STAR API token permissions set for default runtime mode (644)."
+    say_success "${SILENT_MODE}" "STAR API token permissions set for default runtime mode (${expected_mode})."
     return 0
 }
 
@@ -385,7 +392,7 @@ wait_for_health() {
 print_final_output() {
     local docs_state
     local docs_url_value
-    local secret_mode="default mode (644 while runtime is active)"
+    local secret_mode="default mode (${DEFAULT_TOKEN_PERMISSION_MODE} while runtime is active)"
 
     [[ "${SILENT_MODE}" == "true" ]] && return 0
 
