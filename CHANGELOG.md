@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Hardened file download `Content-Disposition` headers with safe ASCII filename fallbacks and UTF-8 `filename*` parameters.
 - Added `STAR_MAX_BODY_BYTES` for non-upload request bodies, kept multipart uploads governed by `STAR_MAX_FILE_BYTES`, and rejected request bodies on methods such as `GET` and `DELETE` before route handling.
 - Added configurable auth gates for runtime docs and Prometheus metrics, with `/metrics` and enabled docs requiring Bearer auth by default unless explicitly made public through environment settings.
+- Updated packaged runtime startup to prefer `0640` API token permissions when the token group already matches `STAR_CONTAINER_GID`, while preserving `0644` fallback for local Docker Compose secret readability.
 - Changed the AES-256 encrypt/decrypt actions to pass OpenSSL passphrases through invocation-owned temporary secret files instead of `-pass pass:...` argv, preventing direct argv/procfs exposure of those values.
 - Enforced DSL `secret` delivery rules so sensitive parameter values are never rendered as raw argv tokens, redacted those invocation-provided values from sanitized subprocess output, and omitted rejected input values from public validation error details.
 - Sanitized public `StarError.details` through allowlisted keys, bounded values, filtered Pydantic validation errors, and `INTERNAL_ERROR` reason omission before HTTP serialization.
