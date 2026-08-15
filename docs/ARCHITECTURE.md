@@ -470,6 +470,9 @@ The Compose service:
 - attaches the service to an external Docker network named by `STAR_SHARED_NETWORK`
 - publishes STAR to the host using `STAR_HOST_BIND_ADDRESS:STAR_HOST_PORT:STAR_PORT`
 - restarts with `unless-stopped`
+- runs with Docker init reaping, `no-new-privileges`, and no Linux capabilities
+- limits the application service and its subprocesses to 256 PIDs, `1g` memory, and `1.0` CPU
+- allows writes through the named STAR root volume while root-filesystem immutability remains deferred until all temporary write paths are explicitly modeled
 
 `star-init` creates the root directory, assigns ownership to the non-root runtime user, and normalizes directory and file permissions on the mounted storage volume before the API service starts.
 

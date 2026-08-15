@@ -12,6 +12,17 @@ This directory contains helper scripts used for local development, release artif
 | `scripts/star-forward.sh` | Forward a localhost port to a running STAR container when Compose port publishing is disabled or not desired |
 | `scripts/export_openapi.py` | Build the FastAPI app and write the OpenAPI schema to disk |
 | `scripts/build_docs_site.py` | Build a versioned Swagger UI site for GitHub Pages from the exported schema |
+| `scripts/assert_container_security.py` | Validate Dockerfile and Compose hardening contracts |
+
+## assert_container_security.py
+
+Validates portable Dockerfile and Compose security invariants without starting containers. With `--require-compose-hardening`, it checks the STAR application service rather than the root `star-init` helper: init-based child-process reaping, no privilege escalation, dropped Linux capabilities, the fixed PID, memory, and CPU limits, and graceful shutdown.
+
+```bash
+source .venv/bin/activate && python scripts/assert_container_security.py --dockerfile Dockerfile --compose docker-compose.yml --compose deploy/star-runtime/docker-compose.yml --require-compose-hardening
+```
+
+The checker intentionally does not require `read_only` yet because the writable root filesystem has not been reduced to explicit volumes and tmpfs mounts.
 
 ## star-forward.sh
 

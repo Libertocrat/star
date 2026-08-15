@@ -30,7 +30,7 @@ STAR uses defense in depth through these mechanisms:
 - managed file storage rooted at `STAR_ROOT_DIR`
 - sandbox path enforcement in low-level filesystem helpers
 - optional baseline response security headers
-- container isolation and a non-root container user
+- container isolation, a non-root container user, dropped Linux capabilities, and no privilege escalation
 
 This model aims to keep the exposed capability set small, deterministic, and observable.
 
@@ -53,7 +53,7 @@ These goals do not include multi-tenant isolation or public Internet exposure.
 
 STAR protects these assets:
 
-- Host integrity. The service reduces host exposure by running in a container, using a non-root user, and restricting storage to a mounted STAR root directory.
+- Host integrity. The service reduces host exposure by running in a container as a non-root user with no Linux capabilities or privilege escalation, and restricting storage to a mounted STAR root directory.
 - Managed storage contents. File uploads, action outputs, blobs, and metadata are limited to a strict root boundary at `STAR_ROOT_DIR`.
 - Action execution environment. Only DSL-defined actions that passed startup validation can run through `POST /v1/actions/{action_id}`.
 - Authentication token. The bearer token gates protected endpoints and is loaded from a Docker secret path.
@@ -224,6 +224,7 @@ Authentication coverage is as follows:
 - `RateLimitMiddleware` applies process-local per-client token buckets using `request.client.host` and `star_rate_limit_rps`.
 - `TimeoutMiddleware` aborts long running requests using `star_timeout_ms`.
 - Action subprocess execution also uses `star_timeout_ms` so process cleanup does not depend only on the outer HTTP timeout.
+- The Compose application service uses Docker init reaping and fixed limits of 256 PIDs, `1g` memory, and `1.0` CPU across the API process and action subprocesses.
 - Upload and content-processing paths enforce size-aware behavior before persisting or returning data.
 
 ### Request smuggling mitigations
@@ -243,7 +244,7 @@ Some risks remain by design or by deployment assumption.
 - `RateLimitMiddleware` is process-local. In multi-process or multi-instance deployments, each process keeps independent per-client token buckets, so upstream or distributed quota enforcement is still needed for horizontally scaled deployments.
 - `/health` is intentionally unauthenticated. Metrics and docs endpoints increase reachable surface if operators explicitly configure them as public.
 - Filesystem race conditions are reduced but not fully eliminated. The code explicitly notes TOCTOU limitations around some path-resolution patterns.
-- Service availability still depends on the underlying container host, mounted volume performance, and upstream request volume.
+- Service availability still depends on the underlying container host, mounted volume performance, and upstream request volume; actions that exceed the fixed memory, CPU, or PID limits can be throttled or terminated by the container runtime.
 - `secret` params are still accepted as plaintext JSON request values. STAR reduces argv, public error, and output exposure for those values, but it does not provide client-side encryption, asymmetric encryption, persistent secret storage, or protection from highly privileged process or memory inspection.
 
 ## 9. Security Assumptions
