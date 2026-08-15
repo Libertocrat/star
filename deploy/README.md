@@ -100,6 +100,12 @@ Swagger / OpenAPI docs are enabled by default in the standard local deploy flow 
 
 Default local startup keeps the token host-owned and uses the least permissive mode that remains readable by Docker Compose file-based secrets: `0640` when the token group already matches `STAR_CONTAINER_GID`, otherwise `0644`. Production startup explicitly prepares `0640` with the container group before starting.
 
+## Runtime hardening
+
+The long-running STAR container uses Docker's init process for child-process reaping, disallows privilege escalation, drops all Linux capabilities, and has fixed first-pass limits of 256 PIDs, `1g` memory, and `1.0` CPU. These limits apply collectively to the API process and its allowlisted action subprocesses; the short-lived root `star-init` helper remains limited to preparing named-volume ownership.
+
+The runtime root filesystem remains writable in this release because STAR has not yet proven every required temporary write path under an explicit volume or tmpfs. Resource limits and other hardening controls are intentionally fixed in `0.1.3`.
+
 If you use `--production`, configure with production-oriented settings, or manually disable docs in `.env`, you can re-check STAR status as follows:
 
 1. Safely stop STAR with `./star down`

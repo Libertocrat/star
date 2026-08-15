@@ -19,6 +19,15 @@ services:
     image: ${STAR_IMAGE:-ghcr.io/libertocrat/star:latest}
     pull_policy: ${STAR_PULL_POLICY:-missing}
     restart: unless-stopped
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 256
+    mem_limit: 1g
+    cpus: "1.0"
+    stop_grace_period: 30s
     env_file: .env
     secrets:
       - star_api_token
