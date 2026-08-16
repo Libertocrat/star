@@ -102,9 +102,9 @@ Default local startup keeps the token host-owned and uses the least permissive m
 
 ## Runtime hardening
 
-The long-running STAR container uses Docker's init process for child-process reaping, disallows privilege escalation, drops all Linux capabilities, and has fixed first-pass limits of 256 PIDs, `1g` memory, and `1.0` CPU. These limits apply collectively to the API process and its allowlisted action subprocesses; the short-lived root `star-init` helper remains limited to preparing named-volume ownership.
+The long-running STAR container uses Docker's init process for child-process reaping, disallows privilege escalation, drops all Linux capabilities, and limits the application service to 256 PIDs. `STAR_CONTAINER_MEMORY_LIMIT` and `STAR_CONTAINER_CPUS_LIMIT` configure hard memory and CPU limits collectively for the API process and its allowlisted action subprocesses; they default to `1g` and `1.0`, respectively. The supported ranges are `512m` through `8g` for memory and `0.5` through `8.0` CPU cores. The short-lived root `star-init` helper remains limited to preparing named-volume ownership.
 
-The runtime root filesystem remains writable in this release because STAR has not yet proven every required temporary write path under an explicit volume or tmpfs. Resource limits and other hardening controls are intentionally fixed in `0.1.3`.
+The runtime root filesystem remains writable in this release because STAR has not yet proven every required temporary write path under an explicit volume or tmpfs. Capability, privilege, PID, and shutdown controls remain fixed in `0.1.3`.
 
 If you use `--production`, configure with production-oriented settings, or manually disable docs in `.env`, you can re-check STAR status as follows:
 

@@ -11,6 +11,8 @@ WAIT_MODE=true
 SILENT_MODE=false
 PRODUCTION_MODE=false
 DEFAULT_TOKEN_PERMISSION_MODE="644"
+DEFAULT_STAR_CONTAINER_MEMORY_LIMIT="1g"
+DEFAULT_STAR_CONTAINER_CPUS_LIMIT="1.0"
 
 # Print CLI usage and examples.
 usage() {
@@ -94,6 +96,19 @@ require_runtime_env_value() {
     fi
 }
 
+# Apply compatibility defaults only when older .env files omit resource limits.
+apply_resource_limit_defaults() {
+    if [[ -z "${STAR_CONTAINER_MEMORY_LIMIT+x}" ]]; then
+        STAR_CONTAINER_MEMORY_LIMIT="${DEFAULT_STAR_CONTAINER_MEMORY_LIMIT}"
+        export STAR_CONTAINER_MEMORY_LIMIT
+    fi
+
+    if [[ -z "${STAR_CONTAINER_CPUS_LIMIT+x}" ]]; then
+        STAR_CONTAINER_CPUS_LIMIT="${DEFAULT_STAR_CONTAINER_CPUS_LIMIT}"
+        export STAR_CONTAINER_CPUS_LIMIT
+    fi
+}
+
 # Validate runtime env values loaded from the generated .env file.
 validate_runtime_env() {
     require_runtime_env_value STAR_SHARED_NETWORK
@@ -105,6 +120,8 @@ validate_runtime_env() {
     require_runtime_env_value STAR_ROOT_DIR
     require_runtime_env_value STAR_CONTAINER_UID
     require_runtime_env_value STAR_CONTAINER_GID
+    require_runtime_env_value STAR_CONTAINER_MEMORY_LIMIT
+    require_runtime_env_value STAR_CONTAINER_CPUS_LIMIT
 
     if ! is_safe_docker_name "${STAR_SHARED_NETWORK}"; then
         die "STAR_SHARED_NETWORK must use letters, numbers, dots, underscores or dashes. Current value: ${STAR_SHARED_NETWORK}"
@@ -140,6 +157,14 @@ validate_runtime_env() {
 
     if ! is_int "${STAR_CONTAINER_GID}" || ((STAR_CONTAINER_GID < 0)); then
         die "STAR_CONTAINER_GID must be a non-negative integer. Current value: ${STAR_CONTAINER_GID}"
+    fi
+
+    if ! is_compose_memory_limit "${STAR_CONTAINER_MEMORY_LIMIT}"; then
+        die "STAR_CONTAINER_MEMORY_LIMIT must be an integer from 512m to 8g with lowercase m, mb, g or gb units. Current value: ${STAR_CONTAINER_MEMORY_LIMIT}"
+    fi
+
+    if ! is_compose_cpu_limit "${STAR_CONTAINER_CPUS_LIMIT}"; then
+        die "STAR_CONTAINER_CPUS_LIMIT must be a number from 0.5 to 8.0 with up to three decimal places. Current value: ${STAR_CONTAINER_CPUS_LIMIT}"
     fi
 }
 
@@ -456,6 +481,7 @@ main() {
     ensure_file_exists "${STAR_COMPOSE_FILE}" "docker-compose.yml" || exit 1
 
     load_env required
+    apply_resource_limit_defaults
     validate_runtime_env
 
     validate_existing_token_file || exit 1

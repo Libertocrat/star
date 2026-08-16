@@ -16,7 +16,7 @@ This directory contains helper scripts used for local development, release artif
 
 ## assert_container_security.py
 
-Validates portable Dockerfile and Compose security invariants without starting containers. With `--require-compose-hardening`, it checks the STAR application service rather than the root `star-init` helper: init-based child-process reaping, no privilege escalation, dropped Linux capabilities, the fixed PID, memory, and CPU limits, and graceful shutdown.
+Validates portable Dockerfile and Compose security invariants without starting containers. With `--require-compose-hardening`, it checks the STAR application service rather than the root `star-init` helper: init-based child-process reaping, no privilege escalation, dropped Linux capabilities, the fixed PID limit, bounded memory and CPU limit interpolation with `1g` and `1.0` fallbacks, and graceful shutdown.
 
 ```bash
 source .venv/bin/activate && python scripts/assert_container_security.py --dockerfile Dockerfile --compose docker-compose.yml --compose deploy/star-runtime/docker-compose.yml --require-compose-hardening

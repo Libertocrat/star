@@ -579,6 +579,75 @@ is_port() {
     ((value >= 1 && value <= 65535))
 }
 
+# Return the configured Compose memory limit as mebibytes when it is supported.
+compose_memory_limit_mebibytes() {
+    local value="${1-}"
+    local amount
+    local unit
+    local multiplier
+    local mebibytes
+
+    if [[ ! "${value}" =~ ^([1-9][0-9]{0,3})(m|mb|g|gb)$ ]]; then
+        return 1
+    fi
+
+    amount="${BASH_REMATCH[1]}"
+    unit="${BASH_REMATCH[2]}"
+
+    case "${unit}" in
+        m | mb)
+            multiplier=1
+            ;;
+        g | gb)
+            multiplier=1024
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+
+    mebibytes=$((10#${amount} * multiplier))
+    if ((mebibytes < 512 || mebibytes > 8192)); then
+        return 1
+    fi
+
+    printf '%s\n' "${mebibytes}"
+}
+
+# Return the configured Compose CPU limit as millicpus when it is supported.
+compose_cpu_limit_millicpus() {
+    local value="${1-}"
+    local whole
+    local fraction
+    local millicpus
+
+    if [[ ! "${value}" =~ ^(0|[1-9][0-9]?)(\.([0-9]{1,3}))?$ ]]; then
+        return 1
+    fi
+
+    whole="${BASH_REMATCH[1]}"
+    fraction="${BASH_REMATCH[3]:-}"
+    fraction="${fraction}000"
+    fraction="${fraction:0:3}"
+    millicpus=$((10#${whole} * 1000 + 10#${fraction}))
+
+    if ((millicpus < 500 || millicpus > 8000)); then
+        return 1
+    fi
+
+    printf '%s\n' "${millicpus}"
+}
+
+# Validate a bounded Docker Compose memory-limit value.
+is_compose_memory_limit() {
+    compose_memory_limit_mebibytes "${1-}" > /dev/null
+}
+
+# Validate a bounded Docker Compose CPU-limit value.
+is_compose_cpu_limit() {
+    compose_cpu_limit_millicpus "${1-}" > /dev/null
+}
+
 # Validate supported bind addresses (localhost, common defaults, basic IPv4).
 is_bind_address() {
     local value

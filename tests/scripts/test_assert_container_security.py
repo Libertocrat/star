@@ -29,8 +29,8 @@ def _valid_compose_payload() -> dict[str, Any]:
                 "security_opt": ["no-new-privileges:true"],
                 "cap_drop": ["ALL"],
                 "pids_limit": 256,
-                "mem_limit": "1g",
-                "cpus": "1.0",
+                "mem_limit": "${STAR_CONTAINER_MEMORY_LIMIT:-1g}",
+                "cpus": "${STAR_CONTAINER_CPUS_LIMIT:-1.0}",
                 "stop_grace_period": "30s",
             }
         },
@@ -101,15 +101,39 @@ def test_committed_compose_manifests_satisfy_application_hardening(
         ),
         pytest.param(
             "mem_limit",
-            "512m",
-            "star must set mem_limit to 1g",
-            id="mem_limit",
+            "${STAR_CONTAINER_MEMORY_LIMIT:-512m}",
+            "star must interpolate STAR_CONTAINER_MEMORY_LIMIT with fallback 1g",
+            id="memory_fallback",
+        ),
+        pytest.param(
+            "mem_limit",
+            "${STAR_MEMORY_LIMIT:-1g}",
+            "star must interpolate STAR_CONTAINER_MEMORY_LIMIT with fallback 1g",
+            id="memory_variable",
+        ),
+        pytest.param(
+            "mem_limit",
+            "${STAR_CONTAINER_MEMORY_LIMIT}",
+            "star must interpolate STAR_CONTAINER_MEMORY_LIMIT with fallback 1g",
+            id="memory_missing_fallback",
         ),
         pytest.param(
             "cpus",
-            "2.0",
-            "star must set cpus to 1.0",
-            id="cpus",
+            "${STAR_CONTAINER_CPUS_LIMIT:-2.0}",
+            "star must interpolate STAR_CONTAINER_CPUS_LIMIT with fallback 1.0",
+            id="cpu_fallback",
+        ),
+        pytest.param(
+            "cpus",
+            "${STAR_CPU_LIMIT:-1.0}",
+            "star must interpolate STAR_CONTAINER_CPUS_LIMIT with fallback 1.0",
+            id="cpu_variable",
+        ),
+        pytest.param(
+            "cpus",
+            "${STAR_CONTAINER_CPUS_LIMIT}",
+            "star must interpolate STAR_CONTAINER_CPUS_LIMIT with fallback 1.0",
+            id="cpu_missing_fallback",
         ),
         pytest.param(
             "stop_grace_period",
@@ -172,4 +196,6 @@ def test_hardening_validator_does_not_accept_controls_on_init_service(
     messages = [finding.message for finding in findings]
     assert "star must enable init for child-process reaping" in messages
     assert "star must drop all Linux capabilities" in messages
-    assert "star must set mem_limit to 1g" in messages
+    assert (
+        "star must interpolate STAR_CONTAINER_MEMORY_LIMIT with fallback 1g" in messages
+    )
