@@ -224,7 +224,7 @@ Authentication coverage is as follows:
 - `RateLimitMiddleware` applies process-local per-client token buckets using `request.client.host` and `star_rate_limit_rps`.
 - `TimeoutMiddleware` aborts long running requests using `star_timeout_ms`.
 - Action subprocess execution also uses `star_timeout_ms` so process cleanup does not depend only on the outer HTTP timeout.
-- The Compose application service uses Docker init reaping and fixed limits of 256 PIDs, `1g` memory, and `1.0` CPU across the API process and action subprocesses.
+- The Compose application service uses Docker init reaping and a fixed 256-PID cap across the API process and action subprocesses. Its hard memory and CPU caps are configured through bounded `STAR_CONTAINER_MEMORY_LIMIT` (`512m`-`8g`, default `1g`) and `STAR_CONTAINER_CPUS_LIMIT` (`0.5`-`8.0`, default `1.0`) values.
 - Upload and content-processing paths enforce size-aware behavior before persisting or returning data.
 
 ### Request smuggling mitigations
@@ -244,7 +244,7 @@ Some risks remain by design or by deployment assumption.
 - `RateLimitMiddleware` is process-local. In multi-process or multi-instance deployments, each process keeps independent per-client token buckets, so upstream or distributed quota enforcement is still needed for horizontally scaled deployments.
 - `/health` is intentionally unauthenticated. Metrics and docs endpoints increase reachable surface if operators explicitly configure them as public.
 - Filesystem race conditions are reduced but not fully eliminated. The code explicitly notes TOCTOU limitations around some path-resolution patterns.
-- Service availability still depends on the underlying container host, mounted volume performance, and upstream request volume; actions that exceed the fixed memory, CPU, or PID limits can be throttled or terminated by the container runtime.
+- Service availability still depends on the underlying container host, mounted volume performance, and upstream request volume; actions that exceed the configured memory, CPU, or fixed PID limits can be throttled or terminated by the container runtime. STAR does not derive those limits from host capacity.
 - `secret` params are still accepted as plaintext JSON request values. STAR reduces argv, public error, and output exposure for those values, but it does not provide client-side encryption, asymmetric encryption, persistent secret storage, or protection from highly privileged process or memory inspection.
 
 ## 9. Security Assumptions

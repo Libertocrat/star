@@ -32,8 +32,8 @@ services:
     cap_drop:
       - ALL
     pids_limit: 256
-    mem_limit: 1g
-    cpus: "1.0"
+    mem_limit: "${STAR_CONTAINER_MEMORY_LIMIT:-1g}"
+    cpus: "${STAR_CONTAINER_CPUS_LIMIT:-1.0}"
     stop_grace_period: 30s
     env_file: .env
     secrets:

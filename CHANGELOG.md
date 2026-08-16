@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Relicensed STAR from the Apache License 2.0 to the GNU Affero General Public License v3.0, and aligned the README, contribution policy, and OpenAPI metadata with the new license and commercial licensing path.
 - Centralized managed file storage ownership under `star.core.files`, replacing legacy `core.utils` storage/listing shims and adding focused unit coverage for layout, metadata, listing, MIME policy, and local storage helpers.
 - Changed `STAR_RATE_LIMIT_RPS` enforcement from a process-global bucket to process-local per-client host buckets, reducing cross-client blocking while preserving the existing 429 response contract.
+- Made Docker Compose memory and CPU hard limits configurable through bounded `STAR_CONTAINER_MEMORY_LIMIT` and `STAR_CONTAINER_CPUS_LIMIT` environment settings while preserving `1g` and `1.0` defaults.
 
 ### Security
 

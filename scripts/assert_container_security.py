@@ -214,12 +214,14 @@ def check_compose(
                 f"{service_name} must set pids_limit to 256",
             ),
             (
-                service.get("mem_limit") == "1g",
-                f"{service_name} must set mem_limit to 1g",
+                service.get("mem_limit") == "${STAR_CONTAINER_MEMORY_LIMIT:-1g}",
+                f"{service_name} must interpolate "
+                "STAR_CONTAINER_MEMORY_LIMIT with fallback 1g",
             ),
             (
-                service.get("cpus") == "1.0",
-                f"{service_name} must set cpus to 1.0",
+                service.get("cpus") == "${STAR_CONTAINER_CPUS_LIMIT:-1.0}",
+                f"{service_name} must interpolate "
+                "STAR_CONTAINER_CPUS_LIMIT with fallback 1.0",
             ),
             (
                 service.get("stop_grace_period") == "30s",
