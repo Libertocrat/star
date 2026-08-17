@@ -475,7 +475,7 @@ def test_openapi_includes_global_metadata_from_app_settings(
 
     info = schema["info"]
     assert info["title"] == "Secure Templated Actions Runtime (STAR)"
-    assert info["version"] == "0.1.2"
+    assert info["version"] == "0.1.3"
     assert "Runtime-aware OpenAPI contract generation" in info["description"]
 
     assert info["contact"]["name"] == "Libertocrat"
