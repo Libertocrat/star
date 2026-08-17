@@ -7,10 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-08-17
+
 ### Added
 
 - Added a DSL `secret` argument type for sensitive action params, including stdin and ephemeral file delivery, with public contracts marking those params as sensitive password inputs while keeping internal delivery policy out of the public API.
-- Added release image SPDX SBOMs, GitHub provenance/SBOM attestations, keyless Cosign signatures for immutable GHCR image digests, and signed `SHA256SUMS` bundles for release downloads.
 
 ### Changed
 
@@ -22,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- Added release image SPDX SBOMs, GitHub provenance/SBOM attestations, keyless Cosign signatures for immutable GHCR image digests, and signed `SHA256SUMS` bundles for release downloads.
 - Hardened both Docker Compose application runtimes with init-based child-process reaping, `no-new-privileges`, dropped Linux capabilities, and fixed PID, memory, CPU, and graceful-shutdown limits.
 - Hardened file download `Content-Disposition` headers with safe ASCII filename fallbacks and UTF-8 `filename*` parameters.
 - Added `STAR_MAX_BODY_BYTES` for non-upload request bodies, kept multipart uploads governed by `STAR_MAX_FILE_BYTES`, and rejected request bodies on methods such as `GET` and `DELETE` before route handling.
@@ -131,7 +133,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://github.com/Libertocrat/star/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/Libertocrat/star/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/Libertocrat/star/releases/tag/v0.1.3
 [0.1.2]: https://github.com/Libertocrat/star/releases/tag/v0.1.2
 [0.1.1]: https://github.com/Libertocrat/star/releases/tag/v0.1.1
 [0.1.0]: https://github.com/Libertocrat/star/releases/tag/v0.1.0

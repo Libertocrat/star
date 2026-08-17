@@ -32,6 +32,19 @@ def test_get_release_version_normalizes_supported_semver_formats(
     assert export_openapi.get_release_version() == expected
 
 
+def test_get_release_version_defaults_to_current_release(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """
+    GIVEN no RELEASE_VERSION environment variable
+    WHEN the OpenAPI exporter reads the release version
+    THEN it uses the current STAR release version
+    """
+    monkeypatch.delenv("RELEASE_VERSION", raising=False)
+
+    assert export_openapi.get_release_version() == "0.1.3"
+
+
 @pytest.mark.parametrize(
     "raw_version",
     [

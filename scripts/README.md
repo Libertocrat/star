@@ -115,7 +115,7 @@ Builds the STAR application and writes the generated OpenAPI schema to `docs/api
 
 - `RELEASE_VERSION`: optional environment variable
   - Accepted formats: `vX.Y.Z` or `X.Y.Z`
-  - Default: `0.1.2`
+  - Default: `0.1.3`
 - `STAR_DOCS_ROOT_DIR`: optional environment variable for STAR storage initialization during export
   - Must be an absolute path
   - Default: `<repo>/.star-docs` (resolved from current working directory)

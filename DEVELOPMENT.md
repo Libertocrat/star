@@ -99,6 +99,7 @@ The current local workflow depends on the following tools.
 | Make | developer task execution |
 | curl | local API checks and helper downloads |
 | Go (>= 1.25) | install `actionlint` from source |
+| Cosign | optional verification of signed release images and checksum manifests |
 
 Python 3.12 is the supported development version. It can be installed and managed with `pyenv` before creating the project virtual environment.
 
@@ -111,6 +112,7 @@ Additional CLI tools are required for some workflows:
   - `shfmt` for shell script formatting
   - `shellcheck` for shell script linting
   - `go` and `actionlint` for GitHub Actions workflow linting
+  - `cosign` for release image and checksum-manifest verification
 - `Makefile` managed:
   - `semgrep` for deep SAST scans
 
@@ -179,6 +181,18 @@ Once installed, the following commands become available locally:
 make trivy-fs
 make trivy-image
 ```
+
+#### Installing Cosign
+
+Cosign is optional for day-to-day development and is used to verify signed STAR release images and checksum manifests. Follow the [official Cosign installation guide](https://docs.sigstore.dev/cosign/system_config/installation/) for your platform. Contributors who already installed Go for `actionlint` can use:
+
+```bash
+go install github.com/sigstore/cosign/v3/cmd/cosign@latest
+export PATH="$(go env GOPATH)/bin:$PATH"
+cosign version
+```
+
+See [deploy/README.md](deploy/README.md#release-verification) for the STAR image and download verification commands.
 
 #### Installing Hadolint
 
