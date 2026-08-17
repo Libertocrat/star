@@ -211,6 +211,7 @@ def check_release_workflow(path: Path) -> list[Finding]:
         required_push_fragments = (
             "docker push",
             "docker buildx imagetools inspect",
+            "--format '{{.Manifest.Digest}}'",
             "IMAGE_DIGEST=${canonical_digest}",
         )
         if not all(fragment in push_script for fragment in required_push_fragments):

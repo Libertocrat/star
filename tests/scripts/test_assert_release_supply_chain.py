@@ -88,6 +88,17 @@ def test_committed_release_workflow_satisfies_supply_chain_contract() -> None:
             id="missing_digest_capture",
         ),
         pytest.param(
+            lambda payload: _step(payload, "Push semver + sha + latest tags").update(
+                {
+                    "run": _step(payload, "Push semver + sha + latest tags")[
+                        "run"
+                    ].replace("{{.Manifest.Digest}}", "{{.Digest}}")
+                }
+            ),
+            "release image must resolve and persist one published digest",
+            id="unsupported_digest_template",
+        ),
+        pytest.param(
             lambda payload: _step(payload, "Generate image SBOM").update(
                 {"run": "echo no-sbom"}
             ),

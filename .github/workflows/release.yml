@@ -145,7 +145,7 @@ jobs:
             docker push "$tag"
           done
 
-          canonical_digest="$(docker buildx imagetools inspect "$canonical_tag" --format '{{.Digest}}')"
+          canonical_digest="$(docker buildx imagetools inspect "$canonical_tag" --format '{{.Manifest.Digest}}')"
           case "$canonical_digest" in
             sha256:[0-9a-f][0-9a-f]*) ;;
             *)
@@ -156,7 +156,7 @@ jobs:
 
           while read -r tag; do
             [ -n "$tag" ] || continue
-            tag_digest="$(docker buildx imagetools inspect "$tag" --format '{{.Digest}}')"
+            tag_digest="$(docker buildx imagetools inspect "$tag" --format '{{.Manifest.Digest}}')"
             if [[ "$tag_digest" != "$canonical_digest" ]]; then
               echo "Tag ${tag} resolved to ${tag_digest}, expected ${canonical_digest}"
               exit 1
