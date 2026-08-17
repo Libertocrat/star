@@ -252,7 +252,7 @@ The key limitation is that rate limiting is per-client only within one STAR proc
 | --- | --- | --- | --- |
 | LLM01:2025 Prompt Injection | High in upstream agent-to-tool scenarios | Moderate | STAR does not detect prompt injection semantics, but it sharply limits what a successful injection can do by exposing only a validated action registry, strict params, blocked binaries, no shell, and managed files. |
 | LLM02:2025 Sensitive Information Disclosure | High | Moderate | STAR reduces disclosure through authenticated endpoints, managed file UUIDs, path redaction in outputs, and storage boundary controls. It does not prevent an upstream agent from intentionally asking for data that an allowed action is authorized to return. |
-| LLM03:2025 Supply Chain Vulnerabilities | Medium | Limited to Moderate | STAR validates local DSL specs and restricts runtime binaries, but it does not verify signatures, provenance, or SBOM-style integrity of specs, Python dependencies, containers, or external build artifacts. |
+| LLM03:2025 Supply Chain Vulnerabilities | Medium | Moderate | Release images have signed provenance and SPDX SBOMs, and GitHub assets have signed checksum manifests; DSL specs, Python dependencies, and operator-provided artifacts still lack runtime integrity enforcement. |
 | LLM04:2025 Data and Model Poisoning | Low to Medium | Limited | STAR is not a training or fine-tuning system. It can reduce poisoning blast radius by narrowing the tool surface and upload policy, but it does not own model-data hygiene. |
 | LLM05:2025 Improper Output Handling | High | Strong | STAR sanitizes tool output, redacts sensitive paths, bounds stdout and stderr, and returns deterministic envelopes. This is one of the clearest direct alignments with OWASP 2025. |
 | LLM06:2025 Excessive Agency | High | Strong to Moderate | STAR is explicitly designed to reduce excessive agency by replacing unconstrained tool execution with a predefined action registry, allowlisted binaries, and managed files. It does not implement user- or role-aware approval workflows, so coverage is not complete. |
@@ -301,6 +301,8 @@ Positive findings:
 
 - STAR treats its DSL as a security-critical supply chain and validates YAML files strictly before they become executable actions
 - default blocked-binary policy reduces impact even if a spec tries to expose a dangerous binary
+- release images are scanned before publication, signed by immutable digest with GitHub OIDC, and published with GitHub provenance and SPDX SBOM attestations
+- release assets are covered by `SHA256SUMS`, whose Cosign bundle authenticates the manifest before consumers validate individual hashes
 
 Gaps:
 
@@ -432,9 +434,9 @@ This section focuses on relevant ATLAS techniques for STAR's actual role as a co
 
 | ATLAS ID | Technique | Coverage | Analysis |
 | --- | --- | --- | --- |
-| AML.T0010 | AI Supply Chain Compromise | Limited to Moderate | STAR validates local DSL content but does not sign or attest artifacts. |
-| AML.T0010.001 | AI Software | Limited | Python dependencies and platform components remain a standard software supply-chain concern. |
-| AML.T0010.005 | AI Agent Tool | Limited to Moderate | STAR's own DSL and action layer is locally validated, but there is no cryptographic provenance enforcement. |
+| AML.T0010 | AI Supply Chain Compromise | Moderate | Release images and assets have signed evidence, but local DSL content and operator-provided artifacts remain unsigned. |
+| AML.T0010.001 | AI Software | Limited to Moderate | Release image provenance and SBOM improve traceability; Python dependencies and platform components remain standard supply-chain concerns. |
+| AML.T0010.005 | AI Agent Tool | Limited to Moderate | STAR's DSL and action layer is locally validated, but it has no cryptographic provenance enforcement. |
 | AML.T0011.002 | Poisoned AI Agent Tool | Moderate | STAR reduces blast radius because actions are local, typed, and runtime-validated. However, a malicious local spec or compromised dependency remains possible. |
 
 ### Techniques largely out of scope for this repository
@@ -476,11 +478,11 @@ This section focuses on relevant ATLAS techniques for STAR's actual role as a co
 
 | ATLAS ID | Mitigation | Gap |
 | --- | --- | --- |
-| AML.M0013 | Code Signing | No cryptographic signing for DSL specs, dependency artifacts, or runtime action bundles. |
-| AML.M0014 | Verify AI Artifacts | No checksum or signature verification pipeline for DSL specs at startup. |
+| AML.M0013 | Code Signing | Partial: release images and checksum manifests are keylessly signed; DSL specs, dependency artifacts, and runtime action bundles are not. |
+| AML.M0014 | Verify AI Artifacts | Partial: release consumers can verify attestations and signed checksums, but STAR does not verify DSL specs at startup. |
 | AML.M0012 | Encrypt Sensitive Information | Managed file storage is not encrypted by application logic. |
-| AML.M0023 | AI Bill of Materials | No AI BOM or action-artifact provenance inventory is maintained. |
-| AML.M0016 | Vulnerability Scanning | No scanning control is visible in the reviewed code path itself. |
+| AML.M0023 | AI Bill of Materials | Partial: release images have SPDX SBOM attestations; no AI BOM or action-artifact provenance inventory is maintained. |
+| AML.M0016 | Vulnerability Scanning | Partial: the release workflow blocks GHCR publication on HIGH or CRITICAL image vulnerabilities; runtime and operator artifacts are not continuously scanned. |
 
 ## Priority Risk Findings
 
@@ -514,11 +516,9 @@ This is acceptable for trusted automation clients, but should be treated as priv
 
 ### 3. Supply-chain trust is better than average for local DSL content, but still incomplete
 
-STAR does better than many secure tool-execution boundaries because it validates its YAML action surface strictly before use. However, it still lacks:
+STAR signs and attests released container images and release checksum manifests, while it validates its YAML action surface strictly before use. However, it still lacks:
 
-- signing
-- provenance
-- attestation
+- signing, provenance, and attestation for DSL specs and operator-provided action artifacts
 - startup checksum verification for specs
 
 ### 4. Availability protections are solid locally, but not sufficient for distributed deployments

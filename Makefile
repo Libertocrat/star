@@ -140,6 +140,8 @@ lint-shell-format:
 lint-actions:
 	@echo "Running actionlint..."
 	actionlint
+	@echo "Validating release supply-chain contract..."
+	python scripts/assert_release_supply_chain.py
 
 typecheck:
 	mypy --config-file mypy.ini $(SRC_DIRS)
