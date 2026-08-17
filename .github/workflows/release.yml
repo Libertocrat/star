@@ -12,6 +12,8 @@ env:
 
 permissions:
   contents: write
+  id-token: write
+  attestations: write
   packages: write
 
 jobs:
@@ -135,10 +137,42 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
+          canonical_tag="ghcr.io/${IMAGE_OWNER}/${IMAGE_NAME}:${GITHUB_REF_NAME}"
           echo "${{ steps.meta.outputs.tags }}" | tr ',' '\n' | while read -r tag; do
             [ -n "$tag" ] || continue
             docker push "$tag"
           done
+
+          canonical_digest="$(docker buildx imagetools inspect "$canonical_tag" --format '{{.Manifest.Digest}}')"
+          case "$canonical_digest" in
+            sha256:[0-9a-f][0-9a-f]*) ;;
+            *)
+              echo "Unable to resolve a SHA-256 digest for ${canonical_tag}"
+              exit 1
+              ;;
+          esac
+
+          while read -r tag; do
+            [ -n "$tag" ] || continue
+            tag_digest="$(docker buildx imagetools inspect "$tag" --format '{{.Manifest.Digest}}')"
+            if [[ "$tag_digest" != "$canonical_digest" ]]; then
+              echo "Tag ${tag} resolved to ${tag_digest}, expected ${canonical_digest}"
+              exit 1
+            fi
+          done < <(echo "${{ steps.meta.outputs.tags }}" | tr ',' '\n')
+
+          echo "IMAGE_DIGEST=${canonical_digest}" >> "$GITHUB_ENV"
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign published image digest with GitHub OIDC
+        env:
+          IMAGE_REPOSITORY: ghcr.io/${{ env.IMAGE_OWNER }}/${{ env.IMAGE_NAME }}
+        run: |
+          set -Eeuo pipefail
+          cosign sign --yes "${IMAGE_REPOSITORY}@${IMAGE_DIGEST}"
 
       # -------------------------
       # Release Assets (Deploy Bundle + OpenAPI)
@@ -185,6 +219,31 @@ jobs:
 
           cp "docs/api-docs/output/openapi.json" "dist/openapi.json"
           cp "dist/openapi.json" "dist/openapi-${GITHUB_REF_NAME}.json"
+
+      - name: Generate image SBOM
+        env:
+          IMAGE_REF: ghcr.io/${{ env.IMAGE_OWNER }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
+        run: |
+          set -Eeuo pipefail
+          trivy image \
+            --format spdx-json \
+            --output "dist/star-image-${GITHUB_REF_NAME}.spdx.json" \
+            "$IMAGE_REF"
+
+      - name: Generate image provenance attestation
+        uses: actions/attest@v4
+        with:
+          subject-name: ghcr.io/${{ env.IMAGE_OWNER }}/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ env.IMAGE_DIGEST }}
+          push-to-registry: true
+
+      - name: Generate image SBOM attestation
+        uses: actions/attest@v4
+        with:
+          subject-name: ghcr.io/${{ env.IMAGE_OWNER }}/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ env.IMAGE_DIGEST }}
+          sbom-path: dist/star-image-${{ github.ref_name }}.spdx.json
+          push-to-registry: true
 
       - name: Build deploy bundle assets
         shell: bash
@@ -238,12 +297,20 @@ jobs:
             sha256sum \
               openapi.json \
               "openapi-${GITHUB_REF_NAME}.json" \
+              "star-image-${GITHUB_REF_NAME}.spdx.json" \
               "star-deploy-${GITHUB_REF_NAME}.tar.gz" \
               "star-deploy-${GITHUB_REF_NAME}.zip" \
               star-deploy.tar.gz \
               star-deploy.zip \
               > SHA256SUMS
           )
+
+      - name: Sign release checksums with GitHub OIDC
+        run: |
+          set -Eeuo pipefail
+          cosign sign-blob --yes \
+            --bundle "dist/SHA256SUMS.sigstore.json" \
+            "dist/SHA256SUMS"
 
       - name: Validate release assets
         shell: bash
@@ -254,7 +321,9 @@ jobs:
           test -f "dist/star-deploy-${GITHUB_REF_NAME}.zip"
           test -f "dist/star-deploy.tar.gz"
           test -f "dist/star-deploy.zip"
+          test -f "dist/star-image-${GITHUB_REF_NAME}.spdx.json"
           test -f "dist/SHA256SUMS"
+          test -f "dist/SHA256SUMS.sigstore.json"
 
           tar_listing="$(mktemp)"
           tar -tzf "dist/star-deploy-${GITHUB_REF_NAME}.tar.gz" > "${tar_listing}"
@@ -266,7 +335,34 @@ jobs:
           (
             cd dist
             sha256sum -c SHA256SUMS
+
+            expected_assets=(
+              openapi.json
+              "openapi-${GITHUB_REF_NAME}.json"
+              "star-image-${GITHUB_REF_NAME}.spdx.json"
+              "star-deploy-${GITHUB_REF_NAME}.tar.gz"
+              "star-deploy-${GITHUB_REF_NAME}.zip"
+              star-deploy.tar.gz
+              star-deploy.zip
+            )
+            actual_assets="$(awk '{print $2}' SHA256SUMS)"
+            if [[ "$(printf '%s\n' "$actual_assets" | sort -u | wc -l)" -ne "${#expected_assets[@]}" ]]; then
+              echo "SHA256SUMS must list every release content asset exactly once"
+              exit 1
+            fi
+            for asset in "${expected_assets[@]}"; do
+              if [[ "$(printf '%s\n' "$actual_assets" | grep -Fxc "$asset")" -ne 1 ]]; then
+                echo "SHA256SUMS must list ${asset} exactly once"
+                exit 1
+              fi
+            done
           )
+
+          cosign verify-blob \
+            --bundle "dist/SHA256SUMS.sigstore.json" \
+            --certificate-identity-regexp "^https://github\\.com/${GITHUB_REPOSITORY}/\\.github/workflows/release\\.yml@refs/tags/${GITHUB_REF_NAME}$" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            "dist/SHA256SUMS"
 
       # -------------------------
       # GitHub Release
@@ -281,10 +377,12 @@ jobs:
           files: |
             dist/openapi.json
             dist/openapi-${{ github.ref_name }}.json
+            dist/star-image-${{ github.ref_name }}.spdx.json
             dist/star-deploy-${{ github.ref_name }}.tar.gz
             dist/star-deploy-${{ github.ref_name }}.zip
             dist/star-deploy.tar.gz
             dist/star-deploy.zip
             dist/SHA256SUMS
+            dist/SHA256SUMS.sigstore.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -12,7 +12,9 @@ The runtime package is published as GitHub Release assets:
 - `star-deploy-vX.Y.Z.zip`
 - `star-deploy.tar.gz`
 - `star-deploy.zip`
+- `star-image-vX.Y.Z.spdx.json`
 - `SHA256SUMS`
+- `SHA256SUMS.sigstore.json`
 
 Latest stable download URL:
 
@@ -20,12 +22,28 @@ Latest stable download URL:
 curl -fsSL https://github.com/Libertocrat/star/releases/latest/download/star-deploy.tar.gz -o star-deploy.tar.gz
 ```
 
-Optional checksum verification:
+Checksum verification:
 
 ```bash
 curl -fsSL https://github.com/Libertocrat/star/releases/latest/download/SHA256SUMS -o SHA256SUMS
 sha256sum -c SHA256SUMS --ignore-missing
 ```
+
+For cryptographic origin verification, install [Cosign](https://docs.sigstore.dev/cosign/system_config/installation/), select the release tag, and verify the signed manifest before trusting its checksums:
+
+```bash
+VERSION=vX.Y.Z
+BASE_URL="https://github.com/Libertocrat/star/releases/download/${VERSION}"
+curl -fsSL "${BASE_URL}/SHA256SUMS" -o SHA256SUMS
+curl -fsSL "${BASE_URL}/SHA256SUMS.sigstore.json" -o SHA256SUMS.sigstore.json
+cosign verify-blob SHA256SUMS \
+  --bundle SHA256SUMS.sigstore.json \
+  --certificate-identity "https://github.com/Libertocrat/star/.github/workflows/release.yml@refs/tags/${VERSION}" \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+sha256sum -c SHA256SUMS --ignore-missing
+```
+
+Release images are signed and have GitHub provenance and SPDX SBOM attestations. With the GitHub CLI, verify the image selected by a version tag with `gh attestation verify oci://ghcr.io/libertocrat/star:${VERSION} -R Libertocrat/star`. Tags are convenient selectors; use the resolved `@sha256:...` image reference for immutable deployment policy.
 
 ## What is included
 

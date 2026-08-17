@@ -232,9 +232,16 @@ Authentication coverage is as follows:
 - `RequestIntegrityMiddleware` rejects requests that contain both `Content-Length` and `Transfer-Encoding`.
 - Raw header inspection rejects duplicate `Authorization` headers and control characters in headers.
 
+### Release artifact mitigations
+
+- The release workflow scans the local image before publishing any GHCR tag, then resolves one immutable digest and confirms every release tag identifies that digest.
+- GitHub OIDC issues short-lived identity tokens for keyless Cosign signatures and GitHub provenance/SBOM attestations; no long-lived signing key is stored in the repository or workflow secrets.
+- The workflow signs the immutable container digest and the complete `SHA256SUMS` manifest, generates an SPDX SBOM, and verifies the signed checksum bundle before publishing release assets.
+- Consumers can verify image provenance through GitHub attestations and verify release downloads by validating the signed checksum manifest before validating individual asset hashes.
+
 ## 8. Residual Risks
 
-Some risks remain by design or by deployment assumption.
+Some risks remain by design or by deployment assumption. Release attestations and signatures identify the authorized build workflow and immutable artifact digest, but they do not prove an artifact is free of vulnerabilities or replace trust in GitHub, the repository, or authorized release maintainers.
 
 > [!WARNING]
 > `/health` remains unauthenticated. `/metrics` and OpenAPI docs endpoints can also be reached without authentication only when their auth toggles are explicitly disabled. Keep STAR within trusted network boundaries, keep localhost-only publishing by default unless a wider bind is intentional, and disable or authenticate docs for wider or production-oriented exposure even though local packaged deployments may enable public docs for exploration.

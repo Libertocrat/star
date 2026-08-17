@@ -13,6 +13,7 @@ This directory contains helper scripts used for local development, release artif
 | `scripts/export_openapi.py` | Build the FastAPI app and write the OpenAPI schema to disk |
 | `scripts/build_docs_site.py` | Build a versioned Swagger UI site for GitHub Pages from the exported schema |
 | `scripts/assert_container_security.py` | Validate Dockerfile and Compose hardening contracts |
+| `scripts/assert_release_supply_chain.py` | Validate release workflow evidence and publication contracts |
 
 ## assert_container_security.py
 
@@ -23,6 +24,16 @@ source .venv/bin/activate && python scripts/assert_container_security.py --docke
 ```
 
 The checker intentionally does not require `read_only` yet because the writable root filesystem has not been reduced to explicit volumes and tmpfs mounts.
+
+## assert_release_supply_chain.py
+
+Validates the static evidence contract in `.github/workflows/release.yml` without publishing an image or release. It checks least-privilege OIDC and attestation permissions, local scan-before-push ordering, digest capture, GitHub provenance/SBOM attestations, keyless Cosign image and checksum signatures, and uploaded evidence assets.
+
+```bash
+source .venv/bin/activate && python scripts/assert_release_supply_chain.py
+```
+
+`make lint-actions` runs this checker after `actionlint`.
 
 ## star-forward.sh
 
