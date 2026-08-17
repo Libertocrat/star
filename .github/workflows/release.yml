@@ -7,7 +7,8 @@ on:
   workflow_dispatch:
 
 env:
-  IMAGE_NAME: star
+  # Temporary smoke package. Do not merge this overlay into the release branch.
+  IMAGE_NAME: star-release-smoke
   IMAGE_OWNER: ${{ github.repository_owner }}
 
 permissions:
@@ -372,6 +373,7 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           name: Release ${{ github.ref_name }}
+          draft: true
           generate_release_notes: true
           fail_on_unmatched_files: true
           files: |
