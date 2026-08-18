@@ -93,8 +93,8 @@ At a high level:
 
 - `ci.yml` runs on pushes to `main`, `feat/**`, and `feature/**`, on pull requests to `main`, and on manual dispatch
 - `security.yml` runs on pull requests to `main`, on a weekly schedule, and on manual dispatch
-- `release.yml` runs on version tag pushes matching `v*` and on manual dispatch
-- `release-docs.yml` runs on version tag pushes matching `v*`
+- `release.yml` runs on version tag pushes matching `v*` and on manual dispatch; it only publishes when the selected ref is a strict SemVer tag whose target commit is reachable from the repository default branch
+- `release-docs.yml` runs on version tag pushes matching `v*`; it applies the same eligibility check before generating or publishing documentation
 
 This separation keeps fast feedback, deep security analysis, release automation, and documentation publishing in distinct pipelines.
 
@@ -384,12 +384,12 @@ The workflow in `.github/workflows/release-docs.yml` publishes versioned API doc
 > [!NOTE]
 > The docs publishing workflow adds new versioned content without removing previously published API documentation versions.
 
-It is triggered by pushes of tags matching `v*`.
+It is triggered by pushes of tags matching `v*`. Before any dependency installation or publication, it requires a strict `vX.Y.Z` tag whose target commit is reachable from the repository default branch. This prevents tags created from feature or smoke branches from modifying `gh-pages`.
 
 The workflow performs these stages:
 
-1. Checkout the repository
-2. Validate strict semantic version format `vX.Y.Z`
+1. Checkout the release tag
+2. Verify that the ref is a strict `vX.Y.Z` tag integrated into the repository default branch
 3. Set up Python 3.12 and cache pip downloads
 4. Install runtime and testing dependencies and the editable project
 5. Export the OpenAPI schema with `scripts/export_openapi.py` while setting `STAR_DOCS_ROOT_DIR` to a writable runner temporary path

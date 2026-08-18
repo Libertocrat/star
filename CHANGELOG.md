@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- Restricted release assets and documentation publication to strict SemVer tags whose target commits are already reachable from the repository default branch.
+
 ## [0.1.3] - 2026-08-17
 
 ### Added
