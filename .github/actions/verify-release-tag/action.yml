@@ -1,0 +1,35 @@
+name: Verify release tag
+description: Require a strict SemVer tag whose target commit is reachable from the base/main branch.
+
+inputs:
+  base-ref:
+    description: Repository branch that must contain the tagged commit.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Verify release tag eligibility
+      shell: bash
+      env:
+        BASE_REF: ${{ inputs.base-ref }}
+      run: |
+        set -Eeuo pipefail
+
+        if [[ "${GITHUB_REF_TYPE}" != "tag" ]]; then
+          echo "Release publication requires a tag ref. Received: ${GITHUB_REF_TYPE}"
+          exit 1
+        fi
+
+        if [[ ! "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          echo "Invalid release tag. Expected vX.Y.Z. Received: ${GITHUB_REF_NAME}"
+          exit 1
+        fi
+
+        tag_commit="$(git rev-parse --verify "${GITHUB_REF}^{commit}")"
+        git fetch --no-tags origin "refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}"
+
+        if ! git merge-base --is-ancestor "$tag_commit" "origin/${BASE_REF}"; then
+          echo "Release tag ${GITHUB_REF_NAME} must reference a commit reachable from ${BASE_REF}."
+          exit 1
+        fi

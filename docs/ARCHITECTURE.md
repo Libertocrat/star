@@ -437,7 +437,7 @@ The docs endpoints `/docs`, `/redoc`, and `/openapi.json` are mounted only when 
 
 ### CI publication
 
-The repository contains a dedicated GitHub Actions workflow in `.github/workflows/release-docs.yml` that runs on version tags. It exports the OpenAPI schema, validates it, builds the versioned documentation site, and publishes it to the `gh-pages` branch.
+The repository contains a dedicated GitHub Actions workflow in `.github/workflows/release-docs.yml` that runs on version tags. A shared release-tag eligibility action requires the tagged commit to be reachable from the repository default branch before the workflow exports the OpenAPI schema, validates it, builds the versioned documentation site, and publishes it to the `gh-pages` branch.
 
 ## 10. Container Runtime Model
 

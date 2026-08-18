@@ -13,20 +13,19 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout main branch
+      - name: Checkout release tag
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       # -------------------------
-      # Validate strict semver
+      # Validate tag branch and semver
       # -------------------------
-      - name: Validate strict semver tag (vX.Y.Z)
-        run: |
-          if [[ ! "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Invalid tag format. Expected vX.Y.Z"
-            exit 1
-          fi
+
+      - name: Verify release tag eligibility
+        uses: ./.github/actions/verify-release-tag
+        with:
+          base-ref: ${{ github.event.repository.default_branch }}
 
       # -------------------------
       # Python setup
