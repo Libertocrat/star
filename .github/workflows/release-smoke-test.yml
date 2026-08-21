@@ -1,0 +1,61 @@
+name: Release Smoke Test
+
+on:
+  push:
+    branches:
+      - "test/smoke-release-**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-smoke-test
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Release smoke test
+    runs-on: ubuntu-latest
+    environment:
+      name: release-smoke
+      deployment: false
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+      packages: write
+    steps:
+      - name: Checkout release source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run smoke release core
+        uses: ./.github/actions/release-core
+        with:
+          release-version: v${{ github.run_id }}.${{ github.run_attempt }}.0
+          release-tag-name: smoke-v${{ github.run_id }}.${{ github.run_attempt }}.0
+          release-name: Smoke release test v${{ github.run_id }}.${{ github.run_attempt }}.0
+          image-name: star-release-test
+          release-draft: "true"
+          generate-release-notes: "false"
+          require-eligible-tag: "false"
+          verify-release-assets: "false"
+
+  docs:
+    name: Release docs smoke test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout release source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run smoke release docs core
+        uses: ./.github/actions/release-docs-core
+        with:
+          release-version: v${{ github.run_id }}.${{ github.run_attempt }}.0
+          require-eligible-tag: "false"
+          publish-docs: "false"

@@ -13,7 +13,7 @@ This directory contains helper scripts used for local development, release artif
 | `scripts/export_openapi.py` | Build the FastAPI app and write the OpenAPI schema to disk |
 | `scripts/build_docs_site.py` | Build a versioned Swagger UI site for GitHub Pages from the exported schema |
 | `scripts/assert_container_security.py` | Validate Dockerfile and Compose hardening contracts |
-| `scripts/assert_release_supply_chain.py` | Validate release workflow evidence and publication contracts |
+| `scripts/assert_release_supply_chain.py` | Validate production and smoke release publication contracts |
 
 ## assert_container_security.py
 
@@ -27,7 +27,7 @@ The checker intentionally does not require `read_only` yet because the writable 
 
 ## assert_release_supply_chain.py
 
-Validates the static evidence contract in `.github/workflows/release.yml` without publishing an image or release. It checks least-privilege OIDC and attestation permissions, local scan-before-push ordering, digest capture, GitHub provenance/SBOM attestations, keyless Cosign image and checksum signatures, and uploaded evidence assets.
+Validates the static contract across the production wrappers, local release and docs core actions, and the isolated smoke workflow without publishing an image or release. It checks production OIDC and attestation permissions, early eligibility guards, scan-before-push ordering, digest capture, provenance/SBOM attestations, Cosign evidence, smoke-only routing to `star-release-test`, the protected no-deployment environment, and the prohibition on smoke publication to `gh-pages`.
 
 ```bash
 source .venv/bin/activate && python scripts/assert_release_supply_chain.py
