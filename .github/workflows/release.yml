@@ -24,6 +24,7 @@ jobs:
       - name: Run production release core
         uses: ./.github/actions/release-core
         with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           release-version: ${{ github.ref_name }}
           release-tag-name: ${{ github.ref_name }}
           release-name: Release ${{ github.ref_name }}

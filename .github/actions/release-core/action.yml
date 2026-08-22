@@ -2,6 +2,9 @@ name: Release core
 description: Build and publish a STAR release with configurable release identity and validation profile.
 
 inputs:
+  github-token:
+    description: GitHub token forwarded by the calling workflow for registry and release publication.
+    required: true
   release-version:
     description: Strict SemVer version tag used by artifacts and image metadata.
     required: true
@@ -58,7 +61,7 @@ runs:
       with:
         registry: ghcr.io
         username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+        password: ${{ inputs.github-token }}
 
     - name: Extract image metadata (semver + sha tags)
       id: meta
@@ -368,4 +371,4 @@ runs:
           dist/SHA256SUMS
           dist/SHA256SUMS.sigstore.json
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITHUB_TOKEN: ${{ inputs.github-token }}

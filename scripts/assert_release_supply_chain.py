@@ -82,6 +82,28 @@ def _with_value(step: Mapping[str, Any], name: str) -> str | None:
     return value if isinstance(value, str) else None
 
 
+def _require_composite_token_input(
+    findings: list[Finding], path: Path, payload: Mapping[str, Any]
+) -> None:
+    """Require a composite action to accept but not directly resolve a token."""
+    inputs = payload.get("inputs")
+    token = inputs.get("github-token") if isinstance(inputs, Mapping) else None
+    if not isinstance(token, Mapping) or token.get("required") is not True:
+        findings.append(Finding(path, "composite action must require github-token"))
+    if "secrets." in yaml.safe_dump(payload):
+        findings.append(
+            Finding(path, "composite action must not reference the secrets context")
+        )
+
+
+def _require_token_forwarding(
+    findings: list[Finding], path: Path, step: Mapping[str, Any], label: str
+) -> None:
+    """Require a workflow wrapper to forward its GitHub token to one core."""
+    if _with_value(step, "github-token") != "${{ secrets.GITHUB_TOKEN }}":
+        findings.append(Finding(path, f"{label} must forward github-token"))
+
+
 def _workflow_trigger(payload: Mapping[str, Any]) -> Mapping[str, Any] | None:
     """Return the workflow trigger mapping, accommodating PyYAML's YAML 1.1 key."""
     raw_payload = cast(Mapping[Any, Any], payload)
@@ -183,6 +205,9 @@ def check_release_contracts(root: Path) -> list[Finding]:
         findings, paths["release"], release, "./.github/actions/release-core"
     )
     if release_step is not None:
+        _require_token_forwarding(
+            findings, paths["release"], release_step, "production release"
+        )
         expected = {
             "image-name": "star",
             "release-draft": "false",
@@ -194,6 +219,9 @@ def check_release_contracts(root: Path) -> list[Finding]:
                 findings.append(
                     Finding(paths["release"], f"production {name} must be {value}")
                 )
+
+    _require_composite_token_input(findings, paths["core"], payloads["core"])
+    _require_composite_token_input(findings, paths["docs_core"], payloads["docs_core"])
 
     core_steps = _steps(payloads["core"], action=True)
     if core_steps is None:
@@ -322,6 +350,7 @@ def check_release_contracts(root: Path) -> list[Finding]:
         findings, paths["smoke"], smoke, "./.github/actions/release-core"
     )
     if smoke_step is not None:
+        _require_token_forwarding(findings, paths["smoke"], smoke_step, "smoke release")
         expected = {
             "image-name": "star-release-test",
             "release-draft": "true",
@@ -396,6 +425,11 @@ def check_release_contracts(root: Path) -> list[Finding]:
             )
         )
 
+    if docs_step is not None:
+        _require_token_forwarding(
+            findings, paths["release_docs"], docs_step, "production docs"
+        )
+
     docs_core_steps = _steps(payloads["docs_core"], action=True)
     if docs_core_steps is None:
         findings.append(Finding(paths["docs_core"], "missing composite action steps"))
@@ -428,6 +462,11 @@ def check_release_contracts(root: Path) -> list[Finding]:
     ):
         findings.append(
             Finding(paths["smoke"], "smoke docs must build without publishing gh-pages")
+        )
+
+    if smoke_docs_step is not None:
+        _require_token_forwarding(
+            findings, paths["smoke"], smoke_docs_step, "smoke docs"
         )
 
     return findings

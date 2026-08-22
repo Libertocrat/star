@@ -20,6 +20,7 @@ jobs:
       - name: Run production release docs core
         uses: ./.github/actions/release-docs-core
         with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           release-version: ${{ github.ref_name }}
           require-eligible-tag: "true"
           publish-docs: "true"

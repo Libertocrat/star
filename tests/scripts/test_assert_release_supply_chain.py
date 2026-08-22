@@ -83,6 +83,24 @@ def _mutate_core_push(root: Path) -> None:
     _write_yaml(path, payload)
 
 
+def _remove_smoke_release_token(root: Path) -> None:
+    """Remove the token forwarded to the smoke release composite action."""
+    path = root / ".github/workflows/release-smoke-test.yml"
+    payload = _read_yaml(path)
+    jobs = payload["jobs"]
+    assert isinstance(jobs, dict)
+    release = jobs["release"]
+    assert isinstance(release, dict)
+    steps = release["steps"]
+    assert isinstance(steps, list)
+    core = steps[1]
+    assert isinstance(core, dict)
+    inputs = core["with"]
+    assert isinstance(inputs, dict)
+    inputs.pop("github-token")
+    _write_yaml(path, payload)
+
+
 def test_committed_release_contracts_satisfy_supply_chain_invariants() -> None:
     """
     GIVEN the committed release, docs, smoke, and core workflow configuration
@@ -112,6 +130,11 @@ def test_committed_release_contracts_satisfy_supply_chain_invariants() -> None:
             lambda root: _mutate_core_push(root),
             "release image must resolve and persist one published digest",
             id="missing_digest_capture",
+        ),
+        pytest.param(
+            _remove_smoke_release_token,
+            "smoke release must forward github-token",
+            id="missing_smoke_release_token",
         ),
         pytest.param(
             lambda root: _write_yaml(
