@@ -11,116 +11,16 @@ permissions:
 jobs:
   release-docs:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout release tag
+      - name: Checkout release source
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # -------------------------
-      # Validate tag branch and semver
-      # -------------------------
-
-      - name: Verify release tag eligibility
-        uses: ./.github/actions/verify-release-tag
+      - name: Run production release docs core
+        uses: ./.github/actions/release-docs-core
         with:
-          base-ref: ${{ github.event.repository.default_branch }}
-
-      # -------------------------
-      # Python setup
-      # -------------------------
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Cache pip dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: pip-${{ runner.os }}-${{ hashFiles('requirements/**/*.txt') }}
-          restore-keys: |
-            pip-${{ runner.os }}-
-
-      - name: Install Python dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r requirements/runtime.txt
-          python -m pip install -r requirements/testing.txt
-          python -m pip install -e .
-
-      # -------------------------
-      # Export & validate OpenAPI
-      # -------------------------
-      - name: Export OpenAPI schema
-        env:
-          STAR_DOCS_ROOT_DIR: ${{ runner.temp }}/star-docs
-        run: |
-          export RELEASE_VERSION=${GITHUB_REF_NAME}
-          python scripts/export_openapi.py
-
-      - name: Validate OpenAPI schema
-        run: python -m openapi_spec_validator docs/api-docs/output/openapi.json
-
-      # -------------------------
-      # Node setup
-      # -------------------------
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      - name: Install Swagger UI
-        run: |
-          npm init -y
-          npm install swagger-ui-dist@5.17.14
-
-      # -------------------------
-      # Build site
-      # -------------------------
-      - name: Build versioned docs site
-        run: |
-          export RELEASE_VERSION=${GITHUB_REF_NAME}
-          python scripts/build_docs_site.py
-
-      # -------------------------
-      # Checkout gh-pages branch
-      # -------------------------
-      - name: Checkout gh-pages branch
-        uses: actions/checkout@v4
-        with:
-          ref: gh-pages
-          path: gh-pages-dir
-          token: ${{ secrets.GITHUB_TOKEN }}
-        continue-on-error: true
-
-      # -------------------------
-      # Publish without deleting previous versions
-      # -------------------------
-      - name: Publish documentation
-        run: |
-          set -e
-
-          VERSION=${GITHUB_REF_NAME}
-
-          # If gh-pages branch does not exist
-          if [ ! -d "gh-pages-dir/.git" ]; then
-            git clone https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git gh-pages-dir
-            cd gh-pages-dir
-            git checkout --orphan gh-pages
-            git rm -rf .
-          else
-            cd gh-pages-dir
-            git checkout gh-pages
-          fi
-
-          # Copy entire generated site (includes root index + api-docs)
-          cp -r ../site/* .
-
-          git config user.name "${{ github.repository_owner }}"
-          git config user.email "${{ github.repository_owner }}@users.noreply.github.com"
-
-          git add .
-
-          git commit -m "docs: release ${VERSION}" || echo "No changes to commit"
-
-          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git gh-pages
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          release-version: ${{ github.ref_name }}
+          require-eligible-tag: "true"
+          publish-docs: "true"

@@ -1,7 +1,8 @@
-"""Test static release supply-chain workflow assertions."""
+"""Test static release and smoke supply-chain workflow assertions."""
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -11,41 +12,59 @@ import yaml
 from scripts import assert_release_supply_chain
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
-RELEASE_WORKFLOW = REPOSITORY_ROOT / ".github/workflows/release.yml"
 
 
-def _release_workflow_payload() -> dict[str, Any]:
-    """Return the committed release workflow as a mutable fixture."""
-    payload = yaml.safe_load(RELEASE_WORKFLOW.read_text(encoding="utf-8"))
+def _copy_release_contract_tree(destination: Path) -> Path:
+    """Copy the release workflow and action contract tree into a test root.
+
+    Args:
+        destination: Empty temporary directory supplied by pytest.
+
+    Returns:
+        Repository-shaped root containing the static contract inputs.
+    """
+    github = destination / ".github"
+    shutil.copytree(REPOSITORY_ROOT / ".github", github)
+    return destination
+
+
+def _read_yaml(path: Path) -> dict[str, Any]:
+    """Load a mutable YAML fixture mapping.
+
+    Args:
+        path: Workflow or action fixture to load.
+
+    Returns:
+        Parsed mutable mapping.
+    """
+    payload = yaml.safe_load(path.read_text(encoding="utf-8"))
     assert isinstance(payload, dict)
     return payload
 
 
-def _write_workflow(path: Path, payload: dict[str, Any]) -> None:
-    """Write a deterministic workflow fixture.
+def _write_yaml(path: Path, payload: dict[str, Any]) -> None:
+    """Write one deterministic YAML fixture.
 
     Args:
-        path: Destination workflow fixture path.
-        payload: Workflow mapping to serialize.
+        path: Fixture destination.
+        payload: Mapping to serialize.
     """
     path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
 
 
-def _step(payload: dict[str, Any], name: str) -> dict[str, Any]:
-    """Return an exact named release step from a workflow fixture.
+def _action_step(payload: dict[str, Any], name: str) -> dict[str, Any]:
+    """Return a mutable named composite-action step.
 
     Args:
-        payload: Mutable workflow mapping.
-        name: Exact required step name.
+        payload: Composite action fixture.
+        name: Exact step name to find.
 
     Returns:
-        Mutable workflow step mapping.
+        Mutable step mapping.
     """
-    jobs = payload["jobs"]
-    assert isinstance(jobs, dict)
-    release = jobs["release"]
-    assert isinstance(release, dict)
-    steps = release["steps"]
+    runs = payload["runs"]
+    assert isinstance(runs, dict)
+    steps = runs["steps"]
     assert isinstance(steps, list)
     for step in steps:
         assert isinstance(step, dict)
@@ -54,13 +73,41 @@ def _step(payload: dict[str, Any], name: str) -> dict[str, Any]:
     raise AssertionError(f"Missing fixture step: {name}")
 
 
-def test_committed_release_workflow_satisfies_supply_chain_contract() -> None:
+def _mutate_core_push(root: Path) -> None:
+    """Remove digest capture from a copied release core fixture."""
+    path = root / ".github/actions/release-core/action.yml"
+    payload = _read_yaml(path)
+    _action_step(payload, "Push semver + sha + latest tags").update(
+        {"run": "docker push image"}
+    )
+    _write_yaml(path, payload)
+
+
+def _remove_smoke_release_token(root: Path) -> None:
+    """Remove the token forwarded to the smoke release composite action."""
+    path = root / ".github/workflows/release-smoke-test.yml"
+    payload = _read_yaml(path)
+    jobs = payload["jobs"]
+    assert isinstance(jobs, dict)
+    release = jobs["release"]
+    assert isinstance(release, dict)
+    steps = release["steps"]
+    assert isinstance(steps, list)
+    core = steps[1]
+    assert isinstance(core, dict)
+    inputs = core["with"]
+    assert isinstance(inputs, dict)
+    inputs.pop("github-token")
+    _write_yaml(path, payload)
+
+
+def test_committed_release_contracts_satisfy_supply_chain_invariants() -> None:
     """
-    GIVEN the committed STAR release workflow
+    GIVEN the committed release, docs, smoke, and core workflow configuration
     WHEN static supply-chain validation runs
-    THEN image publication and release assets retain their evidence controls
+    THEN production controls and isolated smoke routing both satisfy the contract
     """
-    findings = assert_release_supply_chain.check_release_workflow(RELEASE_WORKFLOW)
+    findings = assert_release_supply_chain.check_release_contracts(REPOSITORY_ROOT)
 
     assert findings == []
 
@@ -69,87 +116,60 @@ def test_committed_release_workflow_satisfies_supply_chain_contract() -> None:
     ("mutator", "expected_message"),
     [
         pytest.param(
-            lambda payload: payload["permissions"].pop("id-token"),
-            "permissions.id-token must be write",
-            id="missing_oidc_permission",
-        ),
-        pytest.param(
-            lambda payload: _step(payload, "Build image locally (no push yet)")[
-                "with"
-            ].update({"push": True}),
-            "release image must build locally before publish",
-            id="push_before_scan",
-        ),
-        pytest.param(
-            lambda payload: _step(payload, "Push semver + sha + latest tags").update(
-                {"run": "docker push image"}
+            lambda root: _write_yaml(
+                root / ".github/workflows/release.yml",
+                {
+                    **_read_yaml(root / ".github/workflows/release.yml"),
+                    "permissions": {"contents": "write"},
+                },
             ),
+            "permissions.id-token must be write",
+            id="missing_production_oidc_permission",
+        ),
+        pytest.param(
+            lambda root: _mutate_core_push(root),
             "release image must resolve and persist one published digest",
             id="missing_digest_capture",
         ),
         pytest.param(
-            lambda payload: _step(payload, "Push semver + sha + latest tags").update(
+            _remove_smoke_release_token,
+            "smoke release must forward github-token",
+            id="missing_smoke_release_token",
+        ),
+        pytest.param(
+            lambda root: _write_yaml(
+                root / ".github/workflows/release-smoke-test.yml",
                 {
-                    "run": _step(payload, "Push semver + sha + latest tags")[
-                        "run"
-                    ].replace("{{.Manifest.Digest}}", "{{.Digest}}")
-                }
+                    **_read_yaml(root / ".github/workflows/release-smoke-test.yml"),
+                    "jobs": {
+                        **_read_yaml(root / ".github/workflows/release-smoke-test.yml")[
+                            "jobs"
+                        ],
+                        "release": {
+                            **_read_yaml(
+                                root / ".github/workflows/release-smoke-test.yml"
+                            )["jobs"]["release"],
+                            "environment": "release-smoke",
+                        },
+                    },
+                },
             ),
-            "release image must resolve and persist one published digest",
-            id="unsupported_digest_template",
-        ),
-        pytest.param(
-            lambda payload: _step(payload, "Generate image SBOM").update(
-                {"run": "echo no-sbom"}
-            ),
-            "missing SPDX SBOM generation from release image",
-            id="missing_sbom_generation",
-        ),
-        pytest.param(
-            lambda payload: _step(payload, "Generate image SBOM attestation")[
-                "with"
-            ].pop("sbom-path"),
-            "missing image SBOM attestation for IMAGE_DIGEST",
-            id="missing_sbom_attestation",
-        ),
-        pytest.param(
-            lambda payload: _step(
-                payload, "Sign published image digest with GitHub OIDC"
-            ).update({"run": "echo unsigned"}),
-            "missing keyless Cosign signature for published image digest",
-            id="missing_image_signature",
-        ),
-        pytest.param(
-            lambda payload: _step(payload, "Validate release assets").update(
-                {"run": "sha256sum -c SHA256SUMS"}
-            ),
-            "release assets must verify signed complete checksums",
-            id="missing_signed_manifest_verification",
-        ),
-        pytest.param(
-            lambda payload: _step(payload, "Create GitHub Release and upload assets")[
-                "with"
-            ].update({"files": "dist/SHA256SUMS"}),
-            "release upload must include SBOM and checksum signature bundle",
-            id="missing_release_evidence_assets",
+            "smoke publication must use release-smoke without deployments",
+            id="smoke_creates_deployment_history",
         ),
     ],
 )
-def test_release_validator_rejects_weakened_supply_chain_control(
-    tmp_path: Path,
-    mutator: Any,
-    expected_message: str,
+def test_release_validator_rejects_weakened_contract(
+    tmp_path: Path, mutator: Any, expected_message: str
 ) -> None:
     """
-    GIVEN a release workflow with one supply-chain control removed
+    GIVEN a release contract fixture with one required control removed
     WHEN static validation runs
-    THEN it reports the weakened contract
+    THEN it reports the specific weakened invariant
     """
-    payload = _release_workflow_payload()
-    mutator(payload)
-    workflow_path = tmp_path / "release.yml"
-    _write_workflow(workflow_path, payload)
+    root = _copy_release_contract_tree(tmp_path)
 
-    findings = assert_release_supply_chain.check_release_workflow(workflow_path)
+    mutator(root)
+    findings = assert_release_supply_chain.check_release_contracts(root)
 
     assert expected_message in [finding.message for finding in findings]

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added an isolated, approval-gated smoke release workflow for validating release publication and docs builds from dedicated test branches without publishing production docs.
+
 ### Security
 
 - Restricted release assets and documentation publication to strict SemVer tags whose target commits are already reachable from the repository default branch.

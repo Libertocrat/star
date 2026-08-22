@@ -1,0 +1,117 @@
+name: Release docs core
+description: Build and optionally publish STAR's versioned OpenAPI documentation site.
+
+inputs:
+  github-token:
+    description: GitHub token forwarded by the calling workflow for gh-pages publication.
+    required: true
+  release-version:
+    description: Release version supplied to the OpenAPI exporter and site builder.
+    required: true
+  require-eligible-tag:
+    description: Whether the source must be a strict production release tag on the default branch.
+    required: true
+  publish-docs:
+    description: Whether to publish the built site to gh-pages.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Verify release tag eligibility
+      if: inputs.require-eligible-tag == 'true'
+      uses: ./.github/actions/verify-release-tag
+      with:
+        base-ref: ${{ github.event.repository.default_branch }}
+
+    - name: Setup Python for docs
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+
+    - name: Cache pip dependencies
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: pip-${{ runner.os }}-${{ hashFiles('requirements/**/*.txt') }}
+        restore-keys: |
+          pip-${{ runner.os }}-
+
+    - name: Install Python dependencies
+      shell: bash
+      run: |
+        set -Eeuo pipefail
+        python -m pip install --upgrade pip
+        python -m pip install -r requirements/runtime.txt
+        python -m pip install -r requirements/testing.txt
+        python -m pip install -e .
+
+    - name: Export OpenAPI schema
+      shell: bash
+      env:
+        RELEASE_VERSION: ${{ inputs.release-version }}
+        STAR_DOCS_ROOT_DIR: ${{ runner.temp }}/star-docs
+      run: |
+        set -Eeuo pipefail
+        python scripts/export_openapi.py
+
+    - name: Validate OpenAPI schema
+      shell: bash
+      run: |
+        set -Eeuo pipefail
+        python -m openapi_spec_validator docs/api-docs/output/openapi.json
+
+    - name: Setup Node for docs
+      uses: actions/setup-node@v4
+      with:
+        node-version: "20"
+
+    - name: Install Swagger UI
+      shell: bash
+      run: |
+        set -Eeuo pipefail
+        npm init -y
+        npm install swagger-ui-dist@5.17.14
+
+    - name: Build versioned docs site
+      shell: bash
+      env:
+        RELEASE_VERSION: ${{ inputs.release-version }}
+      run: |
+        set -Eeuo pipefail
+        python scripts/build_docs_site.py
+
+    - name: Checkout gh-pages branch
+      if: inputs.publish-docs == 'true'
+      uses: actions/checkout@v4
+      with:
+        ref: gh-pages
+        path: gh-pages-dir
+        token: ${{ inputs.github-token }}
+      continue-on-error: true
+
+    - name: Publish documentation
+      if: inputs.publish-docs == 'true'
+      shell: bash
+      env:
+        RELEASE_VERSION: ${{ inputs.release-version }}
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+      run: |
+        set -Eeuo pipefail
+
+        if [[ ! -d "gh-pages-dir/.git" ]]; then
+          git clone "https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git" gh-pages-dir
+          cd gh-pages-dir
+          git checkout --orphan gh-pages
+          git rm -rf .
+        else
+          cd gh-pages-dir
+          git checkout gh-pages
+        fi
+
+        cp -r ../site/* .
+        git config user.name "${{ github.repository_owner }}"
+        git config user.email "${{ github.repository_owner }}@users.noreply.github.com"
+        git add .
+        git commit -m "docs: release ${RELEASE_VERSION}" || echo "No changes to commit"
+        git push "https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git" gh-pages

@@ -26,7 +26,8 @@
 - [6. Security Analysis Pipeline (security.yml)](#6-security-analysis-pipeline-securityyml)
 - [7. Release Pipeline (release.yml)](#7-release-pipeline-releaseyml)
 - [8. Documentation Publishing Pipeline (release-docs.yml)](#8-documentation-publishing-pipeline-release-docsyml)
-- [9. Pre-commit Integration](#9-pre-commit-integration)
+- [9. Release Smoke Test (release-smoke-test.yml)](#9-release-smoke-test-release-smoke-testyml)
+- [10. Pre-commit Integration](#10-pre-commit-integration)
 
 ## 1. CI Overview
 
@@ -80,7 +81,7 @@ BuildDocsSite --> PublishGHpages
 
 ## 2. CI Architecture
 
-GitHub Actions orchestrates the repository pipeline through four workflow files in `.github/workflows/`.
+GitHub Actions orchestrates the repository pipeline through five workflow files in `.github/workflows/` and two local core actions.
 
 | Workflow | Purpose |
 | --- | --- |
@@ -88,6 +89,7 @@ GitHub Actions orchestrates the repository pipeline through four workflow files 
 | `security.yml` | Deep security analysis with Semgrep and Trivy |
 | `release.yml` | Container release to GHCR, OpenAPI export, deploy bundle packaging, checksums generation, and GitHub release assets |
 | `release-docs.yml` | OpenAPI export, versioned docs site build, and publication to `gh-pages` |
+| `release-smoke-test.yml` | Protected pre-merge release and docs publication smoke test using private test destinations |
 
 At a high level:
 
@@ -95,8 +97,9 @@ At a high level:
 - `security.yml` runs on pull requests to `main`, on a weekly schedule, and on manual dispatch
 - `release.yml` runs on version tag pushes matching `v*` and on manual dispatch; it only publishes when the selected ref is a strict SemVer tag whose target commit is reachable from the repository default branch
 - `release-docs.yml` runs on version tag pushes matching `v*`; it applies the same eligibility check before generating or publishing documentation
+- `release-smoke-test.yml` runs only on pushes to `test/smoke-release-**`; its publication job waits for the protected `release-smoke` environment and its docs job never publishes `gh-pages`
 
-This separation keeps fast feedback, deep security analysis, release automation, and documentation publishing in distinct pipelines.
+`release.yml` and `release-docs.yml` delegate shared stages to local composite actions, keeping their production triggers independent while preventing stage drift. This separation keeps fast feedback, deep security analysis, release automation, documentation publishing, and pre-merge smoke validation in distinct pipelines.
 
 ## 3. Makefile-Driven CI Pipeline
 
@@ -293,7 +296,7 @@ SecurityWorkflow --> TrivyImage
 
 ## 7. Release Pipeline (release.yml)
 
-The workflow in `.github/workflows/release.yml` automates container releases and GitHub release assets.
+The workflow in `.github/workflows/release.yml` is the production wrapper for the local `release-core` action, which automates container releases and GitHub release assets.
 
 > [!IMPORTANT]
 > Publishing is reserved for version tags matching `v*`. Regular pushes and pull requests do not publish container images or GitHub release artifacts.
@@ -303,30 +306,20 @@ It is triggered by:
 - pushes of tags matching `v*`
 - manual workflow dispatch
 
-The release job performs these stages:
+The release job checks out the tagged source, then delegates the remaining stages to the local `release-core` action:
 
-1. Checkout with full history
-2. Normalize image owner and image name to lowercase
-3. Enable Docker Buildx
-4. Validate strict semantic version format `vX.Y.Z`
-5. Derive `APP_VERSION` from the tag
-6. Log in to GHCR
-7. Generate Docker metadata tags
-8. Build the `linux/amd64` image locally with Buildx and GitHub cache reuse
-9. Install Trivy and block publication when the local image has HIGH or CRITICAL vulnerabilities
-10. Push the generated tags to GHCR, resolve the immutable digest for the version tag, and fail unless every generated tag resolves to that digest
-11. Sign the published image digest with keyless Cosign using GitHub OIDC
-12. Install release tooling required for archive packaging (`zip`)
-13. Install Python dependencies for OpenAPI export
-14. Export the OpenAPI schema by running `scripts/export_openapi.py` with `STAR_DOCS_ROOT_DIR` set to a writable runner temporary path
-15. Prepare OpenAPI release files in `dist/` (`openapi.json` and `openapi-vX.Y.Z.json`)
-16. Generate an SPDX SBOM from the already scanned local image
-17. Publish GitHub provenance and SPDX SBOM attestations for the immutable GHCR digest
-18. Build deploy bundle archives from `deploy/` with `star-deploy/` as archive root
-19. Generate `SHA256SUMS` for OpenAPI, SBOM, and deploy bundle artifacts
-20. Sign `SHA256SUMS` with keyless Cosign and retain its verification bundle
-21. Validate archive structure, checksum coverage, checksums, and the signed checksum manifest before upload
-22. Create a GitHub release and upload release assets
+1. Checkout the tagged source with full history
+2. Verify strict `vX.Y.Z` eligibility and default-branch ancestry before any registry login or dependency installation
+3. Normalize image metadata and derive `APP_VERSION`
+4. Enable Docker Buildx and log in to GHCR
+5. Generate Docker metadata and build the `linux/amd64` image locally with GitHub cache reuse
+6. Install Trivy and block publication when the local image has HIGH or CRITICAL vulnerabilities
+7. Push the generated tags to GHCR, resolve the immutable digest for the version tag, and fail unless every generated tag resolves to that digest
+8. Sign the published image digest with keyless Cosign using GitHub OIDC
+9. Install archive and OpenAPI tooling, then export OpenAPI with `STAR_DOCS_ROOT_DIR` set to a writable runner temporary path
+10. Generate the SPDX SBOM, provenance/SBOM attestations, deploy archives, checksums, and the signed checksum bundle
+11. Validate archive structure, checksum coverage, checksums, and the signed checksum manifest before upload
+12. Create the GitHub release and upload release assets
 
 Docker metadata is generated by `docker/metadata-action@v5` and includes:
 
@@ -379,7 +372,7 @@ ValidateAssets --> GitHubRelease
 
 ## 8. Documentation Publishing Pipeline (release-docs.yml)
 
-The workflow in `.github/workflows/release-docs.yml` publishes versioned API documentation to the `gh-pages` branch.
+The workflow in `.github/workflows/release-docs.yml` is the production wrapper for the local `release-docs-core` action, which publishes versioned API documentation to the `gh-pages` branch.
 
 > [!NOTE]
 > The docs publishing workflow adds new versioned content without removing previously published API documentation versions.
@@ -423,7 +416,17 @@ ValidateSchema --> BuildDocs
 BuildDocs --> PublishPages
 ```
 
-## 9. Pre-commit Integration
+## 9. Release Smoke Test (release-smoke-test.yml)
+
+`release-smoke-test.yml` validates proposed release and docs changes before merge. It runs only from branches named `test/smoke-release-**`; the release job is protected by the `release-smoke` environment with no GitHub deployment record, while the docs job runs independently with read-only permissions.
+
+The smoke reuses the same local release and docs core actions as production. It builds, scans, publishes, signs, attests, bundles, and uploads a draft GitHub Release, but targets the private `ghcr.io/<owner>/star-release-test` package. It uses a unique synthetic SemVer version and a `smoke-v...` draft tag, so it cannot activate production tag workflows. It publishes the complete SemVer, SHA, and `latest` tag matrix only inside that test package.
+
+The smoke docs job exports and validates OpenAPI and builds the versioned site, but passes `publish-docs: false`; it never checks out or updates `gh-pages`. The smoke runner verifies artifact presence and deploy-bundle structure only. Maintainers manually inspect the draft release assets, package digest, attestations, SBOM, Cosign evidence, checksums, and manifest, then manually delete the draft release, its `smoke-v...` tag, and the associated test-package version.
+
+Before running a smoke, configure the external `release-smoke` environment to accept only `test/smoke-release-*`, require the maintainer's explicit approval, allow maintainer self-approval, and disallow administrative bypass. The test package is private and remains linked to this repository through the workflow `GITHUB_TOKEN`.
+
+## 10. Pre-commit Integration
 
 Local quality enforcement is configured in `.pre-commit-config.yaml`.
 
