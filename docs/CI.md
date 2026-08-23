@@ -348,6 +348,8 @@ The workflow stores provenance and SPDX SBOM attestations with the image digest 
 
 The non-versioned deploy bundle files (`star-deploy.tar.gz` and `star-deploy.zip`) are intentionally published to support a stable latest-release download URL.
 
+Each release deploy bundle embeds its release tag so its generated runtime configuration selects the matching image by default.
+
 These OpenAPI artifacts are generated from the live FastAPI app and the runtime action registry built from validated DSL YAML specs.
 
 This means the release pipeline publishes container artifacts, API contract artifacts, an installable deploy runtime bundle, and release checksums.
