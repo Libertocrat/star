@@ -236,6 +236,7 @@ runs:
         versioned_bundle_name="${bundle_name}-${RELEASE_VERSION}"
         mkdir -p "dist/${bundle_name}"
         cp -a deploy/. "dist/${bundle_name}/"
+        printf '%s\n' "${RELEASE_VERSION}" > "dist/${bundle_name}/star-runtime/.star-release-version"
 
         if [[ -f "dist/${bundle_name}/star-runtime/.env" ]]; then
           echo "Refusing to package star-runtime/.env"
@@ -299,6 +300,7 @@ runs:
         tar -tzf "dist/star-deploy-${RELEASE_VERSION}.tar.gz" > "$tar_listing"
         grep -qx 'star-deploy/star' "$tar_listing"
         grep -qx 'star-deploy/README.md' "$tar_listing"
+        grep -qx 'star-deploy/star-runtime/.star-release-version' "$tar_listing"
         grep -q '^star-deploy/star-runtime/' "$tar_listing"
 
         (
@@ -349,6 +351,7 @@ runs:
         tar -tzf "dist/star-deploy-${RELEASE_VERSION}.tar.gz" > "$tar_listing"
         grep -qx 'star-deploy/star' "$tar_listing"
         grep -qx 'star-deploy/README.md' "$tar_listing"
+        grep -qx 'star-deploy/star-runtime/.star-release-version' "$tar_listing"
         grep -q '^star-deploy/star-runtime/' "$tar_listing"
 
     - name: Create GitHub Release and upload assets

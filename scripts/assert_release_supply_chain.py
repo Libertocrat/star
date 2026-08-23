@@ -299,6 +299,7 @@ def check_release_contracts(root: Path) -> list[Finding]:
         )
 
     required_steps = {
+        "Build deploy bundle assets": "star-runtime/.star-release-version",
         "Generate image SBOM": "--format spdx-json",
         "Generate release checksums": "star-image-${RELEASE_VERSION}.spdx.json",
         "Install Cosign": "sigstore/cosign-installer@v3",

@@ -140,6 +140,8 @@ If you use `--production`, configure with production-oriented settings, or manua
 
 ## Customize
 
+Release bundles configure the matching `ghcr.io/libertocrat/star:vX.Y.Z` image by default. To use another image reference, set `STAR_IMAGE` in `star-runtime/.env` before running `./star up`; supported operator choices include `latest`, a local image tag, or a verified `@sha256:...` digest.
+
 You may want to edit or inspect:
 
 - `star-runtime/.env`

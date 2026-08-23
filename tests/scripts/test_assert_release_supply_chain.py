@@ -83,6 +83,20 @@ def _mutate_core_push(root: Path) -> None:
     _write_yaml(path, payload)
 
 
+def _remove_bundle_release_version(root: Path) -> None:
+    """Remove bundle release-version metadata from a copied core fixture."""
+    path = root / ".github/actions/release-core/action.yml"
+    payload = _read_yaml(path)
+    step = _action_step(payload, "Build deploy bundle assets")
+    run = step["run"]
+    assert isinstance(run, str)
+    step["run"] = run.replace(
+        "star-runtime/.star-release-version",
+        "star-runtime/.removed-release-version",
+    )
+    _write_yaml(path, payload)
+
+
 def _remove_smoke_release_token(root: Path) -> None:
     """Remove the token forwarded to the smoke release composite action."""
     path = root / ".github/workflows/release-smoke-test.yml"
@@ -130,6 +144,11 @@ def test_committed_release_contracts_satisfy_supply_chain_invariants() -> None:
             lambda root: _mutate_core_push(root),
             "release image must resolve and persist one published digest",
             id="missing_digest_capture",
+        ),
+        pytest.param(
+            _remove_bundle_release_version,
+            "missing release evidence control: Build deploy bundle assets",
+            id="missing_bundle_release_version",
         ),
         pytest.param(
             _remove_smoke_release_token,

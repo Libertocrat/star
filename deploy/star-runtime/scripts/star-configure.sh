@@ -8,6 +8,7 @@ source "${SCRIPT_DIR}/helpers/common.sh"
 # Resolve runtime-local paths explicitly from the current script location.
 RUNTIME_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 ENV_FILE="${RUNTIME_DIR}/.env"
+RELEASE_VERSION_FILE="${RUNTIME_DIR}/.star-release-version"
 SECRET_DIR="${RUNTIME_DIR}/secrets"
 SECRET_FILE="${SECRET_DIR}/star_api_token.txt"
 USER_SPECS_DIR="${RUNTIME_DIR}/user-specs"
@@ -135,6 +136,7 @@ show_intro() {
 # Initialize selected values with recommended defaults.
 set_selected_defaults() {
     STAR_VERSION_VALUE="${DEFAULT_STAR_VERSION}"
+    load_packaged_release_version
     COMPOSE_PROJECT_NAME_VALUE="${DEFAULT_COMPOSE_PROJECT_NAME}"
     STAR_SHARED_NETWORK_VALUE="${DEFAULT_STAR_SHARED_NETWORK}"
     STAR_HOST_BIND_ADDRESS_VALUE="${DEFAULT_STAR_HOST_BIND_ADDRESS}"
@@ -161,6 +163,29 @@ is_valid_star_version_tag() {
     [[ -n "${value}" && "${value}" =~ ^[a-zA-Z0-9][a-zA-Z0-9_.-]*$ ]]
 }
 
+# Load the release tag embedded by release packaging, when this is a release bundle.
+load_packaged_release_version() {
+    local release_version
+    local version_path_display
+
+    if [[ ! -e "${RELEASE_VERSION_FILE}" && ! -L "${RELEASE_VERSION_FILE}" ]]; then
+        return 0
+    fi
+
+    version_path_display="$(path_relative_to_pwd "${RELEASE_VERSION_FILE}")"
+    if [[ ! -f "${RELEASE_VERSION_FILE}" || -L "${RELEASE_VERSION_FILE}" ]]; then
+        die "Release version metadata must be a regular file: ${version_path_display}"
+    fi
+
+    release_version="$(< "${RELEASE_VERSION_FILE}")"
+    release_version="$(trim "${release_version}")"
+    if [[ ! "${release_version}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        die "Release version metadata must contain a vX.Y.Z tag: ${version_path_display}"
+    fi
+
+    STAR_VERSION_VALUE="${release_version}"
+}
+
 # Show only beginner-facing recommended defaults.
 show_recommended_defaults() {
     local docs_state
@@ -184,7 +209,7 @@ prompt_star_version() {
     local value
 
     while true; do
-        value="$(prompt_default "STAR version tag" "${DEFAULT_STAR_VERSION}")"
+        value="$(prompt_default "STAR version tag" "${STAR_VERSION_VALUE}")"
         if ! is_non_empty "${value}"; then
             warn "STAR version tag must not be empty."
             continue
