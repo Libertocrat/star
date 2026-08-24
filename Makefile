@@ -1,7 +1,7 @@
 .PHONY: help deps deps-local semgrep-install fmt fmt-shell lint lint-shell lint-shell-format lint-actions typecheck test \
-	bandit pip-audit hadolint semgrep trivy \
+	bandit pip-audit hadolint semgrep trivy trivy-fs trivy-image trivy-image-pull \
 	quality ci-security deep-security ci full \
-	build
+	deep-security-pull full-pull build build-pull
 
 PYTHON ?= python
 PIP ?= pip
@@ -71,14 +71,17 @@ help:
 	@echo ""
 	@echo "== Build =="
 	@echo "make build          - Build Docker image locally"
+	@echo "make build-pull     - Build Docker image locally after pulling its base"
 	@echo ""
 	@echo "== Security =="
 	@echo "make ci-security    - Baseline security (bandit + pip-audit + hadolint)"
 	@echo "make deep-security  - Advanced scans (semgrep + trivy fs + trivy image)"
+	@echo "make deep-security-pull - Advanced scans using a freshly pulled image base"
 	@echo ""
 	@echo "== CI =="
 	@echo "make ci             - quality + ci-security"
 	@echo "make full           - ci + build + deep-security"
+	@echo "make full-pull      - ci + fresh build + deep-security-pull"
 
 # -----------------------------
 # Dependency Setup
@@ -176,6 +179,10 @@ build:
 	docker build -t $(IMAGE_TARGET) .
 	@echo "Docker image $(IMAGE_TARGET) built successfully."
 
+build-pull:
+	docker build --pull -t $(IMAGE_TARGET) .
+	@echo "Docker image $(IMAGE_TARGET) built successfully with a freshly pulled base."
+
 # -----------------------------
 # Deep Security (Heavy)
 # -----------------------------
@@ -197,6 +204,9 @@ trivy-fs:
 	[ "$$HIGH_COUNT" -eq 0 ] && [ "$$CRITICAL_COUNT" -eq 0 ] && [ "$$SECRET_COUNT" -eq 0 ]
 
 trivy-image: build
+trivy-image-pull: build-pull
+
+trivy-image trivy-image-pull:
 	@echo "Running Trivy image scan..."
 	@set -e; \
 	trivy $(TRIVY_IMAGE_FLAGS) -o trivy-image.json $(IMAGE_TARGET); \
@@ -209,6 +219,9 @@ trivy-image: build
 deep-security: semgrep trivy-fs trivy-image
 	@echo "Deep security scans passed."
 
+deep-security-pull: semgrep trivy-fs trivy-image-pull
+	@echo "Deep security scans passed with a freshly pulled image base."
+
 # -----------------------------
 # CI Aggregates
 # -----------------------------
@@ -218,3 +231,6 @@ ci: quality ci-security
 
 full: ci build deep-security
 	@echo "Full pipeline passed."
+
+full-pull: ci build-pull deep-security-pull
+	@echo "Full pipeline passed with a freshly pulled image base."

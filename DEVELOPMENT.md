@@ -454,8 +454,11 @@ Important targets are:
 | `make quality` | run linting, type checking, and tests |
 | `make ci` | run the local CI quality gate |
 | `make build` | build the Docker image locally |
+| `make build-pull` | build the Docker image after pulling its base image |
 | `make deep-security` | run Semgrep and Trivy scans |
+| `make deep-security-pull` | run Semgrep and Trivy scans after pulling the image base |
 | `make full` | run the full local pipeline |
+| `make full-pull` | run the full local pipeline with a freshly pulled image base |
 
 Current target behavior:
 
@@ -469,8 +472,11 @@ Current target behavior:
 - `make quality` runs `lint`, `typecheck`, and `test`
 - `make ci` runs `quality` and `ci-security`
 - `make build` runs `docker build -t star:local .`
+- `make build-pull` runs `docker build --pull -t star:local .`
 - `make deep-security` runs `semgrep`, `trivy-fs`, and `trivy-image`
+- `make deep-security-pull` runs `semgrep`, `trivy-fs`, and `trivy-image-pull`
 - `make full` runs `ci`, `build`, and `deep-security`
+- `make full-pull` runs `ci`, `build-pull`, and `deep-security-pull`
 
 These commands mirror the CI pipelines documented in [docs/CI.md](docs/CI.md), except for local DX oriented commands such as `fmt`, `deps`, and `deps-local`.
 

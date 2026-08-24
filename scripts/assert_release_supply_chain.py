@@ -269,6 +269,13 @@ def check_release_contracts(root: Path) -> list[Finding]:
                     paths["core"], "release image must build locally before publish"
                 )
             )
+        elif values.get("pull") is not True:
+            findings.append(
+                Finding(
+                    paths["core"],
+                    "release image must pull the current base before scanning",
+                )
+            )
 
     push = _named_step(core_steps, "Push semver + sha + latest tags")
     if push is None or not all(

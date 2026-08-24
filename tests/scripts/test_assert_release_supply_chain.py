@@ -83,6 +83,17 @@ def _mutate_core_push(root: Path) -> None:
     _write_yaml(path, payload)
 
 
+def _remove_release_base_pull(root: Path) -> None:
+    """Remove fresh-base pulling from a copied release core fixture."""
+    path = root / ".github/actions/release-core/action.yml"
+    payload = _read_yaml(path)
+    step = _action_step(payload, "Build image locally (no push yet)")
+    inputs = step["with"]
+    assert isinstance(inputs, dict)
+    inputs.pop("pull")
+    _write_yaml(path, payload)
+
+
 def _remove_bundle_release_version(root: Path) -> None:
     """Remove bundle release-version metadata from a copied core fixture."""
     path = root / ".github/actions/release-core/action.yml"
@@ -144,6 +155,11 @@ def test_committed_release_contracts_satisfy_supply_chain_invariants() -> None:
             lambda root: _mutate_core_push(root),
             "release image must resolve and persist one published digest",
             id="missing_digest_capture",
+        ),
+        pytest.param(
+            _remove_release_base_pull,
+            "release image must pull the current base before scanning",
+            id="missing_fresh_release_base",
         ),
         pytest.param(
             _remove_bundle_release_version,

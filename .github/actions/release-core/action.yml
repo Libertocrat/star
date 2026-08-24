@@ -81,6 +81,7 @@ runs:
       with:
         context: .
         push: false
+        pull: true
         build-args: |
           STAR_APP_VERSION=${{ env.APP_VERSION }}
         tags: ${{ steps.meta.outputs.tags }}
