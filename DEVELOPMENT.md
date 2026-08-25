@@ -323,6 +323,12 @@ Confirm they exist:
 command -v hadolint jq semgrep trivy shfmt shellcheck actionlint
 ```
 
+When manually verifying release images or checksum manifests, also confirm Cosign is available:
+
+```bash
+command -v cosign
+```
+
 ### Python version
 
 Use Python 3.12 before creating the virtual environment.
@@ -676,7 +682,7 @@ The blocking Semgrep gate excludes the GitHub Actions mutable-action-tag rule.
 STAR treats SHA pinning for workflow actions as hardening work while the workflow
 policy allows reviewed stable major versions.
 
-Note that `make ci` and `make full` require the relevant local tools to be installed. In particular, `hadolint`, `jq`, `semgrep`, `trivy`, `shfmt`, `shellcheck`, and `actionlint` are not installed by `requirements/dev.txt`.
+Note that `make ci` and `make full` require the relevant local tools to be installed. In particular, `hadolint`, `jq`, `semgrep`, `trivy`, `shfmt`, `shellcheck`, and `actionlint` are not installed by `requirements/dev.txt`. Cosign is also installed separately, but is required only for manual release image and checksum-manifest verification.
 
 ## 12. Troubleshooting
 
@@ -702,6 +708,12 @@ pip freeze
 
 ```bash
 command -v hadolint jq semgrep trivy shfmt shellcheck actionlint
+```
+
+### Verify Cosign for manual release verification
+
+```bash
+command -v cosign
 ```
 
 ### actionlint not found in PATH
