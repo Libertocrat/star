@@ -51,7 +51,7 @@ def get_release_version() -> str:
         ValueError: If `RELEASE_VERSION` is not a valid semantic version.
     """
 
-    raw = os.getenv("RELEASE_VERSION", "0.1.3").strip()
+    raw = os.getenv("RELEASE_VERSION", "0.1.4").strip()
     normalized = raw[1:] if raw.startswith("v") else raw
     if not re.fullmatch(r"\d+\.\d+\.\d+", normalized):
         raise ValueError("RELEASE_VERSION must be in format vX.Y.Z or X.Y.Z")

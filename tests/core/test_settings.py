@@ -54,7 +54,7 @@ def test_settings_defaults_applied(minimal_safe_env):
     assert s.star_max_yml_bytes == 102400
     assert s.star_timeout_ms == 5000
     assert s.star_rate_limit_rps == 10
-    assert s.star_app_version == "0.1.3"
+    assert s.star_app_version == "0.1.4"
     assert s.star_enable_docs is False
     assert s.star_docs_require_auth is True
     assert s.star_metrics_require_auth is True
