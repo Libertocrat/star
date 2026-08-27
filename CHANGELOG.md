@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Release deploy bundles now configure the image tag associated with their release by default.
 - Release and smoke builds now pull their container base before Trivy scanning, with explicit local fresh-build targets for equivalent validation.
+- Added isolated Bats coverage for the packaged deploy lifecycle in CI.
 
 ### Security
 
