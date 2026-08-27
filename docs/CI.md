@@ -38,6 +38,7 @@ The CI system enforces:
 - code quality
 - type safety
 - automated testing
+- isolated deploy lifecycle integration testing
 - security scanning
 - container build validation
 - automated releases and image publishing to GHCR.io
@@ -85,7 +86,7 @@ GitHub Actions orchestrates the repository pipeline through five workflow files 
 
 | Workflow | Purpose |
 | --- | --- |
-| `ci.yml` | Fast quality gate and Docker build validation |
+| `ci.yml` | Fast quality gate, Docker build validation, and deploy lifecycle integration |
 | `security.yml` | Deep security analysis with Semgrep and Trivy |
 | `release.yml` | Container release to GHCR, OpenAPI export, deploy bundle packaging, checksums generation, and GitHub release assets |
 | `release-docs.yml` | OpenAPI export, versioned docs site build, and publication to `gh-pages` |
@@ -126,6 +127,7 @@ Supporting targets provide the actual commands:
 - `lint-actions` runs `actionlint` for `.github/workflows/`
 - `typecheck` runs `mypy --config-file mypy.ini`
 - `test` runs `pytest -q tests`
+- `test-deploy` runs the Bats Core suite for an isolated extracted deploy bundle
 - `bandit` scans `src/`
 - `pip-audit` audits `requirements/runtime.txt`
 - `hadolint` checks `Dockerfile`
@@ -207,6 +209,10 @@ That includes:
 - Bandit SAST through `bandit`
 - pip-audit dependency scanning against `requirements/runtime.txt`
 - Hadolint checks for `Dockerfile`
+
+### `deploy-integration` job
+
+After the fast quality gate, this Docker-enabled job installs Bats Core and runs `make test-deploy`. The suite builds a local test image and validates an extracted deploy bundle with unique Compose resources; it has no registry or publication permissions.
 
 ### `build` job
 

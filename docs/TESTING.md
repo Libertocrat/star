@@ -87,6 +87,7 @@ The test suite is organized under `tests/`.
 | `tests/actions/runtime` | Unit tests for execution, rendering, output builders, and sanitization. |
 | `tests/core` | Unit tests for configuration, schemas, security helpers, response helpers, and managed file primitives. |
 | `tests/integration` | End-to-end HTTP validation for middleware, routes, files, and OpenAPI output. |
+| `deploy-tests/` | Bats Core validation of a freshly extracted deploy bundle and isolated Docker Compose lifecycle. |
 
 Within those directories:
 
@@ -149,6 +150,16 @@ Route integration coverage includes:
 - `/health` success payload validation
 - `/metrics` Prometheus text format validation
 - `/openapi.json` validation, public/private route projection, response header docs, and runtime action examples from the generated docs surface
+
+### Deploy lifecycle integration
+
+`deploy-tests/` is intentionally separate from `tests/` and pytest. Its Bats Core suite builds a uniquely tagged local image, constructs a temporary bundle from tracked `deploy/` files, extracts it, and validates `configure`, `up`, `status`, `logs`, and `down` through the packaged `./star` CLI. Each run uses unique Compose, network, volume, image, and loopback-port names; cleanup is limited to those resources.
+
+Run it explicitly with:
+
+```bash
+make test-deploy
+```
 
 ## 6. Security Testing
 
@@ -237,6 +248,7 @@ Typical commands are:
 
 ```bash
 make test
+make test-deploy
 pytest -q tests
 pytest -q tests/core/files
 pytest -q tests/integration
@@ -255,6 +267,8 @@ Testing dependencies are declared in `requirements/testing.txt`, and `requiremen
 The same test suite is executed automatically in GitHub Actions.
 
 The CI workflow in `.github/workflows/ci.yml` creates a Python 3.12 virtual environment, installs `requirements/dev.txt`, and runs `make ci`. The `make ci` target includes the full pytest suite as part of the quality gate.
+
+The same workflow also runs `make test-deploy` in a dedicated Docker-enabled Bats job. This job is separate from pytest and does not publish images or release artifacts.
 
 For pipeline details, see [docs/CI.md](./CI.md).
 

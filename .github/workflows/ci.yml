@@ -106,3 +106,23 @@ jobs:
           platforms: linux/amd64
           cache-from: type=gha,scope=star
           cache-to: type=gha,mode=max,scope=star
+
+  deploy-integration:
+    name: Deploy Lifecycle Integration (Bats)
+    runs-on: ubuntu-latest
+    needs: ci
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Bats
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bats
+          bats --version
+
+      - name: Run deploy lifecycle integration tests
+        run: make test-deploy

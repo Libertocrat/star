@@ -100,6 +100,7 @@ The current local workflow depends on the following tools.
 | curl | local API checks and helper downloads |
 | Go (>= 1.25) | install `actionlint` from source |
 | Cosign | optional verification of signed release images and checksum manifests |
+| Bats Core | optional isolated deploy lifecycle integration tests |
 
 Python 3.12 is the supported development version. It can be installed and managed with `pyenv` before creating the project virtual environment.
 
@@ -113,6 +114,7 @@ Additional CLI tools are required for some workflows:
   - `shellcheck` for shell script linting
   - `go` and `actionlint` for GitHub Actions workflow linting
   - `cosign` for release image and checksum-manifest verification
+  - `bats` for deploy lifecycle integration tests
 - `Makefile` managed:
   - `semgrep` for deep SAST scans
 
@@ -193,6 +195,16 @@ cosign version
 ```
 
 See [deploy/README.md](deploy/README.md#release-verification) for the STAR image and download verification commands.
+
+#### Installing Bats
+
+Bats Core is optional for normal development and runs the isolated deploy lifecycle suite.
+
+```bash
+sudo apt update
+sudo apt install -y bats
+bats --version
+```
 
 #### Installing Hadolint
 
@@ -458,6 +470,7 @@ Important targets are:
 | `make lint-shell-format` | validate shell formatting with `shfmt` |
 | `make lint-actions` | validate GitHub Actions workflows with actionlint |
 | `make quality` | run linting, type checking, and tests |
+| `make test-deploy` | run isolated deploy lifecycle integration tests with Bats |
 | `make ci` | run the local CI quality gate |
 | `make build` | build the Docker image locally |
 | `make build-pull` | build the Docker image after pulling its base image |
@@ -671,6 +684,12 @@ For deeper local validation, run:
 make full
 ```
 
+To validate the packaged Docker Compose lifecycle separately, run:
+
+```bash
+make test-deploy
+```
+
 This adds:
 
 - Docker image build
@@ -683,6 +702,8 @@ STAR treats SHA pinning for workflow actions as hardening work while the workflo
 policy allows reviewed stable major versions.
 
 Note that `make ci` and `make full` require the relevant local tools to be installed. In particular, `hadolint`, `jq`, `semgrep`, `trivy`, `shfmt`, `shellcheck`, and `actionlint` are not installed by `requirements/dev.txt`. Cosign is also installed separately, but is required only for manual release image and checksum-manifest verification.
+
+`make test-deploy` additionally requires Bats, Docker, Docker Compose v2, `curl`, `tar`, and Python 3. It creates and cleans unique test-owned Docker resources without touching a normal local STAR deployment.
 
 ## 12. Troubleshooting
 

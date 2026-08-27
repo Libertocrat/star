@@ -1,4 +1,4 @@
-.PHONY: help deps deps-local semgrep-install fmt fmt-shell lint lint-shell lint-shell-format lint-actions typecheck test \
+.PHONY: help deps deps-local semgrep-install fmt fmt-shell lint lint-shell lint-shell-format lint-actions typecheck test test-deploy \
 	bandit pip-audit hadolint semgrep trivy trivy-fs trivy-image trivy-image-pull \
 	quality ci-security deep-security ci full \
 	deep-security-pull full-pull build build-pull
@@ -9,7 +9,7 @@ PIP ?= pip
 SRC_DIRS = src tests scripts
 SHELL_FILES := $(shell find . \
 	-type f \
-	\( -name '*.sh' -o -name 'star' \) \
+	\( -name '*.sh' -o -name '*.bash' -o -name 'star' \) \
 	-not -path './.git/*' \
 	-not -path './.venv/*' \
 	-not -path './venv/*' \
@@ -51,6 +51,7 @@ TRIVY_IMAGE_FLAGS = image \
 IMAGE_NAME ?= star
 IMAGE_TAG ?= local
 IMAGE_TARGET := $(IMAGE_NAME):$(IMAGE_TAG)
+BATS ?= bats
 
 # -----------------------------
 # Help
@@ -68,6 +69,7 @@ help:
 	@echo "== Quality =="
 	@echo "make lint-shell     - Validate shell formatting and run ShellCheck"
 	@echo "make quality        - Lint + typecheck + tests"
+	@echo "make test-deploy    - Run isolated deploy lifecycle tests with Bats"
 	@echo ""
 	@echo "== Build =="
 	@echo "make build          - Build Docker image locally"
@@ -151,6 +153,9 @@ typecheck:
 
 test:
 	pytest -q tests
+
+test-deploy:
+	$(BATS) --formatter tap deploy-tests
 
 quality: lint typecheck test
 	@echo "Quality checks passed."
