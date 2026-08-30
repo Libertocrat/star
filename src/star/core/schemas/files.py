@@ -20,6 +20,8 @@ class FileMetadata(BaseModel):
         id: Stable UUID assigned by STAR for the managed file.
         original_filename: Client or producer filename after basename
             normalization.
+        file_name: Editable ASCII display name used for downloads.
+        tags: Canonical mutable labels used for file organization.
         stored_filename: Internal blob filename persisted by STAR.
         mime_type: Server-detected MIME type in `type/subtype` form.
         extension: Normalized lowercase extension including leading dot.
@@ -32,6 +34,8 @@ class FileMetadata(BaseModel):
 
     id: UUID
     original_filename: str = Field(..., min_length=1)
+    file_name: str = Field(..., min_length=1, max_length=255)
+    tags: list[str] = Field(..., max_length=50)
     stored_filename: str = Field(..., min_length=1)
     mime_type: str = Field(..., pattern=r"^[a-z0-9.+-]+/[a-z0-9.+-]+$")
     extension: str = Field(..., pattern=r"^\.[a-z0-9]+$")

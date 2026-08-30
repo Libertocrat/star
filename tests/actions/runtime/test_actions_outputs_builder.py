@@ -526,6 +526,8 @@ def test_outputs_builder__cleanup_is_not_duplicated(monkeypatch):
     metadata = FileMetadata(
         id=file_id,
         original_filename="x.bin",
+        file_name="x.bin",
+        tags=[],
         stored_filename=f"file_{file_id}.bin",
         mime_type="application/octet-stream",
         extension=".bin",

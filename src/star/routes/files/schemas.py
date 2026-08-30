@@ -10,8 +10,9 @@ from __future__ import annotations
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from star.core.files.metadata_validation import canonicalize_tags, validate_file_name
 from star.core.schemas.files import FileMetadata
 
 
@@ -23,6 +24,53 @@ class UploadFileData(BaseModel):
     """
 
     file: FileMetadata
+
+
+class FileMetadataData(BaseModel):
+    """Success payload for one persisted file metadata operation.
+
+    Attributes:
+        file: Current persisted metadata for the managed file.
+    """
+
+    file: FileMetadata
+
+
+class UpdateFileMetadataRequest(BaseModel):
+    """Complete replacement request for editable managed-file metadata.
+
+    Attributes:
+        file_name: Safe display filename preserving the stored extension.
+        tags: Complete replacement set of canonical organization tags.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    file_name: str = Field(
+        ...,
+        min_length=1,
+        max_length=255,
+        description="ASCII display filename with the existing file extension.",
+    )
+    tags: list[str] = Field(
+        ...,
+        max_length=50,
+        description="Complete replacement tag set using lowercase-safe labels.",
+    )
+
+    @field_validator("file_name")
+    @classmethod
+    def validate_display_file_name(cls, value: str) -> str:
+        """Validate structural filename safety before storage checks its extension."""
+
+        return validate_file_name(value)
+
+    @field_validator("tags")
+    @classmethod
+    def normalize_tags(cls, value: list[str]) -> list[str]:
+        """Canonicalize the supplied complete tag set."""
+
+        return list(canonicalize_tags(value))
 
 
 class UploadFileRequest(BaseModel):

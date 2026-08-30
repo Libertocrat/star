@@ -52,3 +52,16 @@ class FileListPage:
 
     files: list[FileMetadata]
     next_cursor: str | None
+
+
+@dataclass(slots=True, frozen=True)
+class FileMetadataUpdateResult:
+    """Result of a successful conditional metadata replacement.
+
+    Attributes:
+        metadata: Persisted metadata after the replacement.
+        etag: Strong opaque validator for the current metadata representation.
+    """
+
+    metadata: FileMetadata
+    etag: str

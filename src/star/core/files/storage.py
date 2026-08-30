@@ -14,6 +14,7 @@ from star.core.config import Settings, get_settings
 from star.core.files.descriptors import (
     FileContentDescriptor,
     FileListPage,
+    FileMetadataUpdateResult,
     UploadChecksum,
 )
 from star.core.files.exceptions import (
@@ -22,6 +23,7 @@ from star.core.files.exceptions import (
     InvalidChecksumAlgorithmError,
     InvalidManagedFileMetadataError,
     ManagedFileNotFoundError,
+    ManagedFilePreconditionFailedError,
     ManagedFileStorageError,
     ManagedFileTooLargeError,
 )
@@ -43,8 +45,11 @@ from star.core.files.metadata import (
     delete_blob_file,
     delete_metadata_file,
     load_file_metadata,
+    metadata_etag,
+    metadata_lock,
     save_file_metadata,
 )
+from star.core.files.metadata_validation import canonicalize_tags, validate_file_name
 from star.core.files.mime import (
     compute_sha256_for_file,
     detect_mime_for_file,
@@ -153,6 +158,26 @@ class ManagedFileStore(Protocol):
 
         Returns:
             True when metadata deletion publishes successfully.
+        """
+
+    def update_metadata(
+        self,
+        file_id: uuid.UUID,
+        *,
+        file_name: str,
+        tags: tuple[str, ...],
+        expected_etag: str,
+    ) -> FileMetadataUpdateResult:
+        """Conditionally replace mutable metadata using the current ETag.
+
+        Args:
+            file_id: File UUID to update.
+            file_name: Validated display filename with the existing extension.
+            tags: Canonical complete replacement tag set.
+            expected_etag: Strong ETag obtained from the current representation.
+
+        Returns:
+            Updated metadata and its new strong ETag.
         """
 
     def create_pending_output(self, *, original_filename: str) -> FileMetadata:
@@ -310,6 +335,8 @@ class LocalManagedFileStore:
             metadata = FileMetadata(
                 id=file_id,
                 original_filename=safe_original_filename,
+                file_name=safe_original_filename,
+                tags=[],
                 stored_filename=blob_path.name,
                 mime_type=detected_mime,
                 extension=extension,
@@ -442,7 +469,7 @@ class LocalManagedFileStore:
         if "/" not in mime_type:
             mime_type = "application/octet-stream"
 
-        filename = sanitize_download_filename(metadata.original_filename, file_id)
+        filename = sanitize_download_filename(metadata.file_name, file_id)
 
         logger.info(
             "file.content.resolved",
@@ -558,39 +585,42 @@ class LocalManagedFileStore:
             ManagedFileError: If metadata validation or metadata deletion fails.
         """
 
-        metadata = self.require_metadata(file_id)
-        self._validate_ready_metadata(file_id, metadata, action="delete")
+        with metadata_lock(file_id, self.settings):
+            metadata = self.require_metadata(file_id)
+            self._validate_ready_metadata(file_id, metadata, action="delete")
 
-        blob_path = get_blob_path(file_id, self.settings)
-        meta_path = get_meta_path(file_id, self.settings)
-        self._validate_metadata_blob_reference(file_id, metadata, blob_path)
+            blob_path = get_blob_path(file_id, self.settings)
+            meta_path = get_meta_path(file_id, self.settings)
+            self._validate_metadata_blob_reference(file_id, metadata, blob_path)
 
-        blob_exists = blob_path.exists()
-        if not blob_exists:
-            logger.warning(
-                "file.delete.blob_missing_before_cleanup",
-                extra={"file_id": str(file_id), "blob_path": str(blob_path)},
-            )
+            blob_exists = blob_path.exists()
+            if not blob_exists:
+                logger.warning(
+                    "file.delete.blob_missing_before_cleanup",
+                    extra={"file_id": str(file_id), "blob_path": str(blob_path)},
+                )
 
-        if blob_exists and not blob_path.is_file():
-            logger.warning(
-                "file.delete.invalid_metadata",
-                extra={"file_id": str(file_id)},
-            )
-            raise InvalidManagedFileMetadataError(
-                "Stored file path is not a regular file."
-            )
+            if blob_exists and not blob_path.is_file():
+                logger.warning(
+                    "file.delete.invalid_metadata",
+                    extra={"file_id": str(file_id)},
+                )
+                raise InvalidManagedFileMetadataError(
+                    "Stored file path is not a regular file."
+                )
 
-        try:
-            # Metadata deletion is the public deletion boundary; blob cleanup
-            # after this point is best-effort and does not fail the request.
-            delete_metadata_file(file_id, self.settings)
-        except (FileNotFoundError, OSError) as exc:
-            logger.exception(
-                "file.delete.metadata_delete_failed",
-                extra={"file_id": str(file_id), "meta_path": str(meta_path)},
-            )
-            raise ManagedFileStorageError("Failed to delete file metadata.") from exc
+            try:
+                # Metadata deletion is the public deletion boundary; blob cleanup
+                # after this point is best-effort and does not fail the request.
+                delete_metadata_file(file_id, self.settings)
+            except (FileNotFoundError, OSError) as exc:
+                logger.exception(
+                    "file.delete.metadata_delete_failed",
+                    extra={"file_id": str(file_id), "meta_path": str(meta_path)},
+                )
+                raise ManagedFileStorageError(
+                    "Failed to delete file metadata."
+                ) from exc
 
         try:
             delete_blob_file(file_id, self.settings)
@@ -618,6 +648,68 @@ class LocalManagedFileStore:
             },
         )
         return True
+
+    def update_metadata(
+        self,
+        file_id: uuid.UUID,
+        *,
+        file_name: str,
+        tags: tuple[str, ...],
+        expected_etag: str,
+    ) -> FileMetadataUpdateResult:
+        """Conditionally replace mutable metadata for a ready local file."""
+
+        with metadata_lock(file_id, self.settings):
+            metadata = self.require_metadata(file_id)
+            self._validate_ready_metadata(file_id, metadata, action="update")
+            blob_path = get_blob_path(file_id, self.settings)
+            self._validate_metadata_blob_reference(file_id, metadata, blob_path)
+
+            if not blob_path.exists():
+                raise ManagedFileNotFoundError()
+            if not blob_path.is_file():
+                raise InvalidManagedFileMetadataError(
+                    "Stored file path is not a regular file."
+                )
+
+            current_etag = metadata_etag(metadata)
+            if expected_etag != current_etag:
+                raise ManagedFilePreconditionFailedError()
+
+            try:
+                validated_file_name = validate_file_name(
+                    file_name,
+                    extension=metadata.extension,
+                )
+                validated_tags = canonicalize_tags(tags)
+            except ValueError as exc:
+                raise InvalidManagedFileMetadataError(
+                    "File metadata update is invalid."
+                ) from exc
+
+            if metadata.file_name == validated_file_name and metadata.tags == list(
+                validated_tags
+            ):
+                return FileMetadataUpdateResult(metadata=metadata, etag=current_etag)
+
+            updated = metadata.model_copy(
+                update={
+                    "file_name": validated_file_name,
+                    "tags": list(validated_tags),
+                    "updated_at": datetime.now(UTC),
+                }
+            )
+            try:
+                save_file_metadata(updated, self.settings)
+            except OSError as exc:
+                raise ManagedFileStorageError(
+                    "Failed to persist file metadata."
+                ) from exc
+
+            return FileMetadataUpdateResult(
+                metadata=updated,
+                etag=metadata_etag(updated),
+            )
 
     def create_pending_output(self, *, original_filename: str) -> FileMetadata:
         """Create pending metadata for a generated output file.
@@ -682,6 +774,7 @@ class LocalManagedFileStore:
         final_metadata = unverified.model_copy(
             update={
                 "original_filename": original_filename,
+                "file_name": original_filename,
                 "mime_type": mime_type,
                 "extension": ".bin",
                 "size_bytes": size_bytes,
@@ -728,6 +821,8 @@ class LocalManagedFileStore:
         metadata = FileMetadata(
             id=file_id,
             original_filename=original_filename,
+            file_name=original_filename,
+            tags=[],
             stored_filename=f"file_{file_id}.bin",
             mime_type=mime_type,
             extension=extension,
@@ -815,7 +910,11 @@ class LocalManagedFileStore:
             message = (
                 "File is not in deletable state."
                 if action == "delete"
-                else "File is not available for download."
+                else (
+                    "File metadata is not editable."
+                    if action == "update"
+                    else "File is not available for download."
+                )
             )
             raise InvalidManagedFileMetadataError(message)
 

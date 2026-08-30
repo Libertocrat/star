@@ -39,6 +39,10 @@ class ManagedFileStorageError(ManagedFileError):
     """
 
 
+class ManagedFilePreconditionFailedError(ManagedFileError):
+    """Raised when a metadata ETag no longer represents the current record."""
+
+
 class ManagedFileTooLargeError(ManagedFileError):
     """Raised when an uploaded file exceeds the configured byte limit.
 

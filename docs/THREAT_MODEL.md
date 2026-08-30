@@ -92,7 +92,7 @@ The application exposes these HTTP entry points:
 - `/v1/actions/{action_id}` via GET. This endpoint returns the public contract of one runtime action.
 - `/v1/actions/{action_id}` via POST. This is the main execution attack surface because it accepts action-specific parameters for the selected `action_id`.
 - `/v1/files` via POST and GET. These endpoints handle managed file upload and listing.
-- `/v1/files/{id}` via GET and DELETE. These endpoints handle managed file metadata retrieval and deletion by `file_id`.
+- `/v1/files/{id}` via GET, PUT, and DELETE. These endpoints handle managed file metadata retrieval, conditional editable-metadata replacement, and deletion by `file_id`.
 - `/v1/files/{id}/content` via GET. This endpoint streams file content by `file_id`.
 - `/health` via GET. This endpoint is unauthenticated.
 - `/metrics` via GET. This endpoint requires bearer authentication by default and becomes unauthenticated only when `STAR_METRICS_REQUIRE_AUTH=false`.
@@ -101,7 +101,7 @@ The application exposes these HTTP entry points:
 Attack inputs include:
 
 - request headers, especially `Authorization`, `Content-Type`, `Content-Length`, `Transfer-Encoding`, and `X-Request-Id`
-- request body content sent to body-capable endpoints, including `POST /v1/actions/{action_id}` and multipart form uploads sent to `/v1/files`
+- request body content sent to body-capable endpoints, including `POST /v1/actions/{action_id}`, multipart form uploads sent to `/v1/files`, and JSON metadata replacements sent to `PUT /v1/files/{id}`
 - `action_id` path parameters on `GET /v1/actions/{action_id}` and `POST /v1/actions/{action_id}`
 - discovery query parameters such as `q`, `tags`, and `match` on `GET /v1/actions`
 - `file_id` path parameters and file query or filter parameters on `/v1/files` routes

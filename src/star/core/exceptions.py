@@ -13,6 +13,7 @@ import logging
 from typing import Awaitable, Callable, cast
 
 from fastapi import Request
+from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import Response
 
@@ -48,9 +49,9 @@ STARLETTE_HTTP_STATUS_MAP: dict[int, ErrorDef] = {
 }
 
 for status, err in STARLETTE_HTTP_STATUS_MAP.items():
-    assert err.http_status == status, (
-        f"ErrorDef {err.code} has http_status={err.http_status}, " f"expected {status}"
-    )
+    assert (
+        err.http_status == status
+    ), f"ErrorDef {err.code} has http_status={err.http_status}, expected {status}"
 
 
 async def _http_exception_handler(request: Request, exc: StarletteHTTPException):
@@ -91,6 +92,39 @@ http_exception_handler: Callable[
 ] = cast(
     Callable[[Request, Exception], Response | Awaitable[Response]],
     _http_exception_handler,
+)
+
+
+async def _request_validation_exception_handler(
+    request: Request,
+    exc: RequestValidationError,
+) -> Response:
+    """Return a safe STAR envelope for framework request validation failures.
+
+    Args:
+        request: Incoming request carrying the optional request ID.
+        exc: FastAPI validation failure containing untrusted input diagnostics.
+
+    Returns:
+        A 422 STAR response that exposes only sanitized validation structure.
+    """
+
+    rid = getattr(request.state, "request_id", None)
+    headers = {"X-Request-Id": rid} if rid else {}
+    return error_json_response(
+        UNPROCESSABLE_ENTITY,
+        details={"errors": exc.errors()},
+        headers=headers,
+    )
+
+
+# Keep the narrow framework exception type at the implementation boundary, then
+# expose the broader Starlette callback type expected by `add_exception_handler`.
+request_validation_exception_handler: Callable[
+    [Request, Exception], Response | Awaitable[Response]
+] = cast(
+    Callable[[Request, Exception], Response | Awaitable[Response]],
+    _request_validation_exception_handler,
 )
 
 

@@ -11,8 +11,9 @@ from uuid import UUID, uuid4
 
 import pytest
 from fastapi import Request, UploadFile
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 
+from star.core.files import FileMetadataUpdateResult
 from star.core.schemas.files import FileMetadata
 from star.routes.files import router as files_router
 from star.routes.files.handlers.get_file_content import FileContentDescriptor
@@ -20,6 +21,7 @@ from star.routes.files.schemas import (
     DeleteFileResult,
     FileListData,
     Pagination,
+    UpdateFileMetadataRequest,
     UploadFileRequest,
 )
 
@@ -55,6 +57,8 @@ def _metadata(file_id: UUID | None = None) -> FileMetadata:
     return FileMetadata(
         id=resolved_id,
         original_filename="sample.txt",
+        file_name="sample.txt",
+        tags=[],
         stored_filename=f"file_{resolved_id}.bin",
         mime_type="text/plain",
         extension=".txt",
@@ -131,10 +135,59 @@ async def test_get_file_passes_runtime_settings_to_metadata_handler(
     response = await files_router.get_file(
         id=metadata.id,
         request=_request_with_settings(settings),
+        response=Response(),
     )
 
     assert not isinstance(response, JSONResponse)
     assert captured == {"file_id": metadata.id, "settings": settings}
+    assert response.data is not None
+    assert response.data.file is metadata
+
+
+@pytest.mark.asyncio
+async def test_put_file_passes_runtime_settings_to_metadata_update_handler(
+    monkeypatch,
+    settings,
+):
+    """
+    GIVEN a Files API metadata replacement route and runtime settings
+    WHEN the endpoint delegates to its application handler
+    THEN it passes only validated mutable fields and the current ETag
+    """
+
+    captured: dict[str, object] = {}
+    metadata = _metadata()
+    result = FileMetadataUpdateResult(metadata=metadata, etag='"' + "a" * 64 + '"')
+
+    async def _fake_update_handler(**kwargs):
+        captured.update(kwargs)
+        return result
+
+    monkeypatch.setattr(
+        files_router,
+        "update_file_metadata_handler",
+        _fake_update_handler,
+    )
+
+    response = await files_router.put_file_metadata(
+        id=metadata.id,
+        update_request=UpdateFileMetadataRequest(
+            file_name="renamed.txt",
+            tags=["Finance"],
+        ),
+        request=_request_with_settings(settings),
+        response=Response(),
+        if_match='"' + "b" * 64 + '"',
+    )
+
+    assert not isinstance(response, JSONResponse)
+    assert captured == {
+        "file_id": metadata.id,
+        "file_name": "renamed.txt",
+        "tags": ("finance",),
+        "expected_etag": '"' + "b" * 64 + '"',
+        "settings": settings,
+    }
     assert response.data is not None
     assert response.data.file is metadata
 

@@ -275,12 +275,15 @@ The storage lifecycle is owned by `src/star/core/files`, which exposes a transpo
 - `POST /v1/files` uploads a file, validates it, and persists blob plus metadata
 - `GET /v1/files` lists files with cursor pagination and filtering
 - `GET /v1/files/{id}` returns metadata only
+- `PUT /v1/files/{id}` conditionally replaces the editable display filename and complete tag set
 - `GET /v1/files/{id}/content` streams persisted blob content
 - `DELETE /v1/files/{id}` deletes a managed file
 
 The file API is UUID-based. Clients do not provide raw filesystem paths to retrieve stored content. Uploaded files are persisted as immutable blobs with metadata sidecars under storage rooted at `STAR_ROOT_DIR`. Routes delegate upload, listing, metadata lookup, deletion, generated-output lifecycle, and local content resolution to `core/files` instead of calling primitive filesystem helpers directly. Download responses build `Content-Disposition` through core header security helpers so display filenames are serialized with a safe ASCII fallback and UTF-8 `filename*` when needed.
 
 `FileMetadata` is owned by `src/star/core/schemas/files.py` because the same validated model crosses persistence, storage, action-runtime, and public response boundaries. `core/files` owns storage descriptors and domain exceptions; route handlers map those failures to public `StarError` values. File route schemas re-export `FileMetadata` for compatibility, but reusable core helpers and action runtime code import it from `core`.
+
+`PUT /v1/files/{id}` uses an opaque strong ETag obtained from the metadata `GET` response in a required `If-Match` header. This prevents lost updates without exposing a mutable revision field: the write is serialized by the storage adapter, rejected with `412 PRECONDITION_FAILED` if stale, and returns the new ETag. Its JSON body forbids undeclared fields, replaces `tags` rather than merging them, and only accepts a safe ASCII `file_name` that preserves the existing extension. Tags are canonical lowercase ASCII labels matching `^[a-z0-9][a-z0-9_-]{0,47}$`; the maximum is 50 tags per file.
 
 Action outputs can also be materialized into STAR-managed storage. Declared `file + command` outputs use runtime placeholders created before subprocess execution and finalized into managed file records after successful output handling. Sanitized stdout can also be materialized into the reserved `outputs.stdout_file` entry when the client requests `stdout_as_file=true` and the selected action allows it.
 

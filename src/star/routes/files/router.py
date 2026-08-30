@@ -9,12 +9,12 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Header, Request, Response, UploadFile
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import ValidationError
 
-from star.core.errors import INVALID_REQUEST, StarError
-from star.core.files import iter_file_chunks
+from star.core.errors import INVALID_REQUEST, PRECONDITION_REQUIRED, StarError
+from star.core.files import is_metadata_etag, iter_file_chunks, metadata_etag
 from star.core.responses import error_json_response, star_error_json_response
 from star.core.schemas.envelope import ResponseEnvelope
 from star.core.security.headers import content_disposition_attachment
@@ -23,6 +23,7 @@ from star.routes.files.handlers.delete_file import delete_file_handler
 from star.routes.files.handlers.get_file_content import get_file_content_handler
 from star.routes.files.handlers.get_file_metadata import get_file_metadata_handler
 from star.routes.files.handlers.list_files import list_files_handler
+from star.routes.files.handlers.update_file_metadata import update_file_metadata_handler
 from star.routes.files.handlers.upload_file import (
     parse_post_file_request,
     upload_file_handler,
@@ -30,6 +31,8 @@ from star.routes.files.handlers.upload_file import (
 from star.routes.files.schemas import (
     DeleteFileData,
     FileListData,
+    FileMetadataData,
+    UpdateFileMetadataRequest,
     UploadFileData,
     UploadFileRequest,
     VerifyChecksumParams,
@@ -148,6 +151,7 @@ get_metadata_description = (
 async def get_file(
     id: UUID,
     request: Request,
+    response: Response,
 ) -> JSONResponse | ResponseEnvelope[UploadFileData]:
     """Retrieve file metadata by UUID.
 
@@ -162,7 +166,65 @@ async def get_file(
     try:
         settings = get_runtime_settings(request)
         metadata = await get_file_metadata_handler(file_id=id, settings=settings)
+        response.headers["ETag"] = metadata_etag(metadata)
         return ResponseEnvelope.from_success(UploadFileData(file=metadata))
+    except StarError as exc:
+        return star_error_json_response(exc)
+
+
+put_metadata_description = (
+    "**Conditionally replace editable file metadata.**\n\n"
+    "The request must include the current strong `If-Match` ETag obtained "
+    "from `GET /v1/files/{id}`. STAR replaces the complete tag set and the "
+    "display filename without changing content, storage identity, checksum, "
+    "MIME classification, or extension."
+)
+
+
+@router.put(
+    "/files/{id}",
+    summary="Conditionally replace file metadata",
+    description=put_metadata_description,
+    response_model=ResponseEnvelope[FileMetadataData],
+)
+async def put_file_metadata(
+    id: UUID,
+    update_request: UpdateFileMetadataRequest,
+    request: Request,
+    response: Response,
+    if_match: str | None = Header(default=None, alias="If-Match"),
+) -> JSONResponse | ResponseEnvelope[FileMetadataData]:
+    """Replace editable metadata when the supplied ETag is current.
+
+    Args:
+        id: File UUID.
+        update_request: Complete replacement for editable metadata fields.
+        request: Incoming HTTP request.
+        response: Response used to expose the current ETag.
+        if_match: Required strong metadata ETag precondition.
+
+    Returns:
+        A success envelope with updated metadata or a structured STAR error.
+    """
+
+    if if_match is None:
+        return star_error_json_response(StarError(PRECONDITION_REQUIRED))
+    if not is_metadata_etag(if_match):
+        return star_error_json_response(
+            StarError(INVALID_REQUEST, "Invalid If-Match header.")
+        )
+
+    try:
+        settings = get_runtime_settings(request)
+        result = await update_file_metadata_handler(
+            file_id=id,
+            file_name=update_request.file_name,
+            tags=tuple(update_request.tags),
+            expected_etag=if_match,
+            settings=settings,
+        )
+        response.headers["ETag"] = result.etag
+        return ResponseEnvelope.from_success(FileMetadataData(file=result.metadata))
     except StarError as exc:
         return star_error_json_response(exc)
 

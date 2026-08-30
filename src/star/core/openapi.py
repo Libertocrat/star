@@ -365,6 +365,8 @@ def _patch_files_contract(schema: dict[str, Any]) -> None:
             "file": {
                 "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
                 "original_filename": "document.pdf",
+                "file_name": "document.pdf",
+                "tags": [],
                 "stored_filename": "file_<uuid>.bin",
                 "mime_type": "application/pdf",
                 "extension": ".pdf",
@@ -423,6 +425,8 @@ def _patch_files_contract(schema: dict[str, Any]) -> None:
             "file": {
                 "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
                 "original_filename": "example.txt",
+                "file_name": "example.txt",
+                "tags": ["example"],
                 "stored_filename": "file_<uuid>.bin",
                 "mime_type": "text/plain",
                 "extension": ".txt",
@@ -444,6 +448,58 @@ def _patch_files_contract(schema: dict[str, Any]) -> None:
         errors=FILES_GET_ERRORS,
         success_example=FILES_GET_SUCCESS_EXAMPLE,
     )
+
+    FILES_PUT_ERRORS = [
+        errors.INVALID_REQUEST,
+        errors.FILE_NOT_FOUND,
+        errors.PRECONDITION_FAILED,
+        errors.PRECONDITION_REQUIRED,
+        errors.INTERNAL_ERROR,
+    ]
+
+    FILES_PUT_SUCCESS_EXAMPLE = {
+        "success": True,
+        "error": None,
+        "data": {
+            "file": {
+                "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+                "original_filename": "example.txt",
+                "file_name": "quarterly-report.txt",
+                "tags": ["finance", "q3"],
+                "stored_filename": "file_<uuid>.bin",
+                "mime_type": "text/plain",
+                "extension": ".txt",
+                "size_bytes": 123,
+                "sha256": (
+                    "8e9aa02fb68dfb526d787f6b66adda7b651dd3f9f3b4a03e266d466161f4c39e"
+                ),
+                "created_at": "2026-01-01T00:00:00Z",
+                "updated_at": "2026-01-02T00:00:00Z",
+                "status": "ready",
+            }
+        },
+    }
+
+    _patch_operation_contract(
+        schema,
+        path="/v1/files/{id}",
+        method="put",
+        errors=FILES_PUT_ERRORS,
+        success_example=FILES_PUT_SUCCESS_EXAMPLE,
+    )
+
+    files_put_operation = schema.get("paths", {}).get("/v1/files/{id}", {}).get("put")
+    if files_put_operation:
+        for parameter in files_put_operation.get("parameters", []):
+            if parameter.get("in") == "header" and parameter.get("name") == "If-Match":
+                parameter["required"] = True
+                parameter["description"] = (
+                    "Current strong ETag returned by GET /v1/files/{id}."
+                )
+                parameter["schema"] = {
+                    "type": "string",
+                    "pattern": '^"[a-f0-9]{64}"$',
+                }
 
     FILES_DELETE_ERRORS = [
         errors.FILE_NOT_FOUND,
@@ -499,6 +555,18 @@ def _patch_files_contract(schema: dict[str, Any]) -> None:
                 }
             },
         }
+
+    for method in ("get", "put"):
+        operation = schema.get("paths", {}).get("/v1/files/{id}", {}).get(method)
+        if operation:
+            operation.setdefault("responses", {}).setdefault("200", {}).setdefault(
+                "headers", {}
+            )["ETag"] = {
+                "description": (
+                    "Strong opaque validator for conditional metadata updates."
+                ),
+                "schema": {"type": "string", "pattern": '^"[a-f0-9]{64}"$'},
+            }
 
 
 def _patch_actions_get_contract(schema: dict[str, Any]) -> None:
@@ -710,7 +778,7 @@ def _build_action_request_markdown(public_spec: ActionPublicSpec) -> str:
             "- `stdout_as_file` (`bool`): Store sanitized stdout as "
             "`outputs.stdout_file` when enabled and allowed by the action; "
             "default: "
-            f"`{str(stdout_as_file_spec.get("default", False)).lower()}`;"
+            f'`{str(stdout_as_file_spec.get("default", False)).lower()}`;'
         )
 
     return "\n".join(lines)
