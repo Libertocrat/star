@@ -24,6 +24,8 @@ def _valid_metadata_payload() -> dict[str, object]:
     return {
         "id": file_id,
         "original_filename": "sample.txt",
+        "file_name": "sample.txt",
+        "tags": [],
         "stored_filename": f"file_{file_id}.bin",
         "mime_type": "text/plain",
         "extension": ".txt",
@@ -47,6 +49,8 @@ def test_file_metadata_preserves_current_persisted_shape():
     assert metadata.model_dump(mode="json") == {
         "id": "11111111-1111-4111-8111-111111111111",
         "original_filename": "sample.txt",
+        "file_name": "sample.txt",
+        "tags": [],
         "stored_filename": "file_11111111-1111-4111-8111-111111111111.bin",
         "mime_type": "text/plain",
         "extension": ".txt",
@@ -56,6 +60,21 @@ def test_file_metadata_preserves_current_persisted_shape():
         "updated_at": "2026-01-02T03:04:05Z",
         "status": "ready",
     }
+
+
+@pytest.mark.parametrize("field", ["file_name", "tags"])
+def test_file_metadata_requires_editable_fields(field):
+    """
+    GIVEN a persisted file metadata payload missing a v0.2.0 mutable field
+    WHEN the core FileMetadata schema validates it
+    THEN validation fails instead of silently accepting an obsolete shape
+    """
+
+    payload = _valid_metadata_payload()
+    del payload[field]
+
+    with pytest.raises(ValidationError):
+        FileMetadata.model_validate(payload)
 
 
 def test_file_metadata_rejects_unknown_lifecycle_status():

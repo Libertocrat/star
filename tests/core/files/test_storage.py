@@ -7,10 +7,13 @@ from uuid import UUID, uuid4
 import pytest
 
 from star.core.files import (
+    InvalidManagedFileMetadataError,
     LocalManagedFileStore,
+    ManagedFilePreconditionFailedError,
     get_blob_path,
     iter_file_chunks,
     load_file_metadata,
+    metadata_etag,
     sanitize_download_filename,
 )
 
@@ -78,6 +81,90 @@ def test_local_store_missing_metadata_raises_domain_error(settings):
 
     with pytest.raises(ManagedFileNotFoundError):
         store.require_metadata(uuid4())
+
+
+def test_local_store_conditionally_replaces_editable_metadata(settings):
+    """
+    GIVEN a ready managed file and its current metadata ETag
+    WHEN the store replaces the display name and complete tag set
+    THEN immutable metadata remains unchanged and a new ETag is returned
+    """
+
+    store = LocalManagedFileStore(settings)
+    metadata = store.create_ready_file_from_bytes(
+        original_filename="report.txt",
+        content=b"report body",
+        extension=".txt",
+        mime_type="text/plain",
+    )
+
+    result = store.update_metadata(
+        metadata.id,
+        file_name="quarterly-report.txt",
+        tags=("Q3", "finance"),
+        expected_etag=metadata_etag(metadata),
+    )
+
+    assert result.metadata.file_name == "quarterly-report.txt"
+    assert result.metadata.tags == ["finance", "q3"]
+    assert result.metadata.original_filename == metadata.original_filename
+    assert result.metadata.sha256 == metadata.sha256
+    assert result.etag != metadata_etag(metadata)
+    assert load_file_metadata(metadata.id, settings) == result.metadata
+
+
+def test_local_store_rejects_stale_metadata_etag(settings):
+    """
+    GIVEN a ready managed file and an obsolete ETag
+    WHEN conditional metadata replacement is attempted
+    THEN the store rejects it without modifying metadata
+    """
+
+    store = LocalManagedFileStore(settings)
+    metadata = store.create_ready_file_from_bytes(
+        original_filename="report.txt",
+        content=b"report body",
+        extension=".txt",
+        mime_type="text/plain",
+    )
+
+    with pytest.raises(ManagedFilePreconditionFailedError):
+        store.update_metadata(
+            metadata.id,
+            file_name="quarterly-report.txt",
+            tags=("finance",),
+            expected_etag='"' + "0" * 64 + '"',
+        )
+
+    assert load_file_metadata(metadata.id, settings) == metadata
+
+
+def test_local_store_rejects_metadata_extension_change_as_domain_validation(
+    settings,
+):
+    """
+    GIVEN a ready managed file and its current ETag
+    WHEN a conditional metadata update changes its trusted extension
+    THEN the store raises a mapped domain validation error instead of leaking ValueError
+    """
+
+    store = LocalManagedFileStore(settings)
+    metadata = store.create_ready_file_from_bytes(
+        original_filename="report.txt",
+        content=b"report body",
+        extension=".txt",
+        mime_type="text/plain",
+    )
+
+    with pytest.raises(InvalidManagedFileMetadataError):
+        store.update_metadata(
+            metadata.id,
+            file_name="report.pdf",
+            tags=(),
+            expected_etag=metadata_etag(metadata),
+        )
+
+    assert load_file_metadata(metadata.id, settings) == metadata
 
 
 def test_sanitize_download_filename_strips_path_and_control_characters():

@@ -163,6 +163,18 @@ CONFLICT = ErrorDef(
     default_message="Resource conflict.",
 )
 
+PRECONDITION_FAILED = ErrorDef(
+    code="PRECONDITION_FAILED",
+    http_status=412,
+    default_message="The resource changed before this update could be applied.",
+)
+
+PRECONDITION_REQUIRED = ErrorDef(
+    code="PRECONDITION_REQUIRED",
+    http_status=428,
+    default_message="A current If-Match precondition is required.",
+)
+
 FILE_TOO_LARGE = ErrorDef(
     code="FILE_TOO_LARGE",
     http_status=413,
@@ -226,6 +238,8 @@ PUBLIC_HTTP_ERRORS = [
     FILE_NOT_FOUND,
     METHOD_NOT_ALLOWED,
     CONFLICT,
+    PRECONDITION_FAILED,
+    PRECONDITION_REQUIRED,
     FILE_TOO_LARGE,
     REQUEST_BODY_TOO_LARGE,
     UNSUPPORTED_MEDIA_TYPE,
@@ -258,6 +272,8 @@ __all__ = [
     "FILE_NOT_FOUND",
     "METHOD_NOT_ALLOWED",
     "CONFLICT",
+    "PRECONDITION_FAILED",
+    "PRECONDITION_REQUIRED",
     "FILE_TOO_LARGE",
     "REQUEST_BODY_TOO_LARGE",
     "UNSUPPORTED_MEDIA_TYPE",

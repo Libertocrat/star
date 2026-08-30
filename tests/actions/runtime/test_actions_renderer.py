@@ -54,6 +54,8 @@ def _make_metadata(file_id, *, size_bytes: int = 10) -> FileMetadata:
     return FileMetadata(
         id=file_id,
         original_filename="input.txt",
+        file_name="input.txt",
+        tags=[],
         stored_filename=f"file_{file_id}.bin",
         mime_type="text/plain",
         extension=".txt",
@@ -86,6 +88,8 @@ def _make_metadata_with_status(
     return FileMetadata(
         id=file_id,
         original_filename="input.txt",
+        file_name="input.txt",
+        tags=[],
         stored_filename=f"file_{file_id}.bin",
         mime_type="text/plain",
         extension=".txt",

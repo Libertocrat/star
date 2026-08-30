@@ -13,6 +13,7 @@ from star.core.errors import (
     INVALID_ALGORITHM,
     INVALID_REQUEST,
     MIME_MAPPING_NOT_DEFINED,
+    PRECONDITION_FAILED,
     UNSUPPORTED_MEDIA_TYPE,
     StarError,
 )
@@ -25,6 +26,7 @@ from star.core.files import (
     LocalManagedFileStore,
     ManagedFileError,
     ManagedFileNotFoundError,
+    ManagedFilePreconditionFailedError,
     ManagedFileStorageError,
     ManagedFileTooLargeError,
     MimeMappingNotDefinedError,
@@ -66,6 +68,8 @@ def map_managed_file_error(
 
     if isinstance(exc, ManagedFileNotFoundError):
         return StarError(FILE_NOT_FOUND, details=details)
+    if isinstance(exc, ManagedFilePreconditionFailedError):
+        return StarError(PRECONDITION_FAILED, details=details)
     if isinstance(exc, InvalidManagedFileMetadataError):
         return StarError(
             INVALID_REQUEST,

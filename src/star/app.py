@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from star.actions.registry import build_registry_from_specs
@@ -18,6 +19,7 @@ from star.core import (
     generic_exception_handler,
     get_settings,
     http_exception_handler,
+    request_validation_exception_handler,
 )
 from star.core.errors import FILE_TOO_LARGE
 from star.core.files import ensure_storage_dirs
@@ -158,6 +160,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 path="/v1/files",
                 allowed=frozenset({"multipart/form-data"}),
             ),
+            ContentTypePolicy(
+                method="PUT",
+                path="/v1/files/{id}",
+                allowed=frozenset({"application/json"}),
+            ),
         ],
         body_limit_policies=[
             BodyLimitPolicy(
@@ -177,6 +184,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     # Fallback exception handlers
     app.add_exception_handler(StarletteHTTPException, http_exception_handler)
+    app.add_exception_handler(
+        RequestValidationError,
+        request_validation_exception_handler,
+    )
     app.add_exception_handler(Exception, generic_exception_handler)
 
     # Routers

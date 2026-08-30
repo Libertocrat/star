@@ -31,6 +31,8 @@ def make_file_metadata() -> Callable[..., FileMetadata]:
         payload: dict[str, Any] = {
             "id": file_id,
             "original_filename": "report.txt",
+            "file_name": "report.txt",
+            "tags": [],
             "stored_filename": f"file_{file_id}.bin",
             "mime_type": "text/plain",
             "extension": ".txt",

@@ -2,18 +2,99 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+import re
+import stat
+import tempfile
 import uuid
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID
 
 from star.core.config import Settings, get_settings
-from star.core.files.layout import ensure_storage_dirs, get_blob_path, get_meta_path
+from star.core.files.layout import (
+    ensure_storage_dirs,
+    get_blob_path,
+    get_meta_lock_path,
+    get_meta_path,
+)
 from star.core.schemas.files import FileMetadata
 
 EMPTY_SHA256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+_METADATA_ETAG_PATTERN = re.compile(r'^"[a-f0-9]{64}"$')
+
+
+def metadata_etag(metadata: FileMetadata) -> str:
+    """Return a strong opaque ETag for one canonical metadata representation.
+
+    Args:
+        metadata: Validated metadata record.
+
+    Returns:
+        Quoted SHA-256 entity tag suitable for an HTTP `ETag` header.
+    """
+
+    serialized = json.dumps(
+        metadata.model_dump(mode="json"),
+        ensure_ascii=True,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return f'"{hashlib.sha256(serialized).hexdigest()}"'
+
+
+def is_metadata_etag(value: str) -> bool:
+    """Return whether a header value is a single strong STAR metadata ETag.
+
+    Args:
+        value: Candidate `If-Match` header value.
+
+    Returns:
+        True only for one quoted SHA-256 metadata entity tag.
+    """
+
+    return _METADATA_ETAG_PATTERN.fullmatch(value) is not None
+
+
+@contextmanager
+def metadata_lock(
+    file_id: UUID,
+    settings: Settings | None = None,
+) -> Iterator[None]:
+    """Acquire a process-shared advisory lock for one metadata sidecar.
+
+    Args:
+        file_id: UUID whose server-derived metadata lock to acquire.
+        settings: Optional pre-loaded runtime settings.
+
+    Yields:
+        None while the caller exclusively owns the metadata mutation lock.
+
+    Raises:
+        OSError: If the lock cannot be created or safely opened.
+    """
+
+    import fcntl
+
+    ensure_storage_dirs(settings)
+    lock_path = get_meta_lock_path(file_id, settings)
+    flags = os.O_CREAT | os.O_RDWR | getattr(os, "O_CLOEXEC", 0)
+    flags |= getattr(os, "O_NOFOLLOW", 0)
+    fd = os.open(lock_path, flags, 0o600)
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            raise OSError("Metadata lock path is not a regular file.")
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        yield
+    finally:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+        finally:
+            os.close(fd)
 
 
 def save_file_metadata(
@@ -31,12 +112,26 @@ def save_file_metadata(
     """
 
     meta_path = get_meta_path(metadata.id, settings)
-    tmp_meta_path = meta_path.with_suffix(".json.tmp")
     payload = metadata.model_dump(mode="json")
     serialized = json.dumps(payload, ensure_ascii=False, sort_keys=True)
-
-    tmp_meta_path.write_text(serialized, encoding="utf-8")
-    os.replace(tmp_meta_path, meta_path)
+    fd, tmp_name = tempfile.mkstemp(
+        dir=meta_path.parent,
+        prefix=f".{meta_path.name}.",
+        suffix=".tmp",
+        text=True,
+    )
+    tmp_meta_path = Path(tmp_name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as tmp_file:
+            tmp_file.write(serialized)
+            tmp_file.flush()
+            os.fsync(tmp_file.fileno())
+        os.replace(tmp_meta_path, meta_path)
+    finally:
+        try:
+            tmp_meta_path.unlink()
+        except FileNotFoundError:
+            pass
 
 
 def load_file_metadata(
@@ -94,6 +189,8 @@ def create_placeholder_file_metadata(
     metadata = FileMetadata(
         id=file_id,
         original_filename=original_filename,
+        file_name=original_filename,
+        tags=[],
         stored_filename=f"file_{file_id}.bin",
         mime_type="application/octet-stream",
         extension=".bin",

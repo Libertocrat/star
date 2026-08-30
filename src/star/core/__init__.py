@@ -6,11 +6,15 @@ configuration.
 
 Exports:
     error_json_response, generic_exception_handler, http_exception_handler,
-    star_error_json_response
+    request_validation_exception_handler, star_error_json_response
 """
 
 from .config import Settings, get_settings
-from .exceptions import generic_exception_handler, http_exception_handler
+from .exceptions import (
+    generic_exception_handler,
+    http_exception_handler,
+    request_validation_exception_handler,
+)
 from .responses import error_json_response, star_error_json_response
 from .schemas import envelope
 from .security import paths
@@ -23,5 +27,6 @@ __all__ = [
     "envelope",
     "generic_exception_handler",
     "http_exception_handler",
+    "request_validation_exception_handler",
     "star_error_json_response",
 ]

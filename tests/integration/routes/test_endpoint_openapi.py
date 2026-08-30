@@ -670,6 +670,46 @@ def test_openapi_documents_files_metadata_contract(
         assert isinstance(examples, dict)
         assert examples
 
+    assert "ETag" in responses["200"]["headers"]
+
+
+def test_openapi_documents_files_metadata_update_contract(
+    minimal_safe_env,
+    monkeypatch,
+):
+    """
+    GIVEN docs are enabled
+    WHEN generating the OpenAPI schema
+    THEN conditional metadata replacement documents its ETag and stable errors
+
+    Args:
+        minimal_safe_env: Fixture that provides required STAR environment vars.
+        monkeypatch: Pytest helper used to set test-only environment values.
+    """
+
+    schema = _openapi_document(minimal_safe_env, monkeypatch)
+
+    metadata_put = schema["paths"]["/v1/files/{id}"]["put"]
+    responses = metadata_put["responses"]
+    if_match = next(
+        parameter
+        for parameter in metadata_put["parameters"]
+        if parameter["in"] == "header" and parameter["name"] == "If-Match"
+    )
+
+    assert if_match["required"] is True
+    assert if_match["schema"]["pattern"] == '^"[a-f0-9]{64}"$'
+    assert "ETag" in responses["200"]["headers"]
+    assert responses["200"]["content"]["application/json"]["example"]["data"]["file"][
+        "tags"
+    ] == ["finance", "q3"]
+
+    for status in ("400", "401", "404", "412", "422", "428", "500"):
+        assert status in responses
+        examples = responses[status]["content"]["application/json"]["examples"]
+        assert isinstance(examples, dict)
+        assert examples
+
 
 def test_openapi_documents_files_content_contract(
     minimal_safe_env,

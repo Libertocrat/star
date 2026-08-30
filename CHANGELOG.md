@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added conditional `PUT /v1/files/{id}` metadata replacement with strict editable-field validation, full tag-set replacement, and safe `file_name` updates that preserve the stored extension.
+
+### Security
+
+- Added strong opaque metadata ETags with required `If-Match` preconditions to prevent lost file-metadata updates, plus storage-side serialization and missing-blob readiness checks.
+- Rejected unknown metadata request fields and normalized public FastAPI validation failures into the standard safe `UNPROCESSABLE_ENTITY` envelope.
+
 ## [0.1.4] - 2026-08-27
 
 ### Added

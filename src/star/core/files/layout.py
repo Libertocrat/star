@@ -132,6 +132,20 @@ def get_meta_path(file_id: UUID, settings: Settings | None = None) -> Path:
     return get_meta_dir(settings) / f"file_{file_id}.json"
 
 
+def get_meta_lock_path(file_id: UUID, settings: Settings | None = None) -> Path:
+    """Return the server-derived advisory lock path for one metadata record.
+
+    Args:
+        file_id: UUID of the persisted file.
+        settings: Optional pre-loaded runtime settings.
+
+    Returns:
+        Path to the metadata lock sidecar under STAR-managed storage.
+    """
+
+    return get_meta_dir(settings) / f"file_{file_id}.lock"
+
+
 def ensure_storage_dirs(settings: Settings | None = None) -> None:
     """Create STAR managed storage and runtime file directories.
 

@@ -75,6 +75,8 @@ def test_files_metadata_get_returns_metadata_for_existing_file(
 
     assert response.status_code == 200
     assert "x-request-id" in response.headers
+    assert response.headers["etag"].startswith('"')
+    assert response.headers["etag"].endswith('"')
     assert response.headers["content-type"].startswith("application/json")
 
     body = response.json()
@@ -85,6 +87,8 @@ def test_files_metadata_get_returns_metadata_for_existing_file(
     file_data = body["data"]["file"]
     assert file_data["id"] == str(file_id)
     assert file_data["original_filename"] == "sample.txt"
+    assert file_data["file_name"] == "sample.txt"
+    assert file_data["tags"] == []
     assert file_data["stored_filename"] == f"file_{file_id}.bin"
     assert file_data["mime_type"] == "text/plain"
     assert file_data["extension"] == ".txt"
