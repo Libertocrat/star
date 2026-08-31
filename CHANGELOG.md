@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added strong opaque metadata ETags with required `If-Match` preconditions to prevent lost file-metadata updates, plus storage-side serialization and missing-blob readiness checks.
 - Rejected unknown metadata request fields and normalized public FastAPI validation failures into the standard safe `UNPROCESSABLE_ENTITY` envelope.
 - Hardened managed-file downloads and deletion with descriptor-relative no-follow filesystem operations, regular-file verification, and streaming from the already verified descriptor.
+- Declared explicit read-only `GITHUB_TOKEN` permissions for CI and deep-security workflows.
 
 ## [0.1.4] - 2026-08-27
 
