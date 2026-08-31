@@ -102,6 +102,8 @@ At a high level:
 
 `release.yml` and `release-docs.yml` delegate shared stages to local composite actions, keeping their production triggers independent while preventing stage drift. This separation keeps fast feedback, deep security analysis, release automation, documentation publishing, and pre-merge smoke validation in distinct pipelines.
 
+The CI and Security workflows explicitly restrict `GITHUB_TOKEN` to `contents: read`; their jobs only check out source, cache dependencies, and run validation. Release-oriented workflows retain separate, narrowly scoped write permissions only for their publication and attestation responsibilities.
+
 ## 3. Makefile-Driven CI Pipeline
 
 The `Makefile` defines the executable CI tasks and their composition.
@@ -175,7 +177,7 @@ Workflows install different dependency sets depending on their job:
 
 The workflow in `.github/workflows/ci.yml` is the main fast feedback pipeline.
 
-It has two jobs.
+It has three jobs and explicitly grants every job only `contents: read` through its workflow-level `GITHUB_TOKEN` policy.
 
 ### `ci` job
 
@@ -243,6 +245,8 @@ BuildJob --> DockerBuild
 ## 6. Security Analysis Pipeline (security.yml)
 
 The workflow in `.github/workflows/security.yml` is the deeper security pipeline.
+
+It explicitly grants its security job only `contents: read` through its workflow-level `GITHUB_TOKEN` policy.
 
 Triggers are:
 
