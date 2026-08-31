@@ -16,8 +16,10 @@ from pathlib import Path
 from uuid import UUID
 
 from star.core.config import Settings, get_settings
+from star.core.files.filesystem import unlink_managed_blob, unlink_managed_metadata
 from star.core.files.layout import (
     ensure_storage_dirs,
+    get_blob_filename,
     get_blob_path,
     get_meta_lock_path,
     get_meta_path,
@@ -191,7 +193,7 @@ def create_placeholder_file_metadata(
         original_filename=original_filename,
         file_name=original_filename,
         tags=[],
-        stored_filename=f"file_{file_id}.bin",
+        stored_filename=get_blob_filename(file_id),
         mime_type="application/octet-stream",
         extension=".bin",
         size_bytes=0,
@@ -222,8 +224,9 @@ def delete_blob_file(
         OSError: If deletion fails due to OS-level error.
     """
 
-    blob_path = get_blob_path(file_id, settings)
-    blob_path.unlink()
+    cfg = settings if settings is not None else get_settings()
+    unlink_managed_blob(file_id, cfg)
+    blob_path = get_blob_path(file_id, cfg)
     return blob_path
 
 
@@ -245,6 +248,7 @@ def delete_metadata_file(
         OSError: If deletion fails due to OS-level error.
     """
 
-    meta_path = get_meta_path(file_id, settings)
-    meta_path.unlink()
+    cfg = settings if settings is not None else get_settings()
+    unlink_managed_metadata(file_id, cfg)
+    meta_path = get_meta_path(file_id, cfg)
     return meta_path

@@ -72,82 +72,21 @@ def _blob_path_for(tmp_path: Path, file_id: UUID) -> Path:
 
 
 @pytest.fixture
-def force_path_stat_failure(monkeypatch):
-    """Patch blob path resolution to simulate an OSError on stat().
-
-    This fixture replaces the `get_blob_path` function used by the local
-    managed file store so that it returns a wrapped Path-like object. The
-    wrapped object:
-
-    - Preserves normal behavior for:
-        - exists()
-        - is_file()
-        - name
-        - string conversion
-    - Raises OSError ONLY when `.stat()` is called
-
-    This ensures:
-    - The handler passes all validation checks (exists, is_file)
-    - The failure occurs exactly at the size resolution step:
-        `blob_path.stat().st_size`
-    - The handler's try/except block is exercised correctly
+def force_opened_blob_failure(monkeypatch):
+    """Patch descriptor-relative blob opening to simulate an OS failure.
 
     Args:
-        monkeypatch: pytest fixture used to patch runtime behavior.
+        monkeypatch: Pytest fixture used to patch runtime behavior.
     """
 
-    from star.core.files import storage as storage_module
+    def _raise_os_error(*_args, **_kwargs):
+        """Raise an OSError from the descriptor-relative storage boundary."""
 
-    original_get_blob_path = storage_module.get_blob_path
-
-    def _patched_get_blob_path(file_id, cfg):
-        """Return a wrapped Path object that fails on stat()."""
-
-        real_path = original_get_blob_path(file_id, cfg)
-
-        class WrappedPath:
-            """Minimal Path-like wrapper that injects stat() failure."""
-
-            def __init__(self, path):
-                """Initialize wrapped path proxy.
-
-                Args:
-                    path: Real path instance to proxy.
-                """
-
-                self._path = path
-
-            def exists(self) -> bool:
-                """Delegate to real Path.exists()."""
-                return self._path.exists()
-
-            def is_file(self) -> bool:
-                """Delegate to real Path.is_file()."""
-                return self._path.is_file()
-
-            def stat(self):
-                """Simulate OS-level failure when retrieving file metadata."""
-                raise OSError("stat failure")
-
-            @property
-            def name(self) -> str:
-                """Expose filename for metadata validation."""
-                return self._path.name
-
-            def __str__(self) -> str:
-                """String representation used in logging."""
-                return str(self._path)
-
-            def __fspath__(self):
-                """Support os.fspath compatibility if needed."""
-                return self._path.__fspath__()
-
-        return WrappedPath(real_path)
+        raise OSError("opened blob failure")
 
     monkeypatch.setattr(
-        storage_module,
-        "get_blob_path",
-        _patched_get_blob_path,
+        "star.core.files.storage.open_managed_blob_for_read",
+        _raise_os_error,
     )
 
 
@@ -899,14 +838,14 @@ def test_files_content_get_handles_metadata_read_os_error(
     assert body["error"]["code"] == INTERNAL_ERROR.code
 
 
-def test_files_content_get_handles_stat_failure(
+def test_files_content_get_handles_opened_blob_failure(
     create_upload_app,
     auth_headers,
-    force_path_stat_failure,
+    force_opened_blob_failure,
 ):
     """
-    GIVEN the handler encounters an unexpected OS-level failure while resolving
-          file content
+    GIVEN the handler encounters an unexpected OS-level failure while opening
+          the verified managed blob
     WHEN GET /v1/files/{id}/content is called
     THEN the endpoint returns INTERNAL_ERROR in the standard error envelope
     """

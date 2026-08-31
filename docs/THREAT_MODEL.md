@@ -208,6 +208,7 @@ Authentication coverage is as follows:
 - Existing symlink path components are rejected during sandbox resolution.
 - `safe_open_no_follow()` uses `O_NOFOLLOW` when available and verifies that the opened target is a regular file.
 - Storage helpers keep blobs and metadata rooted under `STAR_ROOT_DIR`.
+- Managed-file downloads and deletion independently traverse the fixed storage layout through no-follow directory descriptors. Downloads stream the already verified regular-file descriptor, and deletion unlinks only a server-derived regular entry relative to its verified parent directory.
 - File download responses construct `Content-Disposition` through dedicated header helpers instead of interpolating stored filenames directly.
 
 ### Action output mitigations
@@ -250,7 +251,7 @@ Some risks remain by design or by deployment assumption. Release attestations an
 - STAR relies on correct storage root configuration. An incorrect `STAR_ROOT_DIR` mount target weakens the filesystem boundary.
 - `RateLimitMiddleware` is process-local. In multi-process or multi-instance deployments, each process keeps independent per-client token buckets, so upstream or distributed quota enforcement is still needed for horizontally scaled deployments.
 - `/health` is intentionally unauthenticated. Metrics and docs endpoints increase reachable surface if operators explicitly configure them as public.
-- Filesystem race conditions are reduced but not fully eliminated. The code explicitly notes TOCTOU limitations around some path-resolution patterns.
+- Managed-file reads avoid pathname validation followed by a later reopen. POSIX deletion remains name-based after its no-follow regular-file inspection, so a hostile concurrent writer to the same managed directory could swap the entry before `unlink`; the operation remains directory-anchored and never follows a swapped symlink target.
 - Service availability still depends on the underlying container host, mounted volume performance, and upstream request volume; actions that exceed the configured memory, CPU, or fixed PID limits can be throttled or terminated by the container runtime. STAR does not derive those limits from host capacity.
 - `secret` params are still accepted as plaintext JSON request values. STAR reduces argv, public error, and output exposure for those values, but it does not provide client-side encryption, asymmetric encryption, persistent secret storage, or protection from highly privileged process or memory inspection.
 

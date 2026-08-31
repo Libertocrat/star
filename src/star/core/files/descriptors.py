@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from pathlib import Path
+from typing import BinaryIO
 
 from star.core.schemas.files import FileMetadata
 
@@ -28,14 +28,15 @@ class FileContentDescriptor:
 
     Attributes:
         file_id: File UUID associated with the blob.
-        blob_path: Filesystem path to the persisted local blob.
+        stream: Owned binary stream from the verified persisted local blob. The
+            response streaming layer assumes ownership and closes it.
         mime_type: Response media type used for streaming.
         filename: Download-safe filename for Content-Disposition.
         size_bytes: Optional blob size used for Content-Length.
     """
 
     file_id: uuid.UUID
-    blob_path: Path
+    stream: BinaryIO
     mime_type: str
     filename: str
     size_bytes: int | None
