@@ -157,6 +157,37 @@ def test_files_delete_cleans_metadata_when_blob_missing(
     assert not meta_path.exists()
 
 
+def test_files_delete_rejects_blob_symlink_without_touching_its_target(
+    create_upload_app,
+    auth_headers,
+    tmp_path: Path,
+):
+    """
+    GIVEN a managed blob entry replaced by a symlink
+    WHEN DELETE /v1/files/{id} is called
+    THEN it returns INVALID_REQUEST and leaves metadata and the symlink target intact
+    """
+
+    app = create_upload_app()
+
+    with TestClient(app) as client:
+        file_id = _upload_file_and_get_id(client, auth_headers)
+        blob_path = _blob_path_for(tmp_path, file_id)
+        meta_path = _meta_path_for(tmp_path, file_id)
+        target = tmp_path / "outside-target.txt"
+        target.write_bytes(b"outside bytes")
+        blob_path.unlink()
+        blob_path.symlink_to(target)
+
+        response = client.delete(f"/v1/files/{file_id}", headers=auth_headers)
+
+    assert response.status_code == INVALID_REQUEST.http_status
+    assert response.json()["error"]["code"] == INVALID_REQUEST.code
+    assert meta_path.exists()
+    assert blob_path.is_symlink()
+    assert target.read_bytes() == b"outside bytes"
+
+
 def test_files_delete_preserves_artifacts_when_metadata_delete_fails(
     create_upload_app,
     auth_headers,

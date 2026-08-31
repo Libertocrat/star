@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from uuid import UUID, uuid4
 
 import pytest
@@ -47,7 +48,7 @@ def test_local_store_resolves_content_descriptor_for_ready_file(settings):
     """
     GIVEN a ready managed file created from trusted producer bytes
     WHEN content is resolved through the local managed file store
-    THEN the descriptor contains the local blob path and safe download metadata
+    THEN the descriptor owns the verified blob stream and safe download metadata
     """
 
     store = LocalManagedFileStore(settings)
@@ -60,12 +61,14 @@ def test_local_store_resolves_content_descriptor_for_ready_file(settings):
 
     descriptor = store.resolve_content(metadata.id)
 
-    assert descriptor.file_id == metadata.id
-    assert descriptor.blob_path == get_blob_path(metadata.id, settings)
-    assert descriptor.blob_path.read_bytes() == b"hello"
-    assert descriptor.mime_type == "text/plain"
-    assert descriptor.filename == "report.txt"
-    assert descriptor.size_bytes == 5
+    try:
+        assert descriptor.file_id == metadata.id
+        assert descriptor.stream.read() == b"hello"
+        assert descriptor.mime_type == "text/plain"
+        assert descriptor.filename == "report.txt"
+        assert descriptor.size_bytes == 5
+    finally:
+        descriptor.stream.close()
 
 
 def test_local_store_missing_metadata_raises_domain_error(settings):
@@ -204,9 +207,11 @@ def test_iter_file_chunks_yields_fixed_size_chunks(tmp_path):
     path = tmp_path / "stream.bin"
     path.write_bytes(b"abcdefg")
 
-    chunks = list(iter_file_chunks(path, chunk_size=3))
+    stream = path.open("rb")
+    chunks = list(iter_file_chunks(stream, chunk_size=3))
 
     assert chunks == [b"abc", b"def", b"g"]
+    assert stream.closed
 
 
 def test_iter_file_chunks_rejects_non_positive_chunk_size(tmp_path):
@@ -219,5 +224,32 @@ def test_iter_file_chunks_rejects_non_positive_chunk_size(tmp_path):
     path = tmp_path / "stream.bin"
     path.write_bytes(b"abcdefg")
 
+    stream = path.open("rb")
     with pytest.raises(ValueError, match="chunk_size must be > 0"):
-        list(iter_file_chunks(path, chunk_size=0))
+        list(iter_file_chunks(stream, chunk_size=0))
+    assert stream.closed
+
+
+def test_local_store_stream_uses_verified_descriptor_after_path_replacement(settings):
+    """
+    GIVEN a content descriptor opened for a ready managed blob
+    WHEN its pathname is atomically replaced before streaming begins
+    THEN streaming returns bytes from the already verified descriptor
+    """
+
+    store = LocalManagedFileStore(settings)
+    metadata = store.create_ready_file_from_bytes(
+        original_filename="report.txt",
+        content=b"original bytes",
+        extension=".txt",
+        mime_type="text/plain",
+    )
+    descriptor = store.resolve_content(metadata.id)
+    replacement = get_blob_path(metadata.id, settings).with_suffix(".replacement")
+    replacement.write_bytes(b"replacement bytes")
+
+    os.replace(replacement, get_blob_path(metadata.id, settings))
+    chunks = list(iter_file_chunks(descriptor.stream, chunk_size=7))
+
+    assert b"".join(chunks) == b"original bytes"
+    assert descriptor.stream.closed

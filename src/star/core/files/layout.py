@@ -104,6 +104,32 @@ def get_secret_tmp_dir(settings: Settings | None = None) -> Path:
     return get_runtime_root(settings) / "secrets"
 
 
+def get_blob_filename(file_id: UUID) -> str:
+    """Return the canonical basename for one managed file blob.
+
+    Args:
+        file_id: UUID of the persisted file.
+
+    Returns:
+        Server-derived blob basename in the `file_<uuid>.bin` form.
+    """
+
+    return f"file_{file_id}.bin"
+
+
+def get_meta_filename(file_id: UUID) -> str:
+    """Return the canonical basename for one managed metadata sidecar.
+
+    Args:
+        file_id: UUID of the persisted file.
+
+    Returns:
+        Server-derived metadata basename in the `file_<uuid>.json` form.
+    """
+
+    return f"file_{file_id}.json"
+
+
 def get_blob_path(file_id: UUID, settings: Settings | None = None) -> Path:
     """Return the persisted blob path for a managed file id.
 
@@ -115,7 +141,7 @@ def get_blob_path(file_id: UUID, settings: Settings | None = None) -> Path:
         Path to `data/files/blobs/file_<uuid>.bin`.
     """
 
-    return get_blob_dir(settings) / f"file_{file_id}.bin"
+    return get_blob_dir(settings) / get_blob_filename(file_id)
 
 
 def get_meta_path(file_id: UUID, settings: Settings | None = None) -> Path:
@@ -129,7 +155,7 @@ def get_meta_path(file_id: UUID, settings: Settings | None = None) -> Path:
         Path to `data/files/meta/file_<uuid>.json`.
     """
 
-    return get_meta_dir(settings) / f"file_{file_id}.json"
+    return get_meta_dir(settings) / get_meta_filename(file_id)
 
 
 def get_meta_lock_path(file_id: UUID, settings: Settings | None = None) -> Path:

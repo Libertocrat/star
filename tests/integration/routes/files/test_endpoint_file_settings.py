@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
+from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
@@ -285,11 +286,9 @@ async def test_get_file_content_passes_runtime_settings_to_content_handler(
 
     captured: dict[str, object] = {}
     file_id = uuid4()
-    blob_path = tmp_path / "blob.txt"
-    blob_path.write_text("content", encoding="utf-8")
     descriptor = FileContentDescriptor(
         file_id=file_id,
-        blob_path=blob_path,
+        stream=BytesIO(b"content"),
         mime_type="text/plain",
         filename="sample.txt",
         size_bytes=7,

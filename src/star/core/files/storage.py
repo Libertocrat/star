@@ -8,7 +8,7 @@ import os
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Iterator, Protocol
+from typing import BinaryIO, Iterator, Protocol
 
 from star.core.config import Settings, get_settings
 from star.core.files.descriptors import (
@@ -27,8 +27,14 @@ from star.core.files.exceptions import (
     ManagedFileStorageError,
     ManagedFileTooLargeError,
 )
+from star.core.files.filesystem import (
+    ManagedStoragePathError,
+    open_managed_blob_for_read,
+    validate_managed_blob_regular,
+)
 from star.core.files.layout import (
     ensure_storage_dirs,
+    get_blob_filename,
     get_blob_path,
     get_meta_dir,
     get_meta_path,
@@ -123,7 +129,7 @@ class ManagedFileStore(Protocol):
             file_id: File UUID to resolve.
 
         Returns:
-            Descriptor with local blob path and safe response metadata.
+            Descriptor with an owned local blob stream and safe response metadata.
         """
 
     def list_files(
@@ -426,7 +432,7 @@ class LocalManagedFileStore:
             file_id: File UUID.
 
         Returns:
-            Descriptor containing streaming metadata and local blob path.
+            Descriptor containing streaming metadata and an owned local blob stream.
 
         Raises:
             ManagedFileError: If metadata or blob state is invalid.
@@ -435,27 +441,24 @@ class LocalManagedFileStore:
         metadata = self.require_metadata(file_id)
         self._validate_ready_metadata(file_id, metadata)
 
-        blob_path = get_blob_path(file_id, self.settings)
-        self._validate_metadata_blob_reference(file_id, metadata, blob_path)
-
-        if not blob_path.exists():
+        expected_blob_name = get_blob_filename(file_id)
+        self._validate_metadata_blob_reference(file_id, metadata, expected_blob_name)
+        try:
+            opened_blob = open_managed_blob_for_read(file_id, self.settings)
+        except FileNotFoundError:
             logger.warning(
                 "file.content.blob_not_found",
-                extra={"file_id": str(file_id), "blob_path": str(blob_path)},
+                extra={"file_id": str(file_id)},
             )
-            raise ManagedFileNotFoundError()
-
-        if not blob_path.is_file():
+            raise ManagedFileNotFoundError() from None
+        except ManagedStoragePathError as exc:
             logger.warning(
                 "file.content.invalid_metadata",
                 extra={"file_id": str(file_id)},
             )
             raise InvalidManagedFileMetadataError(
                 "Stored file path is not a regular file."
-            )
-
-        try:
-            size_bytes = blob_path.stat().st_size
+            ) from exc
         except OSError as exc:
             logger.exception(
                 "file.content.prepare_failed",
@@ -465,30 +468,33 @@ class LocalManagedFileStore:
                 "Failed to prepare file content for streaming."
             ) from exc
 
-        mime_type = metadata.mime_type.strip().lower() if metadata.mime_type else ""
-        if "/" not in mime_type:
-            mime_type = "application/octet-stream"
+        try:
+            mime_type = metadata.mime_type.strip().lower() if metadata.mime_type else ""
+            if "/" not in mime_type:
+                mime_type = "application/octet-stream"
 
-        filename = sanitize_download_filename(metadata.file_name, file_id)
+            filename = sanitize_download_filename(metadata.file_name, file_id)
 
-        logger.info(
-            "file.content.resolved",
-            extra={
-                "file_id": str(file_id),
-                "blob_path": str(blob_path),
-                "mime_type": mime_type,
-                "filename": filename,
-                "size_bytes": size_bytes,
-            },
-        )
+            logger.info(
+                "file.content.resolved",
+                extra={
+                    "file_id": str(file_id),
+                    "mime_type": mime_type,
+                    "filename": filename,
+                    "size_bytes": opened_blob.size_bytes,
+                },
+            )
 
-        return FileContentDescriptor(
-            file_id=file_id,
-            blob_path=blob_path,
-            mime_type=mime_type,
-            filename=filename,
-            size_bytes=size_bytes,
-        )
+            return FileContentDescriptor(
+                file_id=file_id,
+                stream=opened_blob.stream,
+                mime_type=mime_type,
+                filename=filename,
+                size_bytes=opened_blob.size_bytes,
+            )
+        except Exception:
+            opened_blob.stream.close()
+            raise
 
     def list_files(
         self,
@@ -589,30 +595,50 @@ class LocalManagedFileStore:
             metadata = self.require_metadata(file_id)
             self._validate_ready_metadata(file_id, metadata, action="delete")
 
-            blob_path = get_blob_path(file_id, self.settings)
             meta_path = get_meta_path(file_id, self.settings)
-            self._validate_metadata_blob_reference(file_id, metadata, blob_path)
+            expected_blob_name = get_blob_filename(file_id)
+            self._validate_metadata_blob_reference(
+                file_id,
+                metadata,
+                expected_blob_name,
+            )
 
-            blob_exists = blob_path.exists()
-            if not blob_exists:
+            try:
+                validate_managed_blob_regular(file_id, self.settings)
+            except FileNotFoundError:
                 logger.warning(
                     "file.delete.blob_missing_before_cleanup",
-                    extra={"file_id": str(file_id), "blob_path": str(blob_path)},
+                    extra={"file_id": str(file_id)},
                 )
-
-            if blob_exists and not blob_path.is_file():
+            except ManagedStoragePathError as exc:
                 logger.warning(
                     "file.delete.invalid_metadata",
                     extra={"file_id": str(file_id)},
                 )
                 raise InvalidManagedFileMetadataError(
                     "Stored file path is not a regular file."
+                ) from exc
+            except OSError as exc:
+                logger.exception(
+                    "file.delete.blob_validation_failed",
+                    extra={"file_id": str(file_id)},
                 )
+                raise ManagedFileStorageError(
+                    "Failed to prepare file deletion."
+                ) from exc
 
             try:
                 # Metadata deletion is the public deletion boundary; blob cleanup
                 # after this point is best-effort and does not fail the request.
                 delete_metadata_file(file_id, self.settings)
+            except ManagedStoragePathError as exc:
+                logger.warning(
+                    "file.delete.invalid_metadata",
+                    extra={"file_id": str(file_id)},
+                )
+                raise InvalidManagedFileMetadataError(
+                    "Stored metadata path is not a regular file."
+                ) from exc
             except (FileNotFoundError, OSError) as exc:
                 logger.exception(
                     "file.delete.metadata_delete_failed",
@@ -627,19 +653,18 @@ class LocalManagedFileStore:
         except FileNotFoundError:
             logger.warning(
                 "file.delete.blob_cleanup_missing",
-                extra={"file_id": str(file_id), "blob_path": str(blob_path)},
+                extra={"file_id": str(file_id)},
             )
-        except OSError:
+        except (ManagedStoragePathError, OSError):
             logger.exception(
                 "file.delete.blob_cleanup_failed",
-                extra={"file_id": str(file_id), "blob_path": str(blob_path)},
+                extra={"file_id": str(file_id)},
             )
 
         logger.info(
             "file.delete.succeeded",
             extra={
                 "file_id": str(file_id),
-                "blob_path": str(blob_path),
                 "meta_path": str(meta_path),
                 "original_filename": metadata.original_filename,
                 "stored_filename": metadata.stored_filename,
@@ -663,7 +688,7 @@ class LocalManagedFileStore:
             metadata = self.require_metadata(file_id)
             self._validate_ready_metadata(file_id, metadata, action="update")
             blob_path = get_blob_path(file_id, self.settings)
-            self._validate_metadata_blob_reference(file_id, metadata, blob_path)
+            self._validate_metadata_blob_reference(file_id, metadata, blob_path.name)
 
             if not blob_path.exists():
                 raise ManagedFileNotFoundError()
@@ -823,7 +848,7 @@ class LocalManagedFileStore:
             original_filename=original_filename,
             file_name=original_filename,
             tags=[],
-            stored_filename=f"file_{file_id}.bin",
+            stored_filename=get_blob_filename(file_id),
             mime_type=mime_type,
             extension=extension,
             size_bytes=len(content),
@@ -931,20 +956,20 @@ class LocalManagedFileStore:
     def _validate_metadata_blob_reference(
         file_id: uuid.UUID,
         metadata: FileMetadata,
-        blob_path: Path,
+        expected_blob_name: str,
     ) -> None:
         """Validate that metadata references the expected local blob name.
 
         Args:
             file_id: Requested file UUID.
             metadata: Loaded metadata record.
-            blob_path: Expected local blob path.
+            expected_blob_name: Expected server-derived local blob name.
 
         Raises:
             InvalidManagedFileMetadataError: If metadata references another blob.
         """
 
-        if metadata.stored_filename != blob_path.name:
+        if metadata.stored_filename != expected_blob_name:
             logger.warning(
                 "file.content.invalid_metadata",
                 extra={"file_id": str(file_id)},
@@ -968,7 +993,7 @@ def sanitize_download_filename(
         Sanitized filename, or `file_<uuid>.bin` fallback.
     """
 
-    fallback = f"file_{file_id}.bin"
+    fallback = get_blob_filename(file_id)
     candidate = Path(original_filename or "").name
 
     if not candidate:
@@ -981,13 +1006,13 @@ def sanitize_download_filename(
 
 
 def iter_file_chunks(
-    path: Path,
+    stream: BinaryIO,
     chunk_size: int = 65536,
 ) -> Iterator[bytes]:
     """Yield file bytes in fixed-size chunks.
 
     Args:
-        path: File path to stream.
+        stream: Opened binary stream to consume and close.
         chunk_size: Bytes per chunk.
 
     Yields:
@@ -997,12 +1022,13 @@ def iter_file_chunks(
         ValueError: If `chunk_size` is not positive.
     """
 
-    if chunk_size <= 0:
-        raise ValueError("chunk_size must be > 0")
-
-    with path.open("rb") as file_obj:
+    try:
+        if chunk_size <= 0:
+            raise ValueError("chunk_size must be > 0")
         while True:
-            chunk = file_obj.read(chunk_size)
+            chunk = stream.read(chunk_size)
             if not chunk:
                 break
             yield chunk
+    finally:
+        stream.close()

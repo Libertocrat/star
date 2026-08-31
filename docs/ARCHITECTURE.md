@@ -323,6 +323,8 @@ Lower-level path protections exist in `src/star/core/security/paths.py` and rela
 
 These helpers remain relevant because STAR still treats `STAR_ROOT_DIR` as a hardened storage boundary, even though the public API prefers managed `file_id` references over direct path exposure.
 
+Managed-file downloads and deletion use an additional local-storage adapter at the filesystem effect boundary. It canonicalizes the UUID-derived blob or metadata basename, opens `STAR_ROOT_DIR/data/files/{blobs|meta}` through no-follow directory descriptors, and performs final reads or unlinks relative to the verified directory. Downloads derive size and stream bytes from the same regular-file descriptor, rather than validating a pathname and reopening it later. The adapter fails closed when the required POSIX descriptor primitives are unavailable.
+
 ## 7. Configuration System
 
 Configuration is defined in `src/star/core/config.py` with a Pydantic `BaseSettings` model.

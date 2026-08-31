@@ -328,11 +328,15 @@ async def get_file_content(id: UUID, request: Request):
         if descriptor.size_bytes is not None:
             headers["Content-Length"] = str(descriptor.size_bytes)
 
-        return StreamingResponse(
-            iter_file_chunks(descriptor.blob_path),
-            media_type=descriptor.mime_type,
-            headers=headers,
-        )
+        try:
+            return StreamingResponse(
+                iter_file_chunks(descriptor.stream),
+                media_type=descriptor.mime_type,
+                headers=headers,
+            )
+        except Exception:
+            descriptor.stream.close()
+            raise
     except StarError as exc:
         return star_error_json_response(exc)
 
