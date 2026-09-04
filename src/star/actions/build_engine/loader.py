@@ -18,16 +18,15 @@ from star.actions.engine_config import (
     ALLOWED_CONTROL_CHARS,
     ALLOWED_SPEC_EXTENSIONS,
     CORE_MASK_PREFIX,
-    CORE_SPEC_SOURCE,
     CORE_SPECS_DIR,
     DISALLOWED_YAML_PATTERNS,
+    EXTENSION_MASK_PREFIX,
+    EXTENSION_SPECS_DIR,
     IDENTIFIER_NAME_PATTERN,
-    USER_MASK_PREFIX,
     USER_NAMESPACE_PREFIX,
-    USER_SPEC_SOURCE,
-    USER_SPECS_DIR,
 )
 from star.actions.exceptions import ActionSpecsParseError
+from star.actions.models.core import SpecProvenance
 from star.actions.schemas.module import ModuleSpec
 from star.core.config import Settings
 
@@ -276,8 +275,8 @@ def load_module_specs(
                 )
             )
 
-        namespace, source = _derive_namespace(path, spec_root)
-        module.with_runtime_namespace(namespace, source)
+        namespace, provenance = _derive_runtime_identity(path, spec_root)
+        module.with_runtime_identity(namespace, provenance)
 
         module_identity = namespace + (module.module,)
         if module_identity in seen_module_identities:
@@ -308,12 +307,12 @@ def _mask_path(path: Path) -> str:
         path: Source filesystem path.
 
     Returns:
-        Masked path according to configured core/user directories.
+        Masked path according to configured core/extension directories.
     """
 
     for base_dir, prefix in (
         (CORE_SPECS_DIR, CORE_MASK_PREFIX),
-        (USER_SPECS_DIR, USER_MASK_PREFIX),
+        (EXTENSION_SPECS_DIR, EXTENSION_MASK_PREFIX),
     ):
         try:
             relative = path.relative_to(base_dir)
@@ -375,24 +374,27 @@ def _validate_module_filename(path: Path) -> None:
     )
 
 
-def _derive_namespace(path: Path, spec_dir: Path) -> tuple[tuple[str, ...], str]:
-    """Derive runtime namespace and source from path under a specs root.
+def _derive_runtime_identity(
+    path: Path,
+    spec_dir: Path,
+) -> tuple[tuple[str, ...], SpecProvenance]:
+    """Derive runtime namespace and provenance from a specs-root path.
 
     Args:
         path: Module file path.
         spec_dir: Specs root containing this file.
 
     Returns:
-        Tuple of namespace parts and source label.
+        Tuple of namespace parts and source-derived provenance.
     """
 
     relative = path.relative_to(spec_dir)
     relative_dirs = relative.parent.parts
 
-    if spec_dir == USER_SPECS_DIR:
-        return (USER_NAMESPACE_PREFIX, *relative_dirs), USER_SPEC_SOURCE
+    if spec_dir == EXTENSION_SPECS_DIR:
+        return (USER_NAMESPACE_PREFIX, *relative_dirs), SpecProvenance.EXTENSION
 
-    return tuple(relative_dirs), CORE_SPEC_SOURCE
+    return tuple(relative_dirs), SpecProvenance.CORE
 
 
 def _resolve_spec_root_for_file(path: Path, spec_dirs: list[Path]) -> Path:

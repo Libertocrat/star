@@ -14,6 +14,7 @@ import pytest
 
 from star.actions.build_engine.validator import validate_modules
 from star.actions.exceptions import ActionSpecsParseError
+from star.actions.models import SpecProvenance
 from star.actions.schemas.dsl import ArgCmd, BinaryCmd, FlagCmd, OutputCmd
 
 # ============================================================================
@@ -106,8 +107,10 @@ def test_validate_modules_allows_duplicate_module_names_in_different_namespaces(
     WHEN validate_modules is called
     THEN validation succeeds
     """
-    first = make_valid_module().with_runtime_namespace(("file",), "core")
-    second = make_valid_module().with_runtime_namespace(("security",), "core")
+    first = make_valid_module().with_runtime_identity(("file",), SpecProvenance.CORE)
+    second = make_valid_module().with_runtime_identity(
+        ("security",), SpecProvenance.CORE
+    )
 
     validate_modules([first, second])
 
@@ -940,24 +943,24 @@ def test_validate_modules_allows_core_uuid_command_literal_exception(
             binaries=["cat"],
             actions={"gen_uuid": action},
         )
-    ).with_runtime_namespace((), "core")
+    ).with_runtime_identity((), SpecProvenance.CORE)
 
     validate_modules([module])
 
 
 @pytest.mark.parametrize(
-    ("source", "action_name"),
+    ("provenance", "action_name"),
     [
-        ("user", "gen_uuid"),
-        ("core", "read_uuid"),
+        (SpecProvenance.EXTENSION, "gen_uuid"),
+        (SpecProvenance.CORE, "read_uuid"),
     ],
-    ids=["user_source", "wrong_action"],
+    ids=["extension_provenance", "wrong_action"],
 )
 def test_validate_modules_rejects_unreviewed_uuid_path_literal(
     make_module_payload,
     make_action_payload,
     make_module_spec,
-    source: str,
+    provenance: SpecProvenance,
     action_name: str,
 ):
     """
@@ -974,7 +977,207 @@ def test_validate_modules_rejects_unreviewed_uuid_path_literal(
             binaries=["cat"],
             actions={action_name: action},
         )
-    ).with_runtime_namespace((), source)
+    ).with_runtime_identity((), provenance)
+
+    with pytest.raises(ActionSpecsParseError, match="host paths"):
+        validate_modules([module])
+
+
+@pytest.mark.parametrize(
+    ("static_location", "value"),
+    [
+        ("const", "/etc/passwd"),
+        ("const", "templates/report.txt"),
+        ("const", "./settings.ini"),
+        ("const", "../secrets.txt"),
+        ("const", r"C:\\Windows\\System32"),
+        ("const", "C:settings.ini"),
+        ("const", r"\\\\server\\share"),
+        ("const", "~/settings.ini"),
+        ("const", "~operator"),
+        ("const", "$HOME/settings.ini"),
+        ("const", "file:///etc/passwd"),
+        ("const", "%2fetc%2fpasswd"),
+        ("option", "--config=templates/report.txt"),
+        ("flag", "--config=templates/report.txt"),
+        ("default", "templates/report.txt"),
+    ],
+    ids=[
+        "posix_absolute",
+        "relative_segments",
+        "current_directory",
+        "parent_traversal",
+        "windows_drive",
+        "windows_drive_relative",
+        "unc",
+        "home",
+        "home_user",
+        "environment_reference",
+        "file_uri",
+        "encoded_separator",
+        "option_assignment",
+        "flag_value",
+        "string_default",
+    ],
+)
+def test_validate_modules_rejects_extension_static_host_path_references(
+    make_module_payload,
+    make_action_payload,
+    make_module_spec,
+    static_location: str,
+    value: str,
+):
+    """
+    GIVEN an extension module with a static host-path-like argv value
+    WHEN validate_modules is called
+    THEN startup validation rejects the module
+    """
+    action = make_action_payload()
+
+    if static_location in {"const", "option"}:
+        action["command"] = [{"binary": "echo"}, value]
+    elif static_location == "flag":
+        action["flags"] = {
+            "config": {
+                "value": value,
+                "default": False,
+                "description": "static config option",
+            }
+        }
+        action["command"] = [{"binary": "echo"}, {"flag": "config"}]
+    else:
+        action["args"] = {
+            "value": {
+                "type": "string",
+                "required": False,
+                "default": value,
+                "description": "static default value",
+            }
+        }
+        action["command"] = [{"binary": "echo"}, {"arg": "value"}]
+
+    module = make_module_spec(
+        make_module_payload(actions={"ping": action})
+    ).with_runtime_identity(("user",), SpecProvenance.EXTENSION)
+
+    with pytest.raises(ActionSpecsParseError, match="host paths"):
+        validate_modules([module])
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "text/plain",
+        "application/json",
+        "--mime=text/plain",
+        "--content-type=application/json",
+    ],
+    ids=["bare_text", "bare_application", "option_text", "option_application"],
+)
+def test_validate_modules_allows_exact_extension_static_mime_values(
+    make_module_payload,
+    make_action_payload,
+    make_module_spec,
+    value: str,
+):
+    """
+    GIVEN an extension module with an exact STAR-managed MIME static value
+    WHEN validate_modules is called
+    THEN the module remains valid
+    """
+    action = make_action_payload(command=[{"binary": "echo"}, value])
+    module = make_module_spec(
+        make_module_payload(actions={"ping": action})
+    ).with_runtime_identity(("user",), SpecProvenance.EXTENSION)
+
+    validate_modules([module])
+
+
+def test_validate_modules_allows_exact_extension_static_mime_flag_value(
+    make_module_payload,
+    make_action_payload,
+    make_module_spec,
+):
+    """
+    GIVEN an extension flag with an exact STAR-managed MIME value
+    WHEN validate_modules is called
+    THEN the module remains valid
+    """
+    action = make_action_payload(
+        flags={
+            "mime": {
+                "value": "--mime=text/plain",
+                "default": False,
+                "description": "MIME selection",
+            }
+        },
+        command=[{"binary": "echo"}, {"flag": "mime"}],
+    )
+    module = make_module_spec(
+        make_module_payload(actions={"ping": action})
+    ).with_runtime_identity(("user",), SpecProvenance.EXTENSION)
+
+    validate_modules([module])
+
+
+def test_validate_modules_allows_exact_extension_static_mime_string_default(
+    make_module_payload,
+    make_action_payload,
+    make_module_spec,
+):
+    """
+    GIVEN an extension string default with an exact STAR-managed MIME value
+    WHEN validate_modules is called
+    THEN the module remains valid
+    """
+    action = make_action_payload(
+        args={
+            "mime": {
+                "type": "string",
+                "required": False,
+                "default": "application/json",
+                "description": "MIME default",
+            }
+        },
+        command=[{"binary": "echo"}, {"arg": "mime"}],
+    )
+    module = make_module_spec(
+        make_module_payload(actions={"ping": action})
+    ).with_runtime_identity(("user",), SpecProvenance.EXTENSION)
+
+    validate_modules([module])
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "etc/passwd",
+        "--mime=etc/passwd",
+        "https://example.test/value",
+        "--header=Content-Type:text/plain",
+    ],
+    ids=[
+        "mime_like_relative_path",
+        "option_mime_like_relative_path",
+        "url",
+        "ambiguous",
+    ],
+)
+def test_validate_modules_rejects_unsupported_extension_slash_values(
+    make_module_payload,
+    make_action_payload,
+    make_module_spec,
+    value: str,
+):
+    """
+    GIVEN an extension module with a non-path-classified slash static value
+    WHEN validate_modules is called
+    THEN validation rejects the unsupported representation
+    """
+    action = make_action_payload(command=[{"binary": "echo"}, value])
+    module = make_module_spec(
+        make_module_payload(actions={"ping": action})
+    ).with_runtime_identity(("user",), SpecProvenance.EXTENSION)
 
     with pytest.raises(ActionSpecsParseError, match="host paths"):
         validate_modules([module])

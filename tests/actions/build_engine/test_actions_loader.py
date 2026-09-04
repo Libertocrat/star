@@ -24,6 +24,7 @@ from star.actions.build_engine.loader import (
     validate_yaml_file_safety,
 )
 from star.actions.exceptions import ActionSpecsParseError
+from star.actions.models import SpecProvenance
 from star.actions.schemas import ModuleSpec
 from star.core.config import Settings
 
@@ -752,7 +753,7 @@ def test_load_module_specs_loads_from_core_and_user_dirs(
     THEN both modules are present in deterministic order
     """
     monkeypatch.setattr(loader_module, "CORE_SPECS_DIR", core_specs_dir)
-    monkeypatch.setattr(loader_module, "USER_SPECS_DIR", user_specs_dir)
+    monkeypatch.setattr(loader_module, "EXTENSION_SPECS_DIR", user_specs_dir)
 
     write_yaml(core_specs_dir / "coremod.yml", make_module_payload("coremod"))
     write_yaml(user_specs_dir / "usermod.yaml", make_module_payload("usermod"))
@@ -776,7 +777,7 @@ def test_load_module_specs_allows_duplicate_module_names_in_different_namespaces
     THEN both modules are loaded successfully with different runtime namespaces
     """
     monkeypatch.setattr(loader_module, "CORE_SPECS_DIR", core_specs_dir)
-    monkeypatch.setattr(loader_module, "USER_SPECS_DIR", user_specs_dir)
+    monkeypatch.setattr(loader_module, "EXTENSION_SPECS_DIR", user_specs_dir)
 
     (core_specs_dir / "file").mkdir()
     (core_specs_dir / "security").mkdir()
@@ -889,7 +890,7 @@ def test_load_module_specs_attaches_core_namespace_from_relative_dirs(
     module = load_module_specs([core_specs_dir], settings)[0]
 
     assert module.namespace == ("file",)
-    assert module.source == "core"
+    assert module.provenance is SpecProvenance.CORE
 
 
 def test_load_module_specs_attaches_user_namespace_prefix(
@@ -905,7 +906,7 @@ def test_load_module_specs_attaches_user_namespace_prefix(
     THEN the loaded ModuleSpec namespace starts with user
     """
     monkeypatch.setattr(loader_module, "CORE_SPECS_DIR", core_specs_dir)
-    monkeypatch.setattr(loader_module, "USER_SPECS_DIR", user_specs_dir)
+    monkeypatch.setattr(loader_module, "EXTENSION_SPECS_DIR", user_specs_dir)
 
     (user_specs_dir / "custom").mkdir()
     write_yaml(
@@ -916,7 +917,27 @@ def test_load_module_specs_attaches_user_namespace_prefix(
     module = load_module_specs([user_specs_dir], settings)[0]
 
     assert module.namespace == ("user", "custom")
-    assert module.source == "user"
+    assert module.provenance is SpecProvenance.EXTENSION
+
+
+def test_load_module_specs_rejects_yaml_provenance_assignment(
+    user_specs_dir: Path,
+    make_module_payload,
+    settings: Settings,
+    monkeypatch,
+):
+    """
+    GIVEN an extension YAML payload that attempts to set its own provenance
+    WHEN load_module_specs is called
+    THEN structural validation rejects the untrusted field
+    """
+    monkeypatch.setattr(loader_module, "EXTENSION_SPECS_DIR", user_specs_dir)
+    payload = make_module_payload("custom")
+    payload["provenance"] = "core"
+    write_yaml(user_specs_dir / "custom.yml", payload)
+
+    with pytest.raises(ActionSpecsParseError, match="Failed to validate DSL module"):
+        load_module_specs([user_specs_dir], settings)
 
 
 def test_load_module_specs_uses_empty_namespace_for_root_core_module(
@@ -952,7 +973,7 @@ def test_load_module_specs_uses_user_namespace_for_root_user_module(
     THEN module namespace starts with user
     """
     monkeypatch.setattr(loader_module, "CORE_SPECS_DIR", core_specs_dir)
-    monkeypatch.setattr(loader_module, "USER_SPECS_DIR", user_specs_dir)
+    monkeypatch.setattr(loader_module, "EXTENSION_SPECS_DIR", user_specs_dir)
 
     write_yaml(user_specs_dir / "checksum.yml", make_module_payload("checksum"))
 
@@ -972,13 +993,13 @@ def test_mask_path_preserves_nested_relative_path(
     THEN the base directory is masked and relative subpath is preserved
     """
     monkeypatch.setattr(loader_module, "CORE_SPECS_DIR", core_specs_dir)
-    monkeypatch.setattr(loader_module, "USER_SPECS_DIR", user_specs_dir)
+    monkeypatch.setattr(loader_module, "EXTENSION_SPECS_DIR", user_specs_dir)
 
     core_path = core_specs_dir / "file" / "crypto.yml"
     user_path = user_specs_dir / "custom" / "my_module.yml"
 
     assert _mask_path(core_path) == "CORE/file/crypto.yml"
-    assert _mask_path(user_path) == "USER/custom/my_module.yml"
+    assert _mask_path(user_path) == "EXTENSION/custom/my_module.yml"
 
 
 def test_load_module_specs_fails_fast_on_first_invalid_file(

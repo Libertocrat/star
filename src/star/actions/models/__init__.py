@@ -8,6 +8,7 @@ from .core import (
     OutputSource,
     OutputType,
     ParamType,
+    SpecProvenance,
 )
 from .presentation import ActionPublicSpec, ActionSummary, ModuleSummary
 from .runtime import ActionExecutionOutput, ActionExecutionResult, RenderedAction
@@ -18,6 +19,7 @@ __all__ = [
     "ArgDef",
     "FlagDef",
     "ParamType",
+    "SpecProvenance",
     "OutputType",
     "OutputSource",
     "OutputDef",

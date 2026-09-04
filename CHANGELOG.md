@@ -11,12 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added conditional `PUT /v1/files/{id}` metadata replacement with strict editable-field validation, full tag-set replacement, and safe `file_name` updates that preserve the stored extension.
 
+### Fixed
+
+- Pinned AnyIO to `4.14.2` so Starlette `TestClient` imports remain compatible with STAR's strict deprecation-warning policy in fresh CI environments.
+
 ### Security
 
 - Added strong opaque metadata ETags with required `If-Match` preconditions to prevent lost file-metadata updates, plus storage-side serialization and missing-blob readiness checks.
 - Rejected unknown metadata request fields and normalized public FastAPI validation failures into the standard safe `UNPROCESSABLE_ENTITY` envelope.
 - Hardened managed-file downloads and deletion with descriptor-relative no-follow filesystem operations, regular-file verification, and streaming from the already verified descriptor.
 - Declared explicit read-only `GITHUB_TOKEN` permissions for CI and deep-security workflows.
+- Added loader-derived `CORE`/`EXTENSION` DSL provenance and rejected host-path references in extension static command values, flags, and string defaults while retaining exact managed-file MIME values.
 
 ## [0.1.4] - 2026-08-27
 

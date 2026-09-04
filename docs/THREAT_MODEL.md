@@ -193,7 +193,9 @@ Authentication coverage is as follows:
 ### DSL build and execution mitigations
 
 - YAML specs are discovered deterministically and checked for file size, extension, UTF-8 safety, NUL bytes, disallowed control characters, and dangerous YAML patterns.
-- `validate_modules()` rejects unsupported DSL versions, duplicate module identities, invalid identifiers, blocked binaries, malformed action declarations, and host-path-like command literals except for narrow reviewed core exceptions.
+- Loader-derived DSL provenance separates `CORE` modules shipped as part of STAR core from `EXTENSION` modules mounted under `/etc/star/actions.d`; YAML cannot select or elevate that provenance.
+- `validate_modules()` rejects unsupported DSL versions, duplicate module identities, invalid identifiers, blocked binaries, malformed action declarations, and host-path-like command literals except for narrow reviewed core exceptions. Extension static `const` values, flags, and string defaults reject direct, relative, encoded, and environment-style host-path syntax; values containing `/` are accepted only when they exactly match STAR's managed-file MIME policy.
+- The extension static-value policy does not infer whether a pathless runtime string is interpreted as a filename by a particular binary. Extension binary capabilities and per-tool argument semantics remain a separate policy evolution.
 - `secret` args cannot define defaults, cannot be optional, cannot be rendered as raw argv values or const-template placeholders, and must use an explicit sensitive delivery policy.
 - `build_actions()` compiles only validated modules into immutable runtime `ActionSpec` objects.
 - The registry is an explicit in-memory allowlist built from validated DSL specs.

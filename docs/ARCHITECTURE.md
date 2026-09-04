@@ -205,9 +205,9 @@ The action system lives in `src/star/actions` and is split into build-time, pres
 
 At startup, `build_registry_from_specs()` performs the following steps:
 
-1. `load_module_specs()` discovers YAML-based Action DSL specifications from the configured spec directories.
+1. `load_module_specs()` discovers YAML-based Action DSL specifications from the configured spec directories and assigns private source-derived provenance: `CORE` for modules shipped as part of STAR core and `EXTENSION` for modules mounted under `/etc/star/actions.d`. Mounted modules retain the stable public `user.*` namespace.
 2. Loader safety checks reject invalid file sizes, invalid extensions, NUL bytes, disallowed control characters, and dangerous YAML patterns.
-3. `validate_modules()` enforces semantic DSL rules such as module uniqueness, supported DSL version, binary declarations, identifier format, action structure, and command literal path policy.
+3. `validate_modules()` enforces semantic DSL rules such as module uniqueness, supported DSL version, binary declarations, identifier format, action structure, and source-derived static-value path policy.
 4. `build_actions()` compiles validated modules into immutable runtime `ActionSpec` objects with generated `params_model` classes, command templates, defaults, output declarations, stdout file policy, and binary execution policy.
 5. `ActionRegistry` stores the final action mapping and precomputes presentation summaries.
 

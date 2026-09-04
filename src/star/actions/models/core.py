@@ -56,6 +56,22 @@ class ParamType(str, Enum):
     SECRET = "secret"  # noqa: S105
 
 
+class SpecProvenance(str, Enum):
+    """Origin classification assigned to a loaded DSL module.
+
+    The loader derives this value from the configured specification root. It is
+    not serializable DSL input and therefore cannot be chosen by a module
+    author.
+
+    Attributes:
+        CORE: Module shipped as part of the STAR core.
+        EXTENSION: Module mounted after the STAR core is built.
+    """
+
+    CORE = "core"
+    EXTENSION = "extension"
+
+
 class OutputType(str, Enum):
     """Supported logical output types for STAR action outputs."""
 

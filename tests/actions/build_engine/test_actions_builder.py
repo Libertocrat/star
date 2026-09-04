@@ -15,7 +15,7 @@ from pydantic import UUID4, SecretStr, ValidationError
 
 from star.actions.build_engine.builder import build_actions
 from star.actions.exceptions import ActionSpecsBuildError
-from star.actions.models import ActionSpec, ParamType
+from star.actions.models import ActionSpec, ParamType, SpecProvenance
 from star.core.config import Settings
 
 # ============================================================================
@@ -83,7 +83,7 @@ def test_action_names_are_namespaced(
     module = make_module_spec(
         make_module_payload(module_name="random_gen", actions={"token_hex": action})
     )
-    module.with_runtime_namespace(("file",), "core")
+    module.with_runtime_identity(("file",), SpecProvenance.CORE)
 
     result = build_actions([module], _test_settings())
 
@@ -125,7 +125,7 @@ def test_build_actions_includes_core_directory_namespace(
             module_name="crypto", actions={"encrypt_file": make_action_spec_input()}
         )
     )
-    module.with_runtime_namespace(("file",), "core")
+    module.with_runtime_identity(("file",), SpecProvenance.CORE)
 
     result = build_actions([module], _test_settings())
 
@@ -147,7 +147,7 @@ def test_build_actions_includes_user_namespace_prefix(
             module_name="my_module", actions={"some_action": make_action_spec_input()}
         )
     )
-    module.with_runtime_namespace(("user", "custom"), "user")
+    module.with_runtime_identity(("user", "custom"), SpecProvenance.EXTENSION)
 
     result = build_actions([module], _test_settings())
 
@@ -169,7 +169,7 @@ def test_build_actions_sets_action_spec_namespace(
             module_name="crypto", actions={"encrypt_file": make_action_spec_input()}
         )
     )
-    module.with_runtime_namespace(("file", "crypto"), "core")
+    module.with_runtime_identity(("file", "crypto"), SpecProvenance.CORE)
 
     spec = build_actions([module], _test_settings())["file.crypto.crypto.encrypt_file"]
 
@@ -842,7 +842,7 @@ def test_params_model_name_generation(
             actions={"token_hex": action},
         )
     )
-    module.with_runtime_namespace(("file",), "core")
+    module.with_runtime_identity(("file",), SpecProvenance.CORE)
 
     spec = build_actions([module], _test_settings())["file.random_gen.token_hex"]
 
@@ -973,10 +973,10 @@ def test_build_actions_rejects_duplicate_final_action_fqdn(
     action = make_action_spec_input()
     first = make_module_spec(
         make_module_payload(module_name="crypto", actions={"encrypt_file": action})
-    ).with_runtime_namespace(("file",), "core")
+    ).with_runtime_identity(("file",), SpecProvenance.CORE)
     second = make_module_spec(
         make_module_payload(module_name="crypto", actions={"encrypt_file": action})
-    ).with_runtime_namespace(("file",), "core")
+    ).with_runtime_identity(("file",), SpecProvenance.CORE)
 
     with pytest.raises(
         ActionSpecsBuildError,
@@ -999,10 +999,10 @@ def test_build_actions_allows_same_module_action_in_different_namespaces(
     action = make_action_spec_input()
     first = make_module_spec(
         make_module_payload(module_name="crypto", actions={"encrypt_file": action})
-    ).with_runtime_namespace(("file",), "core")
+    ).with_runtime_identity(("file",), SpecProvenance.CORE)
     second = make_module_spec(
         make_module_payload(module_name="crypto", actions={"encrypt_file": action})
-    ).with_runtime_namespace(("security",), "core")
+    ).with_runtime_identity(("security",), SpecProvenance.CORE)
 
     result = build_actions([first, second], _test_settings())
 
