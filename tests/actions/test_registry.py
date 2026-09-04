@@ -12,8 +12,9 @@ from __future__ import annotations
 
 import pytest
 
+import star.actions.build_engine.loader as loader_module
 import star.actions.registry as registry_module
-from star.actions.exceptions import ActionNotFoundError
+from star.actions.exceptions import ActionNotFoundError, ActionSpecsParseError
 from star.actions.models import ActionSpec, ParamType
 from star.actions.registry import ActionRegistry, build_registry_from_specs
 from star.core.config import Settings
@@ -109,6 +110,42 @@ actions:
 
     assert registry.has("file.sample.ping") is True
     assert registry.has("sample.ping") is False
+
+
+def test_build_registry_from_specs_rejects_invalid_extension_before_publication(
+    tmp_path,
+    monkeypatch,
+):
+    """
+    GIVEN an extension module that embeds a static host path
+    WHEN the runtime registry is built
+    THEN startup fails before publishing an action registry
+    """
+    specs_dir = tmp_path / "extensions"
+    specs_dir.mkdir(parents=True, exist_ok=True)
+    (specs_dir / "sample.yml").write_text(
+        """
+version: 1
+module: sample
+description: "Invalid extension module"
+binaries:
+  - echo
+
+actions:
+  ping:
+    description: "Ping"
+    command:
+      - binary: echo
+      - --config=templates/report.txt
+""".strip(),
+        encoding="utf-8",
+    )
+    settings = Settings.model_validate({"star_root_dir": str(tmp_path)})
+    monkeypatch.setattr(registry_module, "SPEC_DIRS", (specs_dir,))
+    monkeypatch.setattr(loader_module, "EXTENSION_SPECS_DIR", specs_dir)
+
+    with pytest.raises(ActionSpecsParseError, match="host paths"):
+        build_registry_from_specs(settings)
 
 
 @pytest.mark.parametrize(

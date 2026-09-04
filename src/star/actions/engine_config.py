@@ -12,7 +12,8 @@ import re
 import tempfile
 from pathlib import Path
 
-from star.actions.models.core import ParamType
+from star.actions.models.core import ParamType, SpecProvenance
+from star.core.security.mime_map import EXTENSION_MIME_MAP
 
 # ------------------------------------------------------------------
 # DSL SPEC DIRECTORIES
@@ -21,17 +22,16 @@ from star.actions.models.core import ParamType
 # Core specs directory (resolved dynamically relative to this module)
 CORE_SPECS_DIR: Path = Path(__file__).resolve().parent / "specs"
 
-# User-provided specs directory (mounted via Docker volume)
-USER_SPECS_DIR: Path = Path("/etc/star/actions.d")
+# Extension specs directory (mounted via Docker volume)
+EXTENSION_SPECS_DIR: Path = Path("/etc/star/actions.d")
 
 # Ordered list of spec directories (deterministic loading order)
 SPEC_DIRS: tuple[Path, ...] = (
     CORE_SPECS_DIR,
-    USER_SPECS_DIR,
+    EXTENSION_SPECS_DIR,
 )
 
-CORE_SPEC_SOURCE = "core"
-USER_SPEC_SOURCE = "user"
+# Mounted modules retain the stable public `user.*` namespace.
 USER_NAMESPACE_PREFIX = "user"
 
 # ------------------------------------------------------------------
@@ -66,7 +66,14 @@ MIME_LIKE_PATTERN = re.compile(
     r"^[a-z0-9][a-z0-9!#$&^_.+-]*/[a-z0-9][a-z0-9!#$&^_.+-]*$"
 )
 
-# Placeholder matcher for restricted const-template interpolation: {arg_name}.
+# Exact MIME values permitted in extension-authored static argv values. This
+# derives from the canonical managed-file MIME policy rather than accepting an
+# arbitrary MIME-like string that could also be a relative host path.
+EXTENSION_STATIC_MIME_TYPES: frozenset[str] = frozenset(
+    mime_type for mime_types in EXTENSION_MIME_MAP.values() for mime_type in mime_types
+)
+
+# Placeholder matcher for validated const-template interpolation: {arg_name}.
 CONST_TEMPLATE_PLACEHOLDER_PATTERN = re.compile(r"\{([a-z][a-z0-9_]*)\}")
 
 # Allowed arg types for const-template interpolation.
@@ -88,19 +95,29 @@ RESERVED_OUTPUT_NAMES: tuple[str, ...] = ("stdout_file",)
 
 # Windows absolute path matcher used by build-time command literal validation.
 WINDOWS_DRIVE_PATH_PATTERN = re.compile(r"^[A-Za-z]:[\\/]")
+WINDOWS_DRIVE_REFERENCE_PATTERN = re.compile(r"^[A-Za-z]:")
 
-# Reviewed core command literal exceptions for trusted built-in specs.
-REVIEWED_COMMAND_LITERAL_PATH_ALLOWLIST: frozenset[tuple[str, str, str, str]] = (
-    frozenset(
-        {
-            (
-                CORE_SPEC_SOURCE,
-                "random",
-                "gen_uuid",
-                "/proc/sys/kernel/random/uuid",
-            )
-        }
-    )
+# Encoded separators and environment-style references can cause a program to
+# reconstruct a host path even when a literal has no raw separator.
+PERCENT_ENCODED_PATH_SEPARATOR_PATTERN = re.compile(r"%(?:2f|5c)", re.IGNORECASE)
+ENVIRONMENT_PATH_REFERENCE_PATTERN = re.compile(
+    r"(?:\$(?:\{[A-Za-z_][A-Za-z0-9_]*\}|[A-Za-z_][A-Za-z0-9_]*)|%[A-Za-z_][A-Za-z0-9_]*%)"
+)
+FILE_URI_PATTERN = re.compile(r"^file:", re.IGNORECASE)
+
+# Reviewed core command literal exceptions. Extension specs never receive a
+# host-path exception.
+REVIEWED_COMMAND_LITERAL_PATH_ALLOWLIST: frozenset[
+    tuple[SpecProvenance, str, str, str]
+] = frozenset(
+    {
+        (
+            SpecProvenance.CORE,
+            "random",
+            "gen_uuid",
+            "/proc/sys/kernel/random/uuid",
+        )
+    }
 )
 
 # ------------------------------------------------------------------
@@ -151,4 +168,4 @@ UNSAFE_CONTROL_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 # ------------------------------------------------------------------
 
 CORE_MASK_PREFIX = "CORE"
-USER_MASK_PREFIX = "USER"
+EXTENSION_MASK_PREFIX = "EXTENSION"

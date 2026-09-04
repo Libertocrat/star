@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from typing import Dict, List, Optional
 
-from pydantic import BaseModel, PrivateAttr
+from pydantic import BaseModel, ConfigDict, PrivateAttr
+
+from star.actions.models.core import SpecProvenance
 
 from .action import ActionSpecInput
 
@@ -14,7 +16,7 @@ class ModuleSpec(BaseModel):
 
     Attributes:
         _namespace: Runtime namespace metadata injected by the loader.
-        _source: Runtime source label injected by the loader.
+        _provenance: Runtime provenance injected by the loader.
         version: DSL module version.
         module: Bare DSL module name.
         description: Human-readable module description.
@@ -24,8 +26,10 @@ class ModuleSpec(BaseModel):
         actions: Mapping of action name to action definitions.
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     _namespace: tuple[str, ...] = PrivateAttr(default_factory=tuple)
-    _source: str = PrivateAttr(default="core")
+    _provenance: SpecProvenance = PrivateAttr(default=SpecProvenance.CORE)
 
     version: int
     module: str
@@ -45,26 +49,26 @@ class ModuleSpec(BaseModel):
         return self._namespace
 
     @property
-    def source(self) -> str:
-        """Return runtime source label for this module."""
+    def provenance(self) -> SpecProvenance:
+        """Return provenance derived from the configured specification root."""
 
-        return self._source
+        return self._provenance
 
-    def with_runtime_namespace(
+    def with_runtime_identity(
         self,
         namespace: tuple[str, ...],
-        source: str,
+        provenance: SpecProvenance,
     ) -> "ModuleSpec":
-        """Attach loader-derived runtime namespace metadata.
+        """Attach loader-derived runtime identity metadata.
 
         Args:
             namespace: Namespace parts derived from the module file path.
-            source: Source label such as `core` or `user`.
+            provenance: Origin classification derived from the spec root.
 
         Returns:
             This module instance with runtime namespace metadata attached.
         """
 
         self._namespace = namespace
-        self._source = source
+        self._provenance = provenance
         return self

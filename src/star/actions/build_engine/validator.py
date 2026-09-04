@@ -23,16 +23,21 @@ from uuid import UUID
 
 from star.actions.engine_config import (
     CONST_TEMPLATE_ALLOWED_ARG_TYPES,
+    ENVIRONMENT_PATH_REFERENCE_PATTERN,
+    EXTENSION_STATIC_MIME_TYPES,
+    FILE_URI_PATTERN,
     IDENTIFIER_NAME_PATTERN,
     MAX_SECRET_LENGTH,
     MIME_LIKE_PATTERN,
+    PERCENT_ENCODED_PATH_SEPARATOR_PATTERN,
     RESERVED_OUTPUT_NAMES,
     REVIEWED_COMMAND_LITERAL_PATH_ALLOWLIST,
     TAG_NAME_PATTERN,
     WINDOWS_DRIVE_PATH_PATTERN,
+    WINDOWS_DRIVE_REFERENCE_PATTERN,
 )
 from star.actions.exceptions import ActionSpecsParseError
-from star.actions.models.core import ParamType
+from star.actions.models.core import ParamType, SpecProvenance
 from star.actions.schemas.action import ActionSpecInput
 from star.actions.schemas.dsl import (
     ArgCmd,
@@ -317,7 +322,7 @@ def _validate_action(
     _validate_command_elements(module, action_name, action)
     _validate_command_references(module.module, action_name, action)
     _validate_unused_definitions(module.module, action_name, action)
-    _validate_args(module.module, action_name, action)
+    _validate_args(module, action_name, action)
     _validate_flags(module, action_name, action)
 
 
@@ -728,12 +733,15 @@ def _is_disallowed_path_literal(
     """
 
     if (
-        module.source,
+        module.provenance,
         module.module,
         action_name,
         literal,
     ) in REVIEWED_COMMAND_LITERAL_PATH_ALLOWLIST:
         return False
+
+    if module.provenance is SpecProvenance.EXTENSION:
+        return _is_disallowed_extension_static_value(literal)
 
     return _looks_like_host_path_literal(literal)
 
@@ -759,6 +767,69 @@ def _looks_like_host_path_literal(literal: str) -> bool:
         return True
 
     return ".." in literal.split("/")
+
+
+def _is_disallowed_extension_static_value(value: str) -> bool:
+    """Return whether an extension-authored static argv value is disallowed.
+
+    Extension modules may use slash-bearing static values only for exact MIME
+    types recognized by STAR's managed-file policy. The narrow exception avoids
+    treating a generic MIME-like pattern such as ``etc/passwd`` as safe.
+
+    Args:
+        value: Static command, flag, or string-default value from an extension
+            module.
+
+    Returns:
+        True when the value contains host-path syntax or an unsupported
+        slash-bearing representation.
+    """
+
+    if _looks_like_extension_host_path(value):
+        return True
+
+    if "/" not in value:
+        return False
+
+    if value in EXTENSION_STATIC_MIME_TYPES:
+        return False
+
+    option_name, separator, option_value = value.partition("=")
+    return not (
+        separator == "="
+        and option_name.startswith("-")
+        and "=" not in option_value
+        and option_value in EXTENSION_STATIC_MIME_TYPES
+    )
+
+
+def _looks_like_extension_host_path(value: str) -> bool:
+    """Return whether a static extension value contains host-path syntax.
+
+    Args:
+        value: Static argv value authored by an extension module.
+
+    Returns:
+        True when the value contains a direct, relative, encoded, URI, home,
+        or environment-style host-path reference.
+    """
+
+    if _looks_like_host_path_literal(value):
+        return True
+
+    if value.startswith("~"):
+        return True
+
+    if WINDOWS_DRIVE_REFERENCE_PATTERN.match(value):
+        return True
+
+    if FILE_URI_PATTERN.match(value):
+        return True
+
+    if PERCENT_ENCODED_PATH_SEPARATOR_PATTERN.search(value):
+        return True
+
+    return ENVIRONMENT_PATH_REFERENCE_PATTERN.search(value) is not None
 
 
 def _extract_command_literal_placeholders(literal: str) -> tuple[str, ...]:
@@ -1066,14 +1137,14 @@ def _validate_secret_delivery_command_usage(
 
 
 def _validate_args(
-    module_name: str,
+    module: ModuleSpec,
     action_name: str,
     action: ActionSpecInput,
 ) -> None:
     """Validate semantic rules for all action arguments.
 
     Args:
-        module_name: Parent module name.
+        module: Parent module specification.
         action_name: Action name.
         action: Action specification.
 
@@ -1083,27 +1154,27 @@ def _validate_args(
 
     for arg_name, arg_spec in (action.args or {}).items():
         _validate_arg_secret_rules(
-            module_name=module_name,
+            module_name=module.module,
             action_name=action_name,
             arg_name=arg_name,
             arg_spec=arg_spec,
         )
         _validate_arg_list_items_rules(
-            module_name=module_name,
+            module_name=module.module,
             action_name=action_name,
             arg_name=arg_name,
             arg_spec=arg_spec,
         )
         _validate_arg_required_default_rules(
-            module_name=module_name,
+            module_name=module.module,
             action_name=action_name,
             arg_name=arg_name,
             arg_spec=arg_spec,
         )
-        _validate_arg_default(module_name, action_name, arg_name, arg_spec)
-        _validate_arg_constraints(module_name, action_name, arg_name, arg_spec)
+        _validate_arg_default(module, action_name, arg_name, arg_spec)
+        _validate_arg_constraints(module.module, action_name, arg_name, arg_spec)
 
-    _validate_secret_delivery_uniqueness(module_name, action_name, action)
+    _validate_secret_delivery_uniqueness(module.module, action_name, action)
 
 
 def _validate_arg_secret_rules(
@@ -1301,7 +1372,7 @@ def _validate_arg_required_default_rules(
 
 
 def _validate_arg_default(
-    module_name: str,
+    module: ModuleSpec,
     action_name: str,
     arg_name: str,
     arg_spec: ArgSpec,
@@ -1309,7 +1380,7 @@ def _validate_arg_default(
     """Validate an argument default against its declared DSL type.
 
     Args:
-        module_name: Parent module name.
+        module: Parent module specification.
         action_name: Action name.
         arg_name: Argument name.
         arg_spec: Argument definition.
@@ -1343,10 +1414,21 @@ def _validate_arg_default(
 
     if not is_valid:
         _raise_action_error(
-            module_name,
+            module.module,
             action_name,
             f"default for arg '{arg_name}' is incompatible with declared type "
             f"'{param_type.value}'",
+        )
+
+    if (
+        module.provenance is SpecProvenance.EXTENSION
+        and param_type is ParamType.STRING
+        and _is_disallowed_extension_static_value(cast(str, default))
+    ):
+        _raise_action_error(
+            module.module,
+            action_name,
+            f"default for arg '{arg_name}' must not contain host paths",
         )
 
 
@@ -1761,12 +1843,30 @@ def _validate_flag_value(
             f"flag '{flag_name}' value must not contain control characters",
         )
 
-    if _looks_like_host_path_literal(flag_spec.value):
+    if _is_disallowed_flag_value(module, flag_spec.value):
         _raise_action_error(
             module.module,
             action_name,
             f"flag '{flag_name}' value must not contain host paths",
         )
+
+
+def _is_disallowed_flag_value(module: ModuleSpec, value: str) -> bool:
+    """Return whether a static flag value violates source-derived path policy.
+
+    Args:
+        module: Parent module specification.
+        value: Literal argv value associated with a DSL flag.
+
+    Returns:
+        True when the value violates the static path policy for the module
+        provenance.
+    """
+
+    if module.provenance is SpecProvenance.EXTENSION:
+        return _is_disallowed_extension_static_value(value)
+
+    return _looks_like_host_path_literal(value)
 
 
 def _validate_identifier(
