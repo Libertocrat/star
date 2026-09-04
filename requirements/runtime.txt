@@ -22,3 +22,6 @@ prometheus-client==0.24.1
 
 ## HTTP client
 httpx==0.28.1
+# Starlette's TestClient still imports the alias deprecated by AnyIO 4.15. Pin
+# the last compatible release until Starlette adopts `anyio.from_thread.BlockingPortal`.
+anyio==4.14.2
