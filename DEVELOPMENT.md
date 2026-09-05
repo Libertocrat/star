@@ -316,12 +316,14 @@ In STAR, new action behavior is defined through YAML specs and then compiled int
 The normal workflow is:
 
 1. Add or update a module spec under `src/star/actions/specs`.
-2. Let the loader, validator, and builder compile it into the runtime registry during application startup.
+2. Let the loader, validator, policy enforcer, and builder compile it into the runtime registry during application startup.
 3. Inspect the public contract through `GET /v1/actions` or `GET /v1/actions/{action_id}`.
 4. Execute it through `POST /v1/actions/{action_id}` with a `params` payload and optional request-level execution options such as `stdout_as_file`.
 5. Use `/v1/files` when the action consumes uploaded files or returns managed file outputs.
 
 This is important when reasoning about STAR locally: an action is a controlled command template with a fixed contract, not an arbitrary shell command accepted from the API.
+
+Modules shipped under `src/star/actions/specs` are loader-derived `CORE` modules. Modules mounted through the deployment `user-specs/` directory are `EXTENSION` modules: they must declare reviewed capabilities, remain within the enabled `STAR_ENABLED_EXTENSION_CAPABILITIES` selection, and match the exact invocation policy of each binary. The current extension catalog does not apply to `CORE`; a future iteration will define a separate policy for built-in modules rather than treat the extension catalog as their authority.
 
 When an action needs a sensitive string such as a passphrase, declare the arg as `type: secret` instead of `type: string`. Clients still send the value as a JSON string in `params`, but the action spec must choose one of STAR's supported delivery modes with `delivery.type: stdin` or `delivery.type: file`. STAR then prevents the raw secret value from being rendered into argv, public validation details, logs, or sanitized subprocess output. For file delivery, `- arg: password` expands to an invocation-owned temporary file path, and command literals may use placeholders such as `file:{password}` when a binary needs command-specific syntax.
 

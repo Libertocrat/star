@@ -12,7 +12,7 @@ from .core import (
 )
 from .presentation import ActionPublicSpec, ActionSummary, ModuleSummary
 from .runtime import ActionExecutionOutput, ActionExecutionResult, RenderedAction
-from .security import BinaryPolicy
+from .security import BinaryPolicy, EffectiveCatalogPolicy
 
 __all__ = [
     "ActionSpec",
@@ -30,4 +30,5 @@ __all__ = [
     "ActionExecutionOutput",
     "RenderedAction",
     "BinaryPolicy",
+    "EffectiveCatalogPolicy",
 ]

@@ -5,6 +5,7 @@ from pprint import pprint
 
 from star.actions.build_engine.builder import build_actions
 from star.actions.build_engine.loader import load_module_specs
+from star.actions.build_engine.policy_enforcer import enforce_build_policies
 from star.actions.build_engine.validator import validate_modules
 from star.core.config import Settings
 
@@ -50,7 +51,10 @@ def main() -> None:
         print("Module validation failed")
 
     try:
-        compiled_actions = build_actions(modules, settings)
+        compiled_actions = build_actions(
+            modules,
+            enforce_build_policies(modules, settings),
+        )
         print("\n=== COMPILED ACTIONS ===\n")
         for action_name, action_spec in compiled_actions.items():
             print(f"Action: {action_name}")

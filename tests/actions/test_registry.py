@@ -14,7 +14,11 @@ import pytest
 
 import star.actions.build_engine.loader as loader_module
 import star.actions.registry as registry_module
-from star.actions.exceptions import ActionNotFoundError, ActionSpecsParseError
+from star.actions.exceptions import (
+    ActionNotFoundError,
+    ActionSpecsParseError,
+    ActionSpecsPolicyError,
+)
 from star.actions.models import ActionSpec, ParamType
 from star.actions.registry import ActionRegistry, build_registry_from_specs
 from star.core.config import Settings
@@ -145,6 +149,48 @@ actions:
     monkeypatch.setattr(loader_module, "EXTENSION_SPECS_DIR", specs_dir)
 
     with pytest.raises(ActionSpecsParseError, match="host paths"):
+        build_registry_from_specs(settings)
+
+
+def test_build_registry_from_specs_rejects_extension_without_capabilities(
+    tmp_path,
+    monkeypatch,
+):
+    """
+    GIVEN a mounted extension that uses a reviewed binary without capabilities
+    WHEN the runtime registry is built
+    THEN startup rejects it before an executable action can be published
+    """
+    specs_dir = tmp_path / "extensions"
+    specs_dir.mkdir(parents=True, exist_ok=True)
+    (specs_dir / "sample.yml").write_text(
+        """
+version: 1
+module: sample
+description: "Unapproved extension module"
+binaries:
+  - file
+
+actions:
+  inspect:
+    description: "Inspect a managed file"
+    summary: "Inspect"
+    args:
+      input_file:
+        type: file_id
+        description: "Managed input file"
+        required: true
+    command:
+      - binary: file
+      - arg: input_file
+""".strip(),
+        encoding="utf-8",
+    )
+    settings = Settings.model_validate({"star_root_dir": str(tmp_path)})
+    monkeypatch.setattr(registry_module, "SPEC_DIRS", (specs_dir,))
+    monkeypatch.setattr(loader_module, "EXTENSION_SPECS_DIR", specs_dir)
+
+    with pytest.raises(ActionSpecsPolicyError, match="must declare capabilities"):
         build_registry_from_specs(settings)
 
 

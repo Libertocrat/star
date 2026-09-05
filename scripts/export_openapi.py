@@ -85,6 +85,7 @@ def build_docs_settings() -> Settings:
         star_rate_limit_rps=5,
         star_enable_security_headers=True,
         star_blocked_binaries_extra=None,
+        star_enabled_extension_capabilities="all",
     )
 
 

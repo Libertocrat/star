@@ -12,6 +12,10 @@ class ActionSpecsParseError(Exception):
     """
 
 
+class ActionSpecsPolicyError(ActionSpecsParseError):
+    """Raised when a DSL module violates STAR execution policy."""
+
+
 class ActionSpecsBuildError(Exception):
     """Raised when validated DSL specs cannot be compiled into `ActionSpec`."""
 

@@ -35,26 +35,27 @@ from star.actions.models.core import (
     ParamType,
     SecretDelivery,
 )
+from star.actions.models.security import EffectiveCatalogPolicy
 from star.actions.schemas.action import ActionSpecInput
 from star.actions.schemas.dsl import ArgCmd as SchemaArgCmd
 from star.actions.schemas.dsl import BinaryCmd as SchemaBinaryCmd
 from star.actions.schemas.dsl import FlagCmd as SchemaFlagCmd
 from star.actions.schemas.dsl import OutputCmd as SchemaOutputCmd
 from star.actions.schemas.module import ModuleSpec
-from star.actions.security.policy import build_binary_policy, is_binary_allowed
-from star.core.config import Settings
+from star.actions.security.policy import is_binary_allowed
 
 logger = logging.getLogger("star.actions.build_engine.builder")
 
 
 def build_actions(
     modules: list[ModuleSpec],
-    settings: Settings,
+    catalog_policy: EffectiveCatalogPolicy,
 ) -> dict[str, ActionSpec]:
     """Compile validated modules into a flat runtime action mapping.
 
     Args:
         modules: Validated STAR DSL modules.
+        catalog_policy: Build-time effective binary policy for every action.
 
     Returns:
         Flat dictionary keyed by the final runtime action name, including any
@@ -84,7 +85,7 @@ def build_actions(
                     module,
                     action_name,
                     action,
-                    settings,
+                    catalog_policy,
                 )
             except ActionSpecsBuildError:
                 raise
@@ -105,7 +106,7 @@ def _build_action(
     module: ModuleSpec,
     action_name: str,
     action: ActionSpecInput,
-    settings: Settings,
+    catalog_policy: EffectiveCatalogPolicy,
 ) -> ActionSpec:
     """Compile one validated DSL action into a runtime `ActionSpec`.
 
@@ -113,6 +114,7 @@ def _build_action(
         module: Parent validated module.
         action_name: Action name inside the module.
         action: Validated action definition.
+        catalog_policy: Build-time effective binary policy for every action.
 
     Returns:
         Immutable runtime `ActionSpec`.
@@ -130,7 +132,12 @@ def _build_action(
         defaults = _build_defaults(arg_defs, flag_defs)
         command_template = _build_command_template(action)
         binary = _extract_primary_binary(command_template)
-        execution_policy = build_binary_policy(tuple(module.binaries), settings)
+        try:
+            execution_policy = catalog_policy.for_action(action_fqdn)
+        except KeyError as exc:
+            raise ActionSpecsBuildError(
+                f"Failed to build action '{action_fqdn}': missing effective policy"
+            ) from exc
         if not is_binary_allowed(binary, execution_policy):
             raise ActionSpecsBuildError(
                 f"Failed to build action '{action_fqdn}': binary '{binary}' "

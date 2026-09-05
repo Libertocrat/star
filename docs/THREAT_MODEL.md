@@ -24,9 +24,9 @@ STAR uses defense in depth through these mechanisms:
 - bearer token authentication enforced by `AuthMiddleware`
 - API token loading from the Docker secret `/run/secrets/star_api_token`
 - request structure validation in `RequestIntegrityMiddleware`
-- strict startup validation of DSL YAML spec files
+- strict startup validation of DSL YAML spec files, including loader-derived extension provenance
 - sensitive DSL params that are kept out of rendered argv
-- build-time and runtime binary policy checks
+- build-time capability and exact invocation-policy checks for mounted extension modules, plus runtime binary policy checks
 - managed file storage rooted at `STAR_ROOT_DIR`
 - sandbox path enforcement in low-level filesystem helpers
 - optional baseline response security headers
