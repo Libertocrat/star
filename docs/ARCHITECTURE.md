@@ -208,10 +208,23 @@ At startup, `build_registry_from_specs()` performs the following steps:
 1. `load_module_specs()` discovers YAML-based Action DSL specifications from the configured spec directories and assigns private source-derived provenance: `CORE` for modules shipped as part of STAR core and `EXTENSION` for modules mounted under `/etc/star/actions.d`. Mounted modules retain the stable public `user.*` namespace.
 2. Loader safety checks reject invalid file sizes, invalid extensions, NUL bytes, disallowed control characters, and dangerous YAML patterns.
 3. `validate_modules()` enforces semantic DSL rules such as module uniqueness, supported DSL version, binary declarations, identifier format, action structure, and source-derived static-value path policy.
-4. `build_actions()` compiles validated modules into immutable runtime `ActionSpec` objects with generated `params_model` classes, command templates, defaults, output declarations, stdout file policy, and binary execution policy.
-5. `ActionRegistry` stores the final action mapping and precomputes presentation summaries.
+4. `enforce_build_policies()` applies STAR-owned policy that is deliberately separate from DSL syntax. For `EXTENSION` modules it requires reviewed capabilities, verifies that each requested capability is operator-enabled, limits binaries to the reviewed catalog, and proves each command matches that binary's exact invocation grammar. `CORE` does not yet participate in this extension-specific catalog and retains its established binary controls until a dedicated core policy is designed.
+5. `build_actions()` compiles validated and policy-approved modules into immutable runtime `ActionSpec` objects with generated `params_model` classes, command templates, defaults, output declarations, stdout file policy, and effective binary execution policy.
+6. `ActionRegistry` stores the final action mapping and precomputes presentation summaries.
 
 This is the allowlist boundary. If a spec is invalid, the registry is not built and the application fails to start.
+
+### Extension capability policy
+
+The policy enforcer owns the reviewed extension catalog; its capabilities and invocation forms are not DSL-defined and are not part of the public API or OpenAPI contract. A mounted module asks for one or more capabilities in its module YAML, but that declaration grants nothing by itself. Startup admits it only when every requested capability is operator-enabled and every declared binary and command form is covered by the immutable catalog.
+
+| Capability | Reviewed binaries | Enforced command shape |
+| --- | --- | --- |
+| `file-inspection` | `file`, `head`, `tail`, `wc` | Explicit non-mutating inspection options and managed `file_id` operands; `head` and `tail` require bounded line counts, while `wc` requires a reviewed count selector. |
+| `text-search` | `grep` | Exact non-mutating search options, required `-e` or `--regexp`, a bounded string pattern, and one managed `file_id` operand. |
+| `checksum` | `sha256sum` | No options and one to 32 managed `file_id` operands. |
+
+The catalog supports overlapping capability grants even where the initial profiles do not need one. It rejects `--`, inline option values, short-option clusters, unrecognized options, raw path operands, unbounded numeric or string argument domains, and command shapes not explicitly represented by a reviewed form. These checks apply only to `EXTENSION` modules; `CORE` modules retain their established behavior until a dedicated core policy is designed.
 
 ### Runtime execution path
 
@@ -224,13 +237,16 @@ This is the allowlist boundary. If a spec is invalid, the registry is not built 
 5. Re-check binary policy and execute the argv with `asyncio.create_subprocess_exec()` in `execute_command()`, using the configured runtime timeout and POSIX process-group cleanup where supported.
 6. Process stdout and stderr through the output pipeline, including sanitization, declared command-output handling, and optional `stdout_file` materialization from sanitized stdout.
 
+The current runtime re-check remains the existing binary policy. A later policy phase will carry typed rendered argv tokens into a final invocation-policy revalidation immediately before execution; it is intentionally separate so this build-time layer remains small and auditable.
+
 ```mermaid
 flowchart LR
 
 subgraph BuildTime["Build-Time Pipeline"]
     Specs["Action DSL Specs"] --> Loader
     Loader --> Validator
-    Validator --> Builder
+    Validator --> PolicyEnforcer["Policy Enforcer"]
+    PolicyEnforcer --> Builder
     Builder --> Registry["Action Registry"]
     Registry --> Presentation["Presentation Layer"]
 end
@@ -358,6 +374,7 @@ Validated runtime controls include:
 - `STAR_METRICS_REQUIRE_AUTH`
 - `STAR_ENABLE_SECURITY_HEADERS`
 - `STAR_BLOCKED_BINARIES_EXTRA`
+- `STAR_ENABLED_EXTENSION_CAPABILITIES`
 
 ### API token loading
 

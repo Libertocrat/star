@@ -130,6 +130,8 @@ class Settings(BaseSettings):
         star_enable_security_headers: Enable baseline response security headers.
         star_blocked_binaries_extra: Optional CSV string with extra blocked
             binaries merged into the default blocklist.
+        star_enabled_extension_capabilities: Operator selection of reviewed
+            capabilities available to mounted DSL extensions.
     """
 
     # Loaded from Docker secret in `get_settings`, not from environment.
@@ -148,6 +150,7 @@ class Settings(BaseSettings):
     star_metrics_require_auth: bool = Field(True)
     star_enable_security_headers: bool = Field(True)
     star_blocked_binaries_extra: str | None = Field(None)
+    star_enabled_extension_capabilities: str = Field("all")
 
     model_config = {
         "env_file": ".env",
@@ -228,6 +231,44 @@ class Settings(BaseSettings):
                 )
 
         return s
+
+    @field_validator("star_enabled_extension_capabilities", mode="before")
+    def _validate_enabled_extension_capabilities(cls, v):
+        """Validate and canonicalize extension capability selection syntax."""
+
+        if v is None:
+            raise ValueError("enabled extension capabilities must not be empty")
+
+        raw = str(v).strip()
+        if raw in {"all", "none"}:
+            return raw
+
+        if raw == "":
+            raise ValueError("enabled extension capabilities must not be empty")
+
+        values = list(parse_csv(raw))
+        raw_values = [item.strip() for item in raw.split(",")]
+        if len(values) != len(raw_values):
+            raise ValueError(
+                "enabled extension capabilities must not contain empty CSV entries"
+            )
+
+        if any(not re.fullmatch(r"[a-z][a-z0-9-]*", value) for value in values):
+            raise ValueError(
+                "enabled extension capabilities must use lowercase kebab-case names"
+            )
+
+        if len(values) != len(set(values)):
+            raise ValueError(
+                "enabled extension capabilities must not contain duplicates"
+            )
+
+        if "all" in values or "none" in values:
+            raise ValueError(
+                "enabled extension capabilities cannot mix all or none with names"
+            )
+
+        return ",".join(values)
 
 
 def abort_config(message: str) -> NoReturn:

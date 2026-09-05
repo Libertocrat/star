@@ -22,6 +22,7 @@ class ModuleSpec(BaseModel):
         description: Human-readable module description.
         authors: Optional module authors list.
         tags: Optional module tags as a YAML list.
+        capabilities: Optional advisory or requested execution capabilities.
         binaries: Allowed binaries for actions in this module.
         actions: Mapping of action name to action definitions.
     """
@@ -37,6 +38,7 @@ class ModuleSpec(BaseModel):
 
     authors: Optional[List[str]] = None
     tags: Optional[List[str]] = None
+    capabilities: Optional[List[str]] = None
 
     binaries: List[str]
 

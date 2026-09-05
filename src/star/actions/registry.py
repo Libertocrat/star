@@ -6,6 +6,7 @@ from collections.abc import Mapping
 
 from star.actions.build_engine.builder import build_actions
 from star.actions.build_engine.loader import load_module_specs
+from star.actions.build_engine.policy_enforcer import enforce_build_policies
 from star.actions.build_engine.validator import validate_modules
 from star.actions.engine_config import SPEC_DIRS
 from star.actions.exceptions import ActionNotFoundError
@@ -69,5 +70,6 @@ def build_registry_from_specs(
     resolved_settings = settings or get_settings()
     modules = load_module_specs(list(SPEC_DIRS), resolved_settings)
     validate_modules(modules)
-    actions = build_actions(modules, resolved_settings)
+    catalog_policy = enforce_build_policies(modules, resolved_settings)
+    actions = build_actions(modules, catalog_policy)
     return ActionRegistry(actions, modules)

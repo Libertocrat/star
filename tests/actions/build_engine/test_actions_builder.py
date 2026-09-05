@@ -13,7 +13,8 @@ from uuid import uuid4
 import pytest
 from pydantic import UUID4, SecretStr, ValidationError
 
-from star.actions.build_engine.builder import build_actions
+from star.actions.build_engine.builder import build_actions as compile_actions
+from star.actions.build_engine.policy_enforcer import enforce_build_policies
 from star.actions.exceptions import ActionSpecsBuildError
 from star.actions.models import ActionSpec, ParamType, SpecProvenance
 from star.core.config import Settings
@@ -44,6 +45,19 @@ def _test_settings(
     )
 
 
+def _build_actions(
+    modules,
+    settings: Settings | None = None,
+):
+    """Build actions through the explicit build-time policy boundary."""
+
+    resolved_settings = settings if settings is not None else _test_settings()
+    return compile_actions(
+        modules,
+        enforce_build_policies(modules, resolved_settings),
+    )
+
+
 # ============================================================================
 # build_actions: happy path
 # ============================================================================
@@ -57,7 +71,7 @@ def test_build_actions_returns_dict(make_valid_module):
     """
     module = make_valid_module()
 
-    result = build_actions([module], _test_settings())
+    result = _build_actions([module], _test_settings())
 
     assert isinstance(result, dict)
     assert all(isinstance(key, str) for key in result)
@@ -85,7 +99,7 @@ def test_action_names_are_namespaced(
     )
     module.with_runtime_identity(("file",), SpecProvenance.CORE)
 
-    result = build_actions([module], _test_settings())
+    result = _build_actions([module], _test_settings())
 
     assert "file.random_gen.token_hex" in result
 
@@ -105,7 +119,7 @@ def test_build_actions_uses_module_action_for_empty_namespace(
         make_module_payload(module_name="test_module", actions={"ping": action})
     )
 
-    result = build_actions([module], _test_settings())
+    result = _build_actions([module], _test_settings())
 
     assert "test_module.ping" in result
 
@@ -127,7 +141,7 @@ def test_build_actions_includes_core_directory_namespace(
     )
     module.with_runtime_identity(("file",), SpecProvenance.CORE)
 
-    result = build_actions([module], _test_settings())
+    result = _build_actions([module], _test_settings())
 
     assert "file.crypto.encrypt_file" in result
 
@@ -142,14 +156,26 @@ def test_build_actions_includes_user_namespace_prefix(
     WHEN build_actions is called
     THEN the final action key starts with user
     """
-    module = make_module_spec(
-        make_module_payload(
-            module_name="my_module", actions={"some_action": make_action_spec_input()}
-        )
+    action = make_action_spec_input(
+        args={
+            "input_file": {
+                "type": "file_id",
+                "required": True,
+                "description": "Managed input file",
+            }
+        },
+        command=[{"binary": "file"}, {"arg": "input_file"}],
     )
+    payload = make_module_payload(
+        module_name="my_module",
+        binaries=["file"],
+        actions={"some_action": action},
+    )
+    payload["capabilities"] = ["file-inspection"]
+    module = make_module_spec(payload)
     module.with_runtime_identity(("user", "custom"), SpecProvenance.EXTENSION)
 
-    result = build_actions([module], _test_settings())
+    result = _build_actions([module], _test_settings())
 
     assert "user.custom.my_module.some_action" in result
 
@@ -171,7 +197,7 @@ def test_build_actions_sets_action_spec_namespace(
     )
     module.with_runtime_identity(("file", "crypto"), SpecProvenance.CORE)
 
-    spec = build_actions([module], _test_settings())["file.crypto.crypto.encrypt_file"]
+    spec = _build_actions([module], _test_settings())["file.crypto.crypto.encrypt_file"]
 
     assert spec.namespace == ("file", "crypto")
 
@@ -214,7 +240,7 @@ def test_command_template_structure(
     )
     module = make_module_spec(make_module_payload(actions={"test_action": action}))
 
-    spec = build_actions([module], _test_settings())["test_module.test_action"]
+    spec = _build_actions([module], _test_settings())["test_module.test_action"]
 
     assert isinstance(spec.command_template, tuple)
     assert spec.command_template == (
@@ -237,7 +263,7 @@ def test_command_template_normalizes_literal_as_const_token(
     action = make_action_spec_input(command=[{"binary": "echo"}, "-hex"])
     module = make_module_spec(make_module_payload(actions={"test_action": action}))
 
-    spec = build_actions([module], _test_settings())["test_module.test_action"]
+    spec = _build_actions([module], _test_settings())["test_module.test_action"]
 
     assert spec.command_template[1] == {"kind": "const", "value": "-hex"}
 
@@ -264,7 +290,7 @@ def test_command_template_normalizes_output_token(
     )
     module = make_module_spec(make_module_payload(actions={"test_action": action}))
 
-    spec = build_actions([module], _test_settings())["test_module.test_action"]
+    spec = _build_actions([module], _test_settings())["test_module.test_action"]
 
     assert spec.command_template[1] == {"kind": "output", "name": "out_file"}
 
@@ -291,7 +317,7 @@ def test_build_actions_compiles_output_definitions(
     )
     module = make_module_spec(make_module_payload(actions={"test_action": action}))
 
-    spec = build_actions([module], _test_settings())["test_module.test_action"]
+    spec = _build_actions([module], _test_settings())["test_module.test_action"]
 
     assert set(spec.outputs.keys()) == {"cmd_file"}
     assert spec.outputs["cmd_file"].type.value == "file"
@@ -313,7 +339,7 @@ def test_build_action_defaults_allow_stdout_as_file_to_true(
     action = make_action_spec_input(command=[{"binary": "echo"}, "ok"])
     module = make_module_spec(make_module_payload(actions={"test_action": action}))
 
-    spec = build_actions([module], _test_settings())["test_module.test_action"]
+    spec = _build_actions([module], _test_settings())["test_module.test_action"]
 
     assert spec.allow_stdout_as_file is True
 
@@ -335,7 +361,7 @@ def test_build_action_preserves_allow_stdout_as_file_false(
     )
     module = make_module_spec(make_module_payload(actions={"test_action": action}))
 
-    spec = build_actions([module], _test_settings())["test_module.test_action"]
+    spec = _build_actions([module], _test_settings())["test_module.test_action"]
 
     assert spec.allow_stdout_as_file is False
 
@@ -360,7 +386,7 @@ def test_binary_extracted_from_command(
         make_module_payload(binaries=["openssl"], actions={"token_hex": action})
     )
 
-    spec = build_actions([module], _test_settings())["test_module.token_hex"]
+    spec = _build_actions([module], _test_settings())["test_module.token_hex"]
 
     assert spec.binary == "openssl"
 
@@ -394,7 +420,7 @@ def test_arg_defs_compiled_correctly(
     )
     module = make_module_spec(make_module_payload(actions={"token_hex": action}))
 
-    spec = build_actions([module], _test_settings())["test_module.token_hex"]
+    spec = _build_actions([module], _test_settings())["test_module.token_hex"]
     arg_def = spec.arg_defs["bytes"]
 
     assert arg_def.type == ParamType.INT
@@ -427,7 +453,7 @@ def test_arg_defs_compile_secret_delivery(
     )
     module = make_module_spec(make_module_payload(actions={"encrypt": action}))
 
-    spec = build_actions([module], _test_settings())["test_module.encrypt"]
+    spec = _build_actions([module], _test_settings())["test_module.encrypt"]
     arg_def = spec.arg_defs["password"]
 
     assert arg_def.type == ParamType.SECRET
@@ -462,7 +488,7 @@ def test_arg_defs_compile_secret_file_delivery(
     )
     module = make_module_spec(make_module_payload(actions={"encrypt": action}))
 
-    spec = build_actions([module], _test_settings())["test_module.encrypt"]
+    spec = _build_actions([module], _test_settings())["test_module.encrypt"]
     arg_def = spec.arg_defs["password"]
 
     assert arg_def.type == ParamType.SECRET
@@ -499,7 +525,7 @@ def test_flag_defs_compiled_correctly(
     )
     module = make_module_spec(make_module_payload(actions={"test_action": action}))
 
-    spec = build_actions([module], _test_settings())["test_module.test_action"]
+    spec = _build_actions([module], _test_settings())["test_module.test_action"]
     flag_def = spec.flag_defs["verbose"]
 
     assert flag_def.value == "-v"
@@ -551,7 +577,7 @@ def test_defaults_include_optional_args_and_flags(
     )
     module = make_module_spec(make_module_payload(actions={"test_action": action}))
 
-    spec = build_actions([module], _test_settings())["test_module.test_action"]
+    spec = _build_actions([module], _test_settings())["test_module.test_action"]
 
     assert spec.defaults == {"optional_arg": 10, "verbose": True}
 
@@ -601,7 +627,7 @@ def test_params_model_fields(
     )
     module = make_module_spec(make_module_payload(actions={"test_action": action}))
 
-    model = build_actions([module], _test_settings())[
+    model = _build_actions([module], _test_settings())[
         "test_module.test_action"
     ].params_model
 
@@ -650,7 +676,7 @@ def test_params_model_required_behavior(
         ],
     )
     module = make_module_spec(make_module_payload(actions={"test_action": action}))
-    model = build_actions([module], _test_settings())[
+    model = _build_actions([module], _test_settings())[
         "test_module.test_action"
     ].params_model
 
@@ -684,7 +710,7 @@ def test_params_model_uses_secretstr_for_secret_args(
         command=[{"binary": "echo"}],
     )
     module = make_module_spec(make_module_payload(actions={"encrypt": action}))
-    model = build_actions([module], _test_settings())[
+    model = _build_actions([module], _test_settings())[
         "test_module.encrypt"
     ].params_model
 
@@ -722,7 +748,7 @@ def test_file_id_validates_uuid4(
         command=[{"binary": "echo"}, {"arg": "file"}],
     )
     module = make_module_spec(make_module_payload(actions={"test_action": action}))
-    model = build_actions([module], _test_settings())[
+    model = _build_actions([module], _test_settings())[
         "test_module.test_action"
     ].params_model
 
@@ -756,7 +782,7 @@ def test_builder_list_string_annotation(
     )
     module = make_module_spec(make_module_payload(actions={"test_action": action}))
 
-    spec = build_actions([module], _test_settings())["test_module.test_action"]
+    spec = _build_actions([module], _test_settings())["test_module.test_action"]
 
     assert spec.params_model.model_fields["files"].annotation == list[str]
     assert spec.arg_defs["files"].items == ParamType.STRING
@@ -785,7 +811,7 @@ def test_builder_list_file_id_annotation(
     )
     module = make_module_spec(make_module_payload(actions={"test_action": action}))
 
-    spec = build_actions([module], _test_settings())["test_module.test_action"]
+    spec = _build_actions([module], _test_settings())["test_module.test_action"]
 
     assert spec.params_model.model_fields["files"].annotation == list[UUID4]
     assert spec.arg_defs["files"].items == ParamType.FILE_ID
@@ -813,7 +839,7 @@ def test_builder_forces_list_required_true_when_omitted(
     )
     module = make_module_spec(make_module_payload(actions={"test_action": action}))
 
-    spec = build_actions([module], _test_settings())["test_module.test_action"]
+    spec = _build_actions([module], _test_settings())["test_module.test_action"]
 
     assert spec.arg_defs["items"].required is True
     assert "items" not in spec.defaults
@@ -844,7 +870,7 @@ def test_params_model_name_generation(
     )
     module.with_runtime_identity(("file",), SpecProvenance.CORE)
 
-    spec = build_actions([module], _test_settings())["file.random_gen.token_hex"]
+    spec = _build_actions([module], _test_settings())["file.random_gen.token_hex"]
 
     assert spec.params_model.__name__ == "FileRandomGenTokenHexParams"
 
@@ -867,7 +893,7 @@ def test_build_actions_normalizes_module_tags(
     payload["tags"] = ["A", "b", "a", "C"]
     module = make_module_spec(payload)
 
-    spec = build_actions([module], _test_settings())["test_module.ping"]
+    spec = _build_actions([module], _test_settings())["test_module.ping"]
 
     assert spec.tags == ("a", "b", "c")
 
@@ -887,7 +913,7 @@ def test_build_actions_merges_module_and_action_tags(
     payload["tags"] = ["crypto", "files", "security"]
     module = make_module_spec(payload)
 
-    spec = build_actions([module], _test_settings())["test_module.encrypt_file"]
+    spec = _build_actions([module], _test_settings())["test_module.encrypt_file"]
 
     assert spec.tags == ("crypto", "files", "security", "aes-256", "encryption")
 
@@ -905,7 +931,7 @@ def test_build_actions_uses_action_tags_without_module_tags(
     action = make_action_spec_input(tags=["aes-256", "encryption"])
     module = make_module_spec(make_module_payload(actions={"encrypt_file": action}))
 
-    spec = build_actions([module], _test_settings())["test_module.encrypt_file"]
+    spec = _build_actions([module], _test_settings())["test_module.encrypt_file"]
 
     assert spec.tags == ("aes-256", "encryption")
 
@@ -928,7 +954,7 @@ def test_authors_normalization(
     payload["authors"] = ["Alice", "Bob"]
     module = make_module_spec(payload)
 
-    spec = build_actions([module], _test_settings())["test_module.ping"]
+    spec = _build_actions([module], _test_settings())["test_module.ping"]
 
     assert spec.authors == ("Alice", "Bob")
 
@@ -957,7 +983,7 @@ def test_duplicate_action_names_raise_error(
     )
 
     with pytest.raises(ActionSpecsBuildError, match="duplicate fully qualified"):
-        build_actions([first, second], _test_settings())
+        _build_actions([first, second], _test_settings())
 
 
 def test_build_actions_rejects_duplicate_final_action_fqdn(
@@ -982,7 +1008,7 @@ def test_build_actions_rejects_duplicate_final_action_fqdn(
         ActionSpecsBuildError,
         match="duplicate fully qualified action name",
     ):
-        build_actions([first, second], _test_settings())
+        _build_actions([first, second], _test_settings())
 
 
 def test_build_actions_allows_same_module_action_in_different_namespaces(
@@ -1004,7 +1030,7 @@ def test_build_actions_allows_same_module_action_in_different_namespaces(
         make_module_payload(module_name="crypto", actions={"encrypt_file": action})
     ).with_runtime_identity(("security",), SpecProvenance.CORE)
 
-    result = build_actions([first, second], _test_settings())
+    result = _build_actions([first, second], _test_settings())
 
     assert "file.crypto.encrypt_file" in result
     assert "security.crypto.encrypt_file" in result
@@ -1038,7 +1064,7 @@ def test_missing_binary_raises_error(
     module = make_module_spec(make_module_payload(actions={"test_action": action}))
 
     with pytest.raises(ActionSpecsBuildError, match="no binary token found"):
-        build_actions([module], _test_settings())
+        _build_actions([module], _test_settings())
 
 
 def test_invalid_command_element_raises_error(make_valid_module):
@@ -1051,7 +1077,7 @@ def test_invalid_command_element_raises_error(make_valid_module):
     module.actions["ping"].command = [123]
 
     with pytest.raises(ActionSpecsBuildError, match="unsupported type"):
-        build_actions([module], _test_settings())
+        _build_actions([module], _test_settings())
 
 
 # ============================================================================
@@ -1073,7 +1099,7 @@ def test_input_not_mutated(
     module = make_module_spec(make_module_payload(actions={"test_action": action}))
     before = module.model_dump(mode="python")
 
-    _ = build_actions([module], _test_settings())
+    _ = _build_actions([module], _test_settings())
 
     after = module.model_dump(mode="python")
     assert after == before
@@ -1087,7 +1113,7 @@ def test_build_actions_attaches_execution_policy(make_valid_module):
     """
     module = make_valid_module()
 
-    spec = build_actions([module], _test_settings())["test_module.ping"]
+    spec = _build_actions([module], _test_settings())["test_module.ping"]
 
     assert spec.execution_policy.allowed == ("echo",)
     assert "bash" in spec.execution_policy.blocked
@@ -1101,7 +1127,7 @@ def test_build_actions_merges_blocked_extra(make_valid_module):
     """
     module = make_valid_module()
 
-    spec = build_actions(
+    spec = _build_actions(
         [module],
         _test_settings(blocked_extra="openssl"),
     )["test_module.ping"]
@@ -1120,7 +1146,7 @@ def test_build_actions_fails_when_primary_binary_is_blocked_extra(
     module = make_valid_module()
 
     with pytest.raises(ActionSpecsBuildError, match="is not allowed by effective"):
-        build_actions([module], _test_settings(blocked_extra="echo"))
+        _build_actions([module], _test_settings(blocked_extra="echo"))
 
 
 def test_build_actions_blocklist_wins_module_allowlist(make_valid_module):
@@ -1132,7 +1158,7 @@ def test_build_actions_blocklist_wins_module_allowlist(make_valid_module):
     module = make_valid_module()
 
     with pytest.raises(ActionSpecsBuildError, match="is not allowed by effective"):
-        build_actions(
+        _build_actions(
             [module],
             _test_settings(blocked_extra="echo"),
         )

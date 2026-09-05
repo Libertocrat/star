@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Added conditional `PUT /v1/files/{id}` metadata replacement with strict editable-field validation, full tag-set replacement, and safe `file_name` updates that preserve the stored extension.
+- Added reviewed build-time capabilities and per-binary invocation policy for mounted action extensions, controlled through `STAR_ENABLED_EXTENSION_CAPABILITIES`.
 
 ### Fixed
 

@@ -82,7 +82,7 @@ The test suite is organized under `tests/`.
 | `tests/test_app_smoke.py` | Basic smoke coverage for app creation and `/health`. |
 | `tests/actions/test_dispatcher.py` | Unit tests for runtime dispatch invariants, params validation, and propagated execution errors. |
 | `tests/actions/test_registry.py` | Unit tests for registry build, lookup, membership, and deterministic listing behavior. |
-| `tests/actions/build_engine` | Unit tests for DSL loading, validation, and action compilation. |
+| `tests/actions/build_engine` | Unit tests for DSL loading, semantic validation, extension policy enforcement, and action compilation. |
 | `tests/actions/presentation` | Unit tests for module catalogs, public contracts, and serializers. |
 | `tests/actions/runtime` | Unit tests for execution, rendering, output builders, and sanitization. |
 | `tests/core` | Unit tests for configuration, schemas, security helpers, response helpers, and managed file primitives. |
@@ -108,6 +108,7 @@ Current unit coverage includes:
 - `tests/actions/test_registry.py` for registry construction from specs, namespace handling, lookup, membership, sorted listing, and built-in action contract regressions
 - `tests/actions/build_engine/test_actions_loader.py` for YAML discovery, safety checks, parsing, and module loading
 - `tests/actions/build_engine/test_actions_validator.py` for semantic DSL rules, uniqueness checks, binary constraints, output rules, template validation, and rejection of unsafe secret usage
+- `tests/actions/build_engine/test_actions_policy_enforcer.py` for extension capabilities, operator enablement, reviewed binaries, exact option grammar, bounded patterns, and managed-file operands
 - `tests/actions/build_engine/test_actions_builder.py` for runtime `ActionSpec` compilation, generated params models, defaults, command templates, sensitive delivery metadata, and output definitions
 - `tests/actions/presentation/test_actions_catalog.py` for grouped module discovery and filtering by `q`, `tags`, and `match`
 - `tests/actions/presentation/test_actions_contracts.py` for params contracts, params examples, response contracts, response examples, and public `secret` contract shape

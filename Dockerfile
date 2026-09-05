@@ -10,7 +10,7 @@ ARG STAR_APP_VERSION=0.1.0
 
 ENV PATH="/usr/local/bin:$PATH"
 
-# Install runtime deps (libmagic) and curl for healthcheck
+# Install libmagic plus the reviewed extension capability catalog.
 # Distribution is upgraded to apply security updates and ensure latest bug fixes
 # apt-get cleanup is done in the same layer to minimize image size
 RUN apt-get update \
@@ -18,11 +18,21 @@ RUN apt-get update \
     && apt-get dist-upgrade -y \
     && apt-get install -y --no-install-recommends \
         ca-certificates \
+        coreutils \
         libmagic1 \
         file \
+        grep \
     && apt-get purge -y --auto-remove \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
+
+# Keep the reviewed extension binary catalog explicit and build-verified.
+RUN command -v file \
+    && command -v head \
+    && command -v tail \
+    && command -v wc \
+    && command -v grep \
+    && command -v sha256sum
 
 # Create non-root group/user (deterministic, minimal, hadolint-clean)
 RUN groupadd \

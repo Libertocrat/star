@@ -59,6 +59,7 @@ def test_settings_defaults_applied(minimal_safe_env):
     assert s.star_docs_require_auth is True
     assert s.star_metrics_require_auth is True
     assert s.star_enable_security_headers is True
+    assert s.star_enabled_extension_capabilities == "all"
 
 
 def test_auth_surface_toggles_parse_from_env(minimal_safe_env, monkeypatch):
@@ -268,6 +269,65 @@ def test_blocked_binary_extra_accepts_duplicate_values(minimal_safe_env, monkeyp
     s = Settings.model_validate({})
 
     assert s.star_blocked_binaries_extra == "bash,bash"
+
+
+# ============================================================================
+# Extension Capability Settings
+# ============================================================================
+
+
+@pytest.mark.parametrize(
+    ("configured", "expected"),
+    [
+        ("all", "all"),
+        ("none", "none"),
+        (" file-inspection , text-search ", "file-inspection,text-search"),
+    ],
+    ids=["all", "none", "canonical_csv"],
+)
+def test_enabled_extension_capabilities_accepts_canonical_selection(
+    minimal_safe_env,
+    monkeypatch,
+    configured: str,
+    expected: str,
+):
+    """
+    GIVEN a supported operator capability selection
+    WHEN Settings validates the environment
+    THEN it stores one canonical selection value
+    """
+    monkeypatch.setenv("STAR_ENABLED_EXTENSION_CAPABILITIES", configured)
+
+    settings = Settings.model_validate({})
+
+    assert settings.star_enabled_extension_capabilities == expected
+
+
+@pytest.mark.parametrize(
+    "configured",
+    [
+        "",
+        "file-inspection,,text-search",
+        "file-inspection,file-inspection",
+        "Text-search",
+        "all,text-search",
+    ],
+    ids=["blank", "empty_entry", "duplicate", "uppercase", "mixed_sentinel"],
+)
+def test_enabled_extension_capabilities_rejects_ambiguous_selection(
+    minimal_safe_env,
+    monkeypatch,
+    configured: str,
+):
+    """
+    GIVEN an ambiguous or malformed capability selection
+    WHEN Settings validates the environment
+    THEN startup configuration fails closed
+    """
+    monkeypatch.setenv("STAR_ENABLED_EXTENSION_CAPABILITIES", configured)
+
+    with pytest.raises(ValidationError):
+        Settings.model_validate({})
 
 
 # ============================================================================
