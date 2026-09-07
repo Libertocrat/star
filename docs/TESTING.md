@@ -114,6 +114,7 @@ Current unit coverage includes:
 - `tests/actions/presentation/test_actions_contracts.py` for params contracts, params examples, response contracts, response examples, and public `secret` contract shape
 - `tests/actions/presentation/test_actions_serializers.py` for stable public action and module serialization without leaking internal delivery policy
 - `tests/actions/runtime/test_actions_renderer.py` for runtime argument resolution, const template interpolation, file input resolution, secret stdin/file delivery, and output placeholder creation
+- `tests/actions/runtime/test_actions_policy_verifier.py` for typed token provenance, compiled extension forms, required and exclusive options, bounded runtime values, managed ownership, non-spawn rejection, and invocation cleanup expectations
 - `tests/actions/runtime/test_actions_executor.py` for binary policy checks, subprocess execution, stdin handoff, and timeout behavior
 - `tests/actions/runtime/test_actions_outputs_builder.py` for output payload shaping and file finalization
 - `tests/actions/runtime/test_actions_sanitizer.py` for stdout and stderr truncation, sensitive-prefix path redaction, invocation-secret redaction, and normalization
@@ -194,6 +195,8 @@ In `tests/actions/build_engine` and `tests/actions/runtime`, the current tests v
 - validation of command token structure and template placeholders
 - build-time and runtime rejection of secret values that would render into argv
 - materialization and cleanup of invocation-owned secret temp files
+- compiled extension invocation forms and typed rendered token origins
+- final pre-spawn rejection of corrupted option, value, cardinality, and managed ownership state without subprocess creation
 - runtime rejection of invalid params, forbidden binaries, and bad output declarations
 - redaction of invocation-provided secrets from sanitized subprocess output and allowlisted omission of unsafe public error details, including rejected validation inputs
 

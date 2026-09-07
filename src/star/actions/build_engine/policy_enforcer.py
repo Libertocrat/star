@@ -7,7 +7,14 @@ from typing import NoReturn
 from star.actions.engine_config import CONST_TEMPLATE_PLACEHOLDER_PATTERN
 from star.actions.exceptions import ActionSpecsPolicyError
 from star.actions.models.core import ParamType, SpecProvenance
-from star.actions.models.security import BinaryPolicy, EffectiveCatalogPolicy
+from star.actions.models.security import (
+    BinaryPolicy,
+    CommandTokenSource,
+    CompiledExtensionInvocationPolicy,
+    CompiledTemplateTokenPolicy,
+    EffectiveCatalogPolicy,
+    InvocationTokenRole,
+)
 from star.actions.schemas.action import ActionSpecInput
 from star.actions.schemas.dsl import ArgCmd, BinaryCmd, FlagCmd, OutputCmd
 from star.actions.schemas.module import ModuleSpec
@@ -54,6 +61,7 @@ def enforce_build_policies(
         raise ActionSpecsPolicyError(str(exc)) from exc
 
     policies: dict[str, BinaryPolicy] = {}
+    invocation_policies: dict[str, CompiledExtensionInvocationPolicy] = {}
     for module in modules:
         declared_capabilities = _parse_module_capabilities(module)
         module_policy = _build_module_binary_policy(module, settings)
@@ -66,17 +74,22 @@ def enforce_build_policies(
             )
 
             for action_name, action in module.actions.items():
-                _enforce_extension_action_policy(
-                    module,
-                    action_name,
-                    action,
-                    declared_capabilities,
+                invocation_policies[_action_fqdn(module, action_name)] = (
+                    _enforce_extension_action_policy(
+                        module,
+                        action_name,
+                        action,
+                        declared_capabilities,
+                    )
                 )
 
         for action_name in module.actions:
             policies[_action_fqdn(module, action_name)] = module_policy
 
-    return EffectiveCatalogPolicy(policies)
+    return EffectiveCatalogPolicy(
+        action_policies=policies,
+        extension_invocation_policies=invocation_policies,
+    )
 
 
 def _parse_module_capabilities(
@@ -177,7 +190,7 @@ def _enforce_extension_action_policy(
     action_name: str,
     action: ActionSpecInput,
     declared_capabilities: tuple[ExtensionCapability, ...],
-) -> None:
+) -> CompiledExtensionInvocationPolicy:
     """Require an extension action to match a reviewed binary grammar.
 
     Args:
@@ -204,12 +217,240 @@ def _enforce_extension_action_policy(
     for form in policy.forms:
         try:
             _enforce_invocation_form(module, action_name, action, form)
-            return
+            return _compile_invocation_policy(action, binary, form)
         except _FormMismatch as exc:
             errors.append(str(exc))
 
     detail = errors[0] if errors else "no reviewed invocation form is available"
     _raise_action_error(module, action_name, detail)
+
+
+def _compile_invocation_policy(
+    action: ActionSpecInput,
+    binary: str,
+    form: InvocationForm,
+) -> CompiledExtensionInvocationPolicy:
+    """Compile one already-matched extension invocation form.
+
+    Args:
+        action: Validated action whose command matched the reviewed form.
+        binary: Exact reviewed executable.
+        form: Deterministically selected invocation form.
+
+    Returns:
+        Immutable template-position policy consumed by rendering and runtime.
+    """
+
+    compiled: list[CompiledTemplateTokenPolicy] = [
+        CompiledTemplateTokenPolicy(
+            template_index=0,
+            source=CommandTokenSource.BINARY,
+            role=InvocationTokenRole.BINARY,
+            exact_value=binary,
+        )
+    ]
+    options_by_name = {name: option for option in form.options for name in option.names}
+    reached_positional = False
+    positional_policy = (
+        form.positional_operands[0] if form.positional_operands else None
+    )
+    index = 1
+
+    while index < len(action.command):
+        token = action.command[index]
+        option = _resolve_option_token(token, action, options_by_name)
+        if option is not None and not reached_positional:
+            compiled.append(
+                _compile_template_token(
+                    action,
+                    token,
+                    template_index=index,
+                    role=InvocationTokenRole.OPTION,
+                    exact_value=_option_token_value(token, action),
+                    optional=isinstance(token, FlagCmd),
+                )
+            )
+            if option.value_kind is not None:
+                value_token = action.command[index + 1]
+                compiled.append(
+                    _compile_template_token(
+                        action,
+                        value_token,
+                        template_index=index + 1,
+                        role=_role_for_operand_kind(option.value_kind),
+                        min_value=option.min_value,
+                        max_value=option.max_value,
+                        max_length=option.max_length,
+                    )
+                )
+                index += 2
+                continue
+            index += 1
+            continue
+
+        reached_positional = True
+        if positional_policy is None:
+            raise ActionSpecsPolicyError(
+                "validated extension invocation has unexpected positional operand"
+            )
+        compiled.append(
+            _compile_template_token(
+                action,
+                token,
+                template_index=index,
+                role=_role_for_operand_kind(positional_policy.kind),
+            )
+        )
+        index += 1
+
+    return CompiledExtensionInvocationPolicy(
+        binary=binary,
+        form=form,
+        template_tokens=tuple(compiled),
+    )
+
+
+def _compile_template_token(
+    action: ActionSpecInput,
+    token: object,
+    *,
+    template_index: int,
+    role: InvocationTokenRole,
+    exact_value: str | None = None,
+    optional: bool = False,
+    min_value: int | None = None,
+    max_value: int | None = None,
+    max_length: int | None = None,
+) -> CompiledTemplateTokenPolicy:
+    """Compile the expected origin and cardinality for one template token.
+
+    Args:
+        action: Validated action that owns the token.
+        token: Validated DSL command token.
+        template_index: Zero-based position in the command template.
+        role: Semantic invocation role proven by the selected form.
+        exact_value: Optional exact rendered value required by policy.
+        optional: Whether the template position may render no token.
+        min_value: Optional inclusive numeric lower bound.
+        max_value: Optional inclusive numeric upper bound.
+        max_length: Optional rendered string length bound.
+
+    Returns:
+        Immutable compiled policy for the template position.
+    """
+
+    source, reference, literal = _command_token_identity(token)
+    minimum, maximum = _compiled_token_cardinality(action, token, role)
+    if optional:
+        minimum = 0
+    return CompiledTemplateTokenPolicy(
+        template_index=template_index,
+        source=source,
+        role=role,
+        reference=reference,
+        template_references=(
+            tuple(CONST_TEMPLATE_PLACEHOLDER_PATTERN.findall(token))
+            if isinstance(token, str)
+            else ()
+        ),
+        exact_value=exact_value if exact_value is not None else literal,
+        min_count=minimum,
+        max_count=maximum,
+        min_value=min_value,
+        max_value=max_value,
+        max_length=max_length,
+    )
+
+
+def _command_token_identity(
+    token: object,
+) -> tuple[CommandTokenSource, str | None, str | None]:
+    """Return structural identity for one DSL token.
+
+    Args:
+        token: Validated DSL command token.
+
+    Returns:
+        Structural source, referenced name, and optional exact literal.
+
+    Raises:
+        ActionSpecsPolicyError: If the token type is not supported.
+    """
+
+    if isinstance(token, str):
+        literal = (
+            None
+            if CONST_TEMPLATE_PLACEHOLDER_PATTERN.search(token) is not None
+            else token
+        )
+        return CommandTokenSource.CONST, None, literal
+    if isinstance(token, ArgCmd):
+        return CommandTokenSource.ARG, token.arg, None
+    if isinstance(token, FlagCmd):
+        return CommandTokenSource.FLAG, token.flag, None
+    if isinstance(token, OutputCmd):
+        return CommandTokenSource.OUTPUT, token.output, None
+    if isinstance(token, BinaryCmd):
+        return CommandTokenSource.BINARY, None, token.binary
+    raise ActionSpecsPolicyError("validated extension command has unsupported token")
+
+
+def _option_token_value(token: object, action: ActionSpecInput) -> str:
+    """Return the exact option spelling selected by one command token.
+
+    Args:
+        token: Static or flag-backed option token.
+        action: Action that owns any referenced flag.
+
+    Returns:
+        Exact option spelling selected by the DSL.
+
+    Raises:
+        ActionSpecsPolicyError: If the token cannot represent an option.
+    """
+
+    if isinstance(token, str):
+        return token
+    if isinstance(token, FlagCmd):
+        return (action.flags or {})[token.flag].value
+    raise ActionSpecsPolicyError("validated extension option has unsupported token")
+
+
+def _compiled_token_cardinality(
+    action: ActionSpecInput,
+    token: object,
+    role: InvocationTokenRole,
+) -> tuple[int, int]:
+    """Return render-time cardinality already proven by build validation.
+
+    Args:
+        action: Validated action that owns the token.
+        token: Validated DSL command token.
+        role: Semantic role selected by the invocation form.
+
+    Returns:
+        Minimum and maximum number of rendered argv tokens.
+    """
+
+    if role is InvocationTokenRole.MANAGED_INPUT and isinstance(token, ArgCmd):
+        arg_spec = (action.args or {})[token.arg]
+        if arg_spec.type is ParamType.LIST:
+            constraints = arg_spec.constraints or {}
+            return constraints["min_items"], constraints["max_items"]
+    return (1, 1)
+
+
+def _role_for_operand_kind(kind: OperandKind) -> InvocationTokenRole:
+    """Map a reviewed operand kind to its rendered semantic role.
+
+    Args:
+        kind: Operand kind declared by the binary invocation policy.
+
+    Returns:
+        Equivalent runtime token role.
+    """
+
+    return InvocationTokenRole(kind.value)
 
 
 def _enforce_invocation_form(

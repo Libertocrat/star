@@ -6,7 +6,11 @@ import pytest
 
 from star.actions.build_engine.policy_enforcer import enforce_build_policies
 from star.actions.exceptions import ActionSpecsPolicyError
-from star.actions.models import SpecProvenance
+from star.actions.models import (
+    CommandTokenSource,
+    InvocationTokenRole,
+    SpecProvenance,
+)
 from star.core.config import Settings
 
 
@@ -89,6 +93,16 @@ def test_enforcer_accepts_reviewed_extension_file_inspection_module(
     result = enforce_build_policies([module], _settings())
 
     assert result.for_action("user.extension_module.run").allowed == ("file",)
+    invocation = result.invocation_for_action("user.extension_module.run")
+    assert invocation is not None
+    assert invocation.binary == "file"
+    assert tuple(
+        (token.template_index, token.source, token.role, token.reference)
+        for token in invocation.template_tokens
+    ) == (
+        (0, CommandTokenSource.BINARY, InvocationTokenRole.BINARY, None),
+        (1, CommandTokenSource.ARG, InvocationTokenRole.MANAGED_INPUT, "input_file"),
+    )
 
 
 def test_enforcer_rejects_extension_without_capabilities(
@@ -257,6 +271,7 @@ def test_enforcer_ignores_known_core_capabilities_for_authorization(
     result = enforce_build_policies([module], _settings(capabilities="none"))
 
     assert result.for_action("test_module.run").allowed == ("echo",)
+    assert result.invocation_for_action("test_module.run") is None
 
 
 # ============================================================================

@@ -50,10 +50,10 @@ async def dispatch_action(
     timeout = settings.star_timeout_ms / 1000.0 if settings is not None else None
     try:
         execution = await runtime_executor.execute_command(
-            rendered.argv,
+            rendered,
             action_spec,
             timeout=timeout,
-            stdin_data=rendered.stdin_data,
+            settings=settings,
         )
     except ActionRuntimeExecError:
         cleanup_output_placeholders(rendered.output_files, settings=settings)
