@@ -6,7 +6,10 @@ import unicodedata
 from pathlib import Path
 from typing import NoReturn
 
-from star.actions.exceptions import ActionInvocationPolicyError
+from star.actions.exceptions import (
+    ActionInvocationInputStateError,
+    ActionInvocationIntegrityError,
+)
 from star.actions.models.core import ActionSpec, SpecProvenance
 from star.actions.models.runtime import RenderedAction, RenderedArgvToken
 from star.actions.models.security import (
@@ -17,7 +20,8 @@ from star.actions.runtime.file_manager import resolve_output_blob_path
 from star.core.config import Settings
 from star.core.files import get_blob_path, get_secret_tmp_dir, load_file_metadata
 
-_POLICY_FAILURE = "Rendered extension invocation failed runtime policy verification"
+_INTEGRITY_FAILURE = "Rendered extension invocation failed runtime policy verification"
+_INPUT_STATE_FAILURE = "Managed file input is no longer available."
 
 
 def verify_rendered_invocation(
@@ -34,8 +38,10 @@ def verify_rendered_invocation(
         settings: Explicit runtime settings snapshot used for managed resources.
 
     Raises:
-        ActionInvocationPolicyError: If compiled or rendered policy state is
+        ActionInvocationIntegrityError: If compiled or rendered policy state is
             absent, corrupted, stale, or inconsistent.
+        ActionInvocationInputStateError: If a managed input becomes unavailable
+            between rendering and process creation.
     """
 
     if not rendered.tokens:
@@ -81,7 +87,7 @@ def _verify_compiled_expansions(
         settings: Runtime settings snapshot for managed resources.
 
     Raises:
-        ActionInvocationPolicyError: If expansion order, count, or content does
+        ActionInvocationIntegrityError: If expansion order, count, or content does
             not match the compiled policy.
     """
 
@@ -137,7 +143,7 @@ def _verify_token(
         settings: Runtime settings snapshot for managed resources.
 
     Raises:
-        ActionInvocationPolicyError: If token identity or value is invalid.
+        ActionInvocationIntegrityError: If token identity or value is invalid.
     """
 
     if (
@@ -186,7 +192,7 @@ def _verify_positive_int(
         expected: Compiled numeric bounds.
 
     Raises:
-        ActionInvocationPolicyError: If the value is malformed or out of range.
+        ActionInvocationIntegrityError: If the value is malformed or out of range.
     """
 
     try:
@@ -212,7 +218,7 @@ def _verify_pattern(
         expected: Compiled pattern length policy.
 
     Raises:
-        ActionInvocationPolicyError: If the pattern is unsafe or oversized.
+        ActionInvocationIntegrityError: If the pattern is unsafe or oversized.
     """
 
     if expected.max_length is None or len(value) > expected.max_length:
@@ -233,22 +239,21 @@ def _verify_managed_input(
         settings: Runtime settings snapshot for managed storage.
 
     Raises:
-        ActionInvocationPolicyError: If identity, state, path, or blob presence
-            is inconsistent.
+        ActionInvocationInputStateError: If the input is no longer available.
+        ActionInvocationIntegrityError: If identity or canonical path is
+            inconsistent.
     """
 
     file_id = token.managed_file_id
     if file_id is None:
         _reject()
-    metadata = load_file_metadata(file_id, settings)
     expected_path = get_blob_path(file_id, settings)
-    if (
-        metadata is None
-        or metadata.id != file_id
-        or metadata.status != "ready"
-        or token.value != str(expected_path)
-        or not expected_path.exists()
-    ):
+    if token.value != str(expected_path):
+        _reject()
+    metadata = load_file_metadata(file_id, settings)
+    if metadata is None or metadata.status != "ready" or not expected_path.exists():
+        raise ActionInvocationInputStateError(_INPUT_STATE_FAILURE)
+    if metadata.id != file_id:
         _reject()
 
 
@@ -266,7 +271,7 @@ def _verify_managed_output(
         settings: Runtime settings snapshot for managed storage.
 
     Raises:
-        ActionInvocationPolicyError: If ownership, metadata, or path differs.
+        ActionInvocationIntegrityError: If ownership, metadata, or path differs.
     """
 
     file_id = token.managed_file_id
@@ -299,7 +304,7 @@ def _verify_secret_file(
         settings: Runtime settings snapshot for temporary secret storage.
 
     Raises:
-        ActionInvocationPolicyError: If the path is unowned or unsafe.
+        ActionInvocationIntegrityError: If the path is unowned or unsafe.
     """
 
     if token.managed_file_id is not None:
@@ -323,7 +328,7 @@ def _verify_option_invariants(rendered: RenderedAction, spec: ActionSpec) -> Non
         spec: Compiled extension action specification.
 
     Raises:
-        ActionInvocationPolicyError: If option invariants no longer hold.
+        ActionInvocationIntegrityError: If option invariants no longer hold.
     """
 
     policy = spec.extension_invocation_policy
@@ -359,7 +364,7 @@ def _reject() -> NoReturn:
     """Raise the safe runtime policy failure without sensitive details.
 
     Raises:
-        ActionInvocationPolicyError: Always.
+        ActionInvocationIntegrityError: Always.
     """
 
-    raise ActionInvocationPolicyError(_POLICY_FAILURE)
+    raise ActionInvocationIntegrityError(_INTEGRITY_FAILURE)

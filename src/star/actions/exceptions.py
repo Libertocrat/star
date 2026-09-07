@@ -32,6 +32,10 @@ class ActionInvalidArgError(ActionRuntimeError):
     """Raised when a user-provided runtime parameter is invalid."""
 
 
+class ActionInvocationParamsError(ActionInvalidArgError):
+    """Raised when action parameters violate an extension invocation policy."""
+
+
 class ActionRuntimeRenderError(ActionRuntimeError):
     """Raised when runtime command rendering fails unexpectedly."""
 
@@ -40,8 +44,12 @@ class ActionRuntimeExecError(ActionRuntimeError):
     """Raised when command execution fails at the runtime layer."""
 
 
-class ActionInvocationPolicyError(ActionRuntimeExecError):
-    """Raised when rendered state violates its compiled invocation policy."""
+class ActionInvocationIntegrityError(ActionRuntimeExecError):
+    """Raised when rendered state violates a compiled invocation invariant."""
+
+
+class ActionInvocationInputStateError(ActionRuntimeExecError):
+    """Raised when a rendered managed input is no longer usable before spawn."""
 
 
 class ActionBinaryBlockedError(ActionRuntimeExecError):

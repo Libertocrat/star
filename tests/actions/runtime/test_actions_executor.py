@@ -20,7 +20,7 @@ from star.actions.exceptions import (
     ActionBinaryNotAllowedError,
     ActionBinaryPathForbiddenError,
     ActionExecutionTimeoutError,
-    ActionInvocationPolicyError,
+    ActionInvocationIntegrityError,
     ActionRuntimeExecError,
 )
 from star.actions.models.core import ActionSpec, SpecProvenance
@@ -296,7 +296,7 @@ async def test_execute_command__rejects_binary_mismatch_before_spawn():
     THEN the invocation fails closed as an internal policy violation
     """
 
-    with pytest.raises(ActionInvocationPolicyError):
+    with pytest.raises(ActionInvocationIntegrityError):
         await execute_command(_rendered(["cat"]), _make_spec(binary="echo"))
 
 
@@ -310,7 +310,7 @@ async def test_execute_command__rejects_extension_without_compiled_policy():
 
     spec = replace(_make_spec(), provenance=SpecProvenance.EXTENSION)
 
-    with pytest.raises(ActionInvocationPolicyError):
+    with pytest.raises(ActionInvocationIntegrityError):
         await execute_command(_rendered(["echo"]), spec)
 
 

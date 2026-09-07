@@ -18,7 +18,8 @@ from star.actions.dispatcher import DispatchedActionResult, dispatch_action
 from star.actions.exceptions import (
     ActionBinaryBlockedError,
     ActionExecutionTimeoutError,
-    ActionInvocationPolicyError,
+    ActionInvocationInputStateError,
+    ActionInvocationIntegrityError,
     ActionNotFoundError,
     ActionRuntimeExecError,
 )
@@ -348,11 +349,15 @@ async def test_dispatch_action_cleans_file_secret_after_nonzero_exit(
         (ActionRuntimeExecError("failed"), "failed"),
         (ActionExecutionTimeoutError("timed out"), "timed out"),
         (
-            ActionInvocationPolicyError("runtime policy rejected"),
+            ActionInvocationIntegrityError("runtime policy rejected"),
             "runtime policy rejected",
         ),
+        (
+            ActionInvocationInputStateError("managed input unavailable"),
+            "managed input unavailable",
+        ),
     ],
-    ids=("exec_error", "timeout", "policy_rejection"),
+    ids=("exec_error", "timeout", "integrity_rejection", "input_state"),
 )
 async def test_dispatch_action_cleans_file_secret_after_executor_error(
     monkeypatch,
@@ -591,14 +596,17 @@ async def test_dispatch_action_cleans_placeholders_after_policy_rejection(
         captured["output_files"] = rendered.output_files
         del timeout
         del settings
-        raise ActionInvocationPolicyError("runtime policy rejected")
+        raise ActionInvocationIntegrityError("runtime policy rejected")
 
     monkeypatch.setattr(
         "star.actions.dispatcher.runtime_executor.execute_command",
         _raise_policy_error,
     )
 
-    with pytest.raises(ActionInvocationPolicyError, match="runtime policy rejected"):
+    with pytest.raises(
+        ActionInvocationIntegrityError,
+        match="runtime policy rejected",
+    ):
         await dispatch_action(
             valid_registry,
             "test_runtime.write_output",

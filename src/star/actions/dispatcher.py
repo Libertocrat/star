@@ -11,6 +11,7 @@ from star.actions.models import ActionExecutionResult, ActionSpec, RenderedActio
 from star.actions.registry import ActionRegistry
 from star.actions.runtime import executor as runtime_executor
 from star.actions.runtime.file_manager import cleanup_output_placeholders
+from star.actions.runtime.policy_validator import validate_extension_invocation_params
 from star.actions.runtime.renderer import render_command
 from star.actions.runtime.secret_manager import cleanup_secret_files
 from star.core.config import Settings
@@ -46,6 +47,7 @@ async def dispatch_action(
     action_spec = registry.get(action_name)
     validated = action_spec.params_model.model_validate(params)
     params_dict = validated.model_dump(mode="python")
+    validate_extension_invocation_params(action_spec, params_dict)
     rendered = render_command(action_spec, params_dict, settings=settings)
     timeout = settings.star_timeout_ms / 1000.0 if settings is not None else None
     try:

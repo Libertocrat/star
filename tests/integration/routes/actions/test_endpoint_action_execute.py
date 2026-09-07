@@ -19,6 +19,9 @@ from star.actions.exceptions import (
     ActionBinaryBlockedError,
     ActionBinaryNotAllowedError,
     ActionBinaryPathForbiddenError,
+    ActionInvocationInputStateError,
+    ActionInvocationIntegrityError,
+    ActionInvocationParamsError,
     ActionRuntimeExecError,
 )
 from star.core.errors import StarError
@@ -288,6 +291,129 @@ def test_execute_omits_internal_error_reason_from_runtime_failure(
     assert body["error"]["details"] == {}
     assert "reason" not in body["error"]["details"]
     assert "raw runtime secret detail" not in response.text
+
+
+def test_execute_maps_late_managed_input_state_to_invalid_params(
+    client,
+    auth_headers,
+    valid_registry,
+    monkeypatch,
+):
+    """
+    GIVEN a managed action input becomes unavailable after rendering
+    WHEN the final runtime gate reports the late input-state failure
+    THEN the endpoint returns the stable INVALID_PARAMS envelope
+    """
+
+    client.app.state.action_registry = valid_registry
+
+    async def _raise_input_state_error(*_args, **_kwargs):
+        """Raise a deterministic late managed-input failure."""
+
+        raise ActionInvocationInputStateError(
+            "Managed file input is no longer available."
+        )
+
+    monkeypatch.setattr(
+        "star.routes.actions.handlers.execute_action.dispatch_action",
+        _raise_input_state_error,
+    )
+
+    response = client.post(
+        "/v1/actions/test_runtime.ping",
+        headers=auth_headers,
+        json={"params": {}},
+    )
+    body = response.json()
+
+    assert response.status_code == 400
+    assert body["success"] is False
+    assert body["data"] is None
+    assert body["error"]["code"] == "INVALID_PARAMS"
+    assert body["error"]["details"] == {
+        "reason": "Managed file input is no longer available."
+    }
+
+
+def test_execute_maps_extension_policy_params_to_invalid_params(
+    client,
+    auth_headers,
+    valid_registry,
+    monkeypatch,
+):
+    """
+    GIVEN extension request values fail a compiled invocation requirement
+    WHEN dispatch rejects them before rendering the command
+    THEN the endpoint returns the stable INVALID_PARAMS envelope
+    """
+
+    client.app.state.action_registry = valid_registry
+
+    async def _raise_params_error(*_args, **_kwargs):
+        """Raise a deterministic extension parameter-policy failure."""
+
+        raise ActionInvocationParamsError(
+            "Extension invocation parameters do not satisfy the action policy."
+        )
+
+    monkeypatch.setattr(
+        "star.routes.actions.handlers.execute_action.dispatch_action",
+        _raise_params_error,
+    )
+
+    response = client.post(
+        "/v1/actions/test_runtime.ping",
+        headers=auth_headers,
+        json={"params": {}},
+    )
+    body = response.json()
+
+    assert response.status_code == 400
+    assert body["success"] is False
+    assert body["data"] is None
+    assert body["error"]["code"] == "INVALID_PARAMS"
+    assert body["error"]["details"] == {
+        "reason": "Extension invocation parameters do not satisfy the action policy."
+    }
+
+
+def test_execute_maps_invocation_integrity_to_internal_error(
+    client,
+    auth_headers,
+    valid_registry,
+    monkeypatch,
+):
+    """
+    GIVEN the final invocation verifier detects internal state corruption
+    WHEN the action handler maps the integrity failure
+    THEN it returns a safe INTERNAL_ERROR envelope without its raw reason
+    """
+
+    client.app.state.action_registry = valid_registry
+
+    async def _raise_integrity_error(*_args, **_kwargs):
+        """Raise a deterministic integrity failure with unsafe diagnostics."""
+
+        raise ActionInvocationIntegrityError("unsafe internal argv detail")
+
+    monkeypatch.setattr(
+        "star.routes.actions.handlers.execute_action.dispatch_action",
+        _raise_integrity_error,
+    )
+
+    response = client.post(
+        "/v1/actions/test_runtime.ping",
+        headers=auth_headers,
+        json={"params": {}},
+    )
+    body = response.json()
+
+    assert response.status_code == 500
+    assert body["success"] is False
+    assert body["data"] is None
+    assert body["error"]["code"] == "INTERNAL_ERROR"
+    assert body["error"]["details"] == {}
+    assert "unsafe internal argv detail" not in response.text
 
 
 def test_execute_invalid_param_type_maps_to_invalid_params(

@@ -15,6 +15,7 @@ from star.actions.exceptions import (
     ActionBinaryPathForbiddenError,
     ActionExecutionTimeoutError,
     ActionInvalidArgError,
+    ActionInvocationInputStateError,
     ActionNotFoundError,
     ActionRuntimeExecError,
     ActionRuntimeOutputError,
@@ -164,6 +165,11 @@ async def execute_action_handler(
         ) from exc
     except ActionExecutionTimeoutError as exc:
         raise StarError(TIMEOUT) from exc
+    except ActionInvocationInputStateError as exc:
+        raise StarError(
+            INVALID_PARAMS,
+            details={"reason": str(exc)},
+        ) from exc
     except ActionRuntimeOutputError as exc:
         raise StarError(INTERNAL_ERROR, details={"reason": str(exc)}) from exc
     except ActionRuntimeExecError as exc:
