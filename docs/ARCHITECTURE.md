@@ -232,13 +232,14 @@ The catalog supports overlapping capability grants even where the initial profil
 
 1. Resolve the action from `ActionRegistry`.
 2. Validate request params and execution options, including `stdout_as_file` policy checks.
-3. Render immutable `RenderedArgvToken` values and any internal sensitive delivery payloads with `render_command()`. Each token retains its command-template position, structural origin, extension policy role, DSL reference, and managed UUID where applicable; the plain argv list is only a derived compatibility view.
-4. Resolve `file_id` args and output placeholders through the managed file layer.
-5. Re-check simple-name, blocklist, allowlist, and compiled binary identity policy in `execute_command()`. For `EXTENSION`, the runtime policy verifier also revalidates the exact token origins, option invariants, bounded values, cardinalities, and managed resource ownership immediately before process creation.
-6. Derive a local argv only after policy verification and execute it with `asyncio.create_subprocess_exec()`, using the configured runtime timeout and POSIX process-group cleanup where supported.
-7. Process stdout and stderr through the output pipeline, including sanitization, declared command-output handling, and optional `stdout_file` materialization from sanitized stdout.
+3. For `EXTENSION`, validate request-dependent option requirements against the compiled form before rendering. Missing required options or required-any-of selections are normal `INVALID_PARAMS` failures and acquire no invocation-owned resources.
+4. Render immutable `RenderedArgvToken` values and any internal sensitive delivery payloads with `render_command()`. Each token retains its command-template position, structural origin, extension policy role, DSL reference, and managed UUID where applicable; the plain argv list is only a derived compatibility view.
+5. Resolve `file_id` args and output placeholders through the managed file layer.
+6. Re-check simple-name, blocklist, allowlist, and compiled binary identity policy in `execute_command()`. For `EXTENSION`, the final runtime policy verifier treats inconsistent token origins, option invariants, bounded values, cardinalities, and managed resource ownership as internal integrity failures immediately before process creation. A managed input that becomes unavailable in that final interval is a safe `INVALID_PARAMS` failure.
+7. Derive a local argv only after policy verification and execute it with `asyncio.create_subprocess_exec()`, using the configured runtime timeout and POSIX process-group cleanup where supported.
+8. Process stdout and stderr through the output pipeline, including sanitization, declared command-output handling, and optional `stdout_file` materialization from sanitized stdout.
 
-Runtime verification consumes only immutable policy already compiled into `ActionSpec`; it does not reparse YAML or consult the mutable catalog. A verifier rejection is an internal execution-policy failure, never reaches process creation, and follows the normal dispatcher cleanup path for output placeholders and ephemeral secret files. `CORE` uses the typed render representation and retains the generic binary checks, but its command grammar remains outside this extension-specific verifier until a dedicated core policy is introduced.
+Runtime policy validation and final verification consume only immutable policy already compiled into `ActionSpec`; neither reparses YAML nor consults the mutable catalog. The pre-render validator owns request-dependent extension option conditions and maps them as invalid parameters. The final verifier owns inconsistent compiled or rendered state, never permits process creation after rejection, and follows the normal dispatcher cleanup path for output placeholders and ephemeral secret files. `CORE` uses the typed render representation and retains the generic binary checks, but its command grammar remains outside this extension-specific policy until a dedicated core policy is introduced.
 
 ```mermaid
 flowchart LR

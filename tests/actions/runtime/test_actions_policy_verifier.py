@@ -1,4 +1,4 @@
-"""Tests for final typed extension invocation policy verification."""
+"""Tests for dynamic and final typed extension invocation policy enforcement."""
 
 from __future__ import annotations
 
@@ -12,7 +12,12 @@ from pydantic import BaseModel
 from star.actions.build_engine.builder import build_actions
 from star.actions.build_engine.policy_enforcer import enforce_build_policies
 from star.actions.build_engine.validator import validate_modules
-from star.actions.exceptions import ActionInvocationPolicyError
+from star.actions.dispatcher import dispatch_action
+from star.actions.exceptions import (
+    ActionInvocationInputStateError,
+    ActionInvocationIntegrityError,
+    ActionInvocationParamsError,
+)
 from star.actions.models import (
     ActionSpec,
     ArgDef,
@@ -30,6 +35,7 @@ from star.actions.models import (
     SpecProvenance,
 )
 from star.actions.models.core import SecretDelivery
+from star.actions.registry import ActionRegistry
 from star.actions.runtime import executor as executor_module
 from star.actions.runtime.file_manager import (
     cleanup_output_placeholders,
@@ -37,6 +43,7 @@ from star.actions.runtime.file_manager import (
     create_ready_file_from_bytes,
     resolve_output_blob_path,
 )
+from star.actions.runtime.policy_validator import validate_extension_invocation_params
 from star.actions.runtime.policy_verifier import verify_rendered_invocation
 from star.actions.runtime.renderer import render_command
 from star.actions.runtime.secret_manager import cleanup_secret_files, create_secret_file
@@ -46,6 +53,7 @@ from star.actions.security.binary_policies import (
     OperandPolicy,
 )
 from star.core.config import Settings
+from star.core.files import get_blob_path
 from star.core.schemas.files import FileMetadata
 
 # =============================================================================
@@ -320,7 +328,7 @@ def test_verifier_rejects_corrupted_rendered_extension_state(
 
     for corrupted in corruptions:
         with pytest.raises(
-            ActionInvocationPolicyError,
+            ActionInvocationIntegrityError,
             match="failed runtime policy verification",
         ):
             verify_rendered_invocation(corrupted, spec, settings=settings)
@@ -334,7 +342,7 @@ def test_verifier_rejects_corrupted_rendered_extension_state(
             template_tokens=(policy.template_tokens[0], *policy.template_tokens[2:]),
         ),
     )
-    with pytest.raises(ActionInvocationPolicyError):
+    with pytest.raises(ActionInvocationIntegrityError):
         verify_rendered_invocation(rendered, corrupted_spec, settings=settings)
 
 
@@ -397,7 +405,7 @@ def test_verifier_binds_const_pattern_to_compiled_placeholder_sources(
             *rendered.tokens[3:],
         ),
     )
-    with pytest.raises(ActionInvocationPolicyError):
+    with pytest.raises(ActionInvocationIntegrityError):
         verify_rendered_invocation(corrupted, spec, settings=settings)
 
 
@@ -406,16 +414,82 @@ def test_verifier_binds_const_pattern_to_compiled_placeholder_sources(
 # =============================================================================
 
 
-def test_verifier_rejects_required_option_group_omitted_at_runtime(
+@pytest.mark.asyncio
+async def test_dispatcher_rejects_missing_required_option_group_before_render(
+    make_module_payload,
+    make_module_spec,
+    make_action_spec_input,
+    monkeypatch,
+    tmp_path: Path,
+):
+    """
+    GIVEN a wc extension whose reviewed selector flags are all optional params
+    WHEN a client leaves every selector false
+    THEN dispatch rejects invalid params before command rendering or resource effects
+    """
+
+    settings = _settings(tmp_path)
+    flags = {
+        name: {"value": value, "default": False, "description": name}
+        for name, value in (("lines", "-l"), ("words", "-w"), ("chars", "-m"))
+    }
+    spec = _build_extension_action(
+        make_module_payload,
+        make_module_spec,
+        make_action_spec_input,
+        settings=settings,
+        binary="wc",
+        capability="file-inspection",
+        args={
+            "input_file": {
+                "type": "file_id",
+                "required": True,
+                "description": "Managed input",
+            }
+        },
+        flags=flags,
+        command=[
+            {"binary": "wc"},
+            {"flag": "lines"},
+            {"flag": "words"},
+            {"flag": "chars"},
+            {"arg": "input_file"},
+        ],
+    )
+    metadata = _create_managed_input(settings)
+    registry = ActionRegistry({spec.name: spec}, [])
+    rendered = False
+
+    def _fail_if_rendered(*_args, **_kwargs):
+        """Record an unexpected render attempt after policy rejection."""
+
+        nonlocal rendered
+        rendered = True
+        raise AssertionError("render_command must not be called")
+
+    monkeypatch.setattr("star.actions.dispatcher.render_command", _fail_if_rendered)
+
+    with pytest.raises(ActionInvocationParamsError):
+        await dispatch_action(
+            registry,
+            spec.name,
+            {"input_file": metadata.id},
+            settings=settings,
+        )
+
+    assert rendered is False
+
+
+def test_verifier_treats_bypassed_required_option_group_as_integrity_failure(
     make_module_payload,
     make_module_spec,
     make_action_spec_input,
     tmp_path: Path,
 ):
     """
-    GIVEN a wc extension whose reviewed selector flags are all optional params
-    WHEN all selector flags render as false
-    THEN runtime rejects the missing required-any-of option group
+    GIVEN a wc extension whose dynamic policy validation was bypassed
+    WHEN all selector flags render as false at the final pre-spawn boundary
+    THEN the verifier fails closed as an internal integrity violation
     """
 
     settings = _settings(tmp_path)
@@ -449,7 +523,7 @@ def test_verifier_rejects_required_option_group_omitted_at_runtime(
     metadata = _create_managed_input(settings)
     rendered = render_command(spec, {"input_file": metadata.id}, settings=settings)
 
-    with pytest.raises(ActionInvocationPolicyError):
+    with pytest.raises(ActionInvocationIntegrityError):
         verify_rendered_invocation(rendered, spec, settings=settings)
 
 
@@ -491,6 +565,10 @@ def test_verifier_accepts_all_current_extension_invocation_shapes(
         {"input_file": first.id},
         settings=settings,
     )
+    file_params = file_spec.params_model.model_validate(
+        {"input_file": first.id}
+    ).model_dump(mode="python")
+    validate_extension_invocation_params(file_spec, file_params)
     verify_rendered_invocation(file_rendered, file_spec, settings=settings)
 
     for binary in ("head", "tail"):
@@ -522,6 +600,10 @@ def test_verifier_accepts_all_current_extension_invocation_shapes(
             {"lines": 10, "input_file": first.id},
             settings=settings,
         )
+        line_params = line_spec.params_model.model_validate(
+            {"lines": 10, "input_file": first.id}
+        ).model_dump(mode="python")
+        validate_extension_invocation_params(line_spec, line_params)
         verify_rendered_invocation(line_rendered, line_spec, settings=settings)
         assert line_rendered.tokens[2].role is InvocationTokenRole.POSITIVE_INT
 
@@ -551,6 +633,10 @@ def test_verifier_accepts_all_current_extension_invocation_shapes(
         {"lines": True, "input_file": first.id},
         settings=settings,
     )
+    wc_params = wc_spec.params_model.model_validate(
+        {"lines": True, "input_file": first.id}
+    ).model_dump(mode="python")
+    validate_extension_invocation_params(wc_spec, wc_params)
     verify_rendered_invocation(wc_rendered, wc_spec, settings=settings)
 
     checksum_spec = _build_extension_action(
@@ -575,6 +661,10 @@ def test_verifier_accepts_all_current_extension_invocation_shapes(
         {"input_files": [first.id, second.id]},
         settings=settings,
     )
+    checksum_params = checksum_spec.params_model.model_validate(
+        {"input_files": [first.id, second.id]}
+    ).model_dump(mode="python")
+    validate_extension_invocation_params(checksum_spec, checksum_params)
     verify_rendered_invocation(
         checksum_rendered,
         checksum_spec,
@@ -589,8 +679,34 @@ def test_verifier_accepts_all_current_extension_invocation_shapes(
             *(checksum_rendered.tokens[1:] * 17),
         ),
     )
-    with pytest.raises(ActionInvocationPolicyError):
+    with pytest.raises(ActionInvocationIntegrityError):
         verify_rendered_invocation(expanded, checksum_spec, settings=settings)
+
+
+def test_verifier_reports_managed_input_unavailable_after_render(
+    make_module_payload,
+    make_module_spec,
+    make_action_spec_input,
+    tmp_path: Path,
+):
+    """
+    GIVEN a rendered extension with a ready managed input
+    WHEN its blob disappears before the final pre-spawn verification
+    THEN the verifier raises the dedicated input-state failure
+    """
+
+    spec, rendered, settings = _build_grep_invocation(
+        make_module_payload,
+        make_module_spec,
+        make_action_spec_input,
+        tmp_path=tmp_path,
+    )
+    file_id = rendered.tokens[-1].managed_file_id
+    assert file_id is not None
+    get_blob_path(file_id, settings).unlink()
+
+    with pytest.raises(ActionInvocationInputStateError):
+        verify_rendered_invocation(rendered, spec, settings=settings)
 
 
 # =============================================================================
@@ -642,7 +758,7 @@ async def test_executor_does_not_spawn_when_extension_verification_fails(
         _fail_if_spawned,
     )
 
-    with pytest.raises(ActionInvocationPolicyError):
+    with pytest.raises(ActionInvocationIntegrityError):
         await executor_module.execute_command(
             corrupted,
             spec,
@@ -758,7 +874,7 @@ def test_verifier_checks_output_and_secret_file_invocation_ownership(
     try:
         verify_rendered_invocation(rendered, spec, settings=settings)
         corrupted = replace(rendered, secret_files=())
-        with pytest.raises(ActionInvocationPolicyError):
+        with pytest.raises(ActionInvocationIntegrityError):
             verify_rendered_invocation(corrupted, spec, settings=settings)
     finally:
         cleanup_secret_files((secret_path,), settings=settings)
