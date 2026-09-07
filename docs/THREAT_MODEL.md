@@ -195,12 +195,13 @@ Authentication coverage is as follows:
 - YAML specs are discovered deterministically and checked for file size, extension, UTF-8 safety, NUL bytes, disallowed control characters, and dangerous YAML patterns.
 - Loader-derived DSL provenance separates `CORE` modules shipped as part of STAR core from `EXTENSION` modules mounted under `/etc/star/actions.d`; YAML cannot select or elevate that provenance.
 - `validate_modules()` rejects unsupported DSL versions, duplicate module identities, invalid identifiers, blocked binaries, malformed action declarations, and host-path-like command literals except for narrow reviewed core exceptions. Extension static `const` values, flags, and string defaults reject direct, relative, encoded, and environment-style host-path syntax; values containing `/` are accepted only when they exactly match STAR's managed-file MIME policy.
-- The extension static-value policy does not infer whether a pathless runtime string is interpreted as a filename by a particular binary. Extension binary capabilities and per-tool argument semantics remain a separate policy evolution.
+- Extension capabilities and per-binary invocation forms constrain which pathless values can occupy each command position. The selected form and permitted token origins are compiled into immutable action policy rather than trusted from the mounted YAML at runtime.
 - `secret` args cannot define defaults, cannot be optional, cannot be rendered as raw argv values or const-template placeholders, and must use an explicit sensitive delivery policy.
-- `build_actions()` compiles only validated modules into immutable runtime `ActionSpec` objects.
+- `build_actions()` compiles only validated modules into immutable runtime `ActionSpec` objects, preserving loader-derived provenance and the selected extension invocation form.
 - The registry is an explicit in-memory allowlist built from validated DSL specs.
-- `render_command()` keeps secret values out of argv and delivers currently supported secret payloads through subprocess stdin bytes or invocation-owned temporary secret files under the STAR root.
-- `execute_command()` rejects binary paths, blocked binaries, and non-allowlisted binaries before subprocess execution, applies configured runtime timeouts, and cleans the owned process group on timeout or cancellation where supported.
+- `render_command()` keeps secret values out of argv, delivers currently supported secret payloads through subprocess stdin bytes or invocation-owned temporary secret files under the STAR root, and emits immutable typed tokens retaining template position, structural origin, semantic role, and managed identity.
+- Immediately before process creation, runtime verifies that every rendered `EXTENSION` token still matches its compiled form, including exact options, required and exclusive groups, value bounds, expansion counts, and invocation-owned input, output, or secret-file references. Rejection does not log raw argv or paths and triggers dispatcher cleanup.
+- `execute_command()` independently rejects binary paths, compiled-binary mismatches, blocked binaries, and non-allowlisted binaries before subprocess execution, applies configured runtime timeouts, and cleans the owned process group on timeout or cancellation where supported. `CORE` retains these generic controls pending its dedicated capability policy.
 
 ### Filesystem mitigations
 

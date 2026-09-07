@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+from types import MappingProxyType
+from typing import Mapping
 from uuid import UUID
+
+from star.actions.models.security import CommandTokenSource, InvocationTokenRole
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,19 +55,42 @@ class ActionExecutionOutput:
 
 
 @dataclass(frozen=True, slots=True)
+class RenderedArgvToken:
+    """One immutable rendered argv token with retained origin metadata.
+
+    Attributes:
+        value: Final string passed to the subprocess.
+        template_index: Command-template position that produced the token.
+        source: Structural source of the rendered value.
+        role: Extension policy role, or ``None`` for an unconstrained core token.
+        reference: Referenced arg, flag, or output name when applicable.
+        template_references: Ordered const-template placeholder names.
+        managed_file_id: Managed input or output UUID when applicable.
+    """
+
+    value: str = field(repr=False)
+    template_index: int
+    source: CommandTokenSource
+    role: InvocationTokenRole | None = None
+    reference: str | None = None
+    template_references: tuple[str, ...] = ()
+    managed_file_id: UUID | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class RenderedAction:
     """Rendered action state produced before command execution.
 
     Attributes:
-        argv: Final resolved argv passed to executor.
+        tokens: Canonical typed argv tokens passed to executor.
         output_files: Mapping of output name to STAR file id for `file + command`.
         stdin_data: Optional bytes written to subprocess stdin.
         secret_redactions: Secret values that must be redacted from output.
         secret_files: Ephemeral secret file paths owned by this invocation.
     """
 
-    argv: list[str]
-    output_files: dict[str, UUID]
+    tokens: tuple[RenderedArgvToken, ...]
+    output_files: Mapping[str, UUID]
     stdin_data: bytes | None = field(default=None, repr=False, compare=False)
     secret_redactions: tuple[str, ...] = field(
         default_factory=tuple,
@@ -75,6 +102,22 @@ class RenderedAction:
         repr=False,
         compare=False,
     )
+
+    def __post_init__(self) -> None:
+        """Freeze a defensive copy of invocation-owned output identities."""
+
+        object.__setattr__(self, "tokens", tuple(self.tokens))
+        object.__setattr__(
+            self,
+            "output_files",
+            MappingProxyType(dict(self.output_files)),
+        )
+
+    @property
+    def argv(self) -> list[str]:
+        """Return a compatibility list derived from canonical typed tokens."""
+
+        return [token.value for token in self.tokens]
 
     def __iter__(self):
         """Iterate over argv tokens for backward-compatible list semantics."""
@@ -95,7 +138,9 @@ class RenderedAction:
         """Compare with another RenderedAction or a plain argv-like list."""
 
         if isinstance(other, RenderedAction):
-            return self.argv == other.argv and self.output_files == other.output_files
+            return (
+                self.tokens == other.tokens and self.output_files == other.output_files
+            )
         if isinstance(other, list):
             return self.argv == other
         return False

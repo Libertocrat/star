@@ -208,8 +208,8 @@ At startup, `build_registry_from_specs()` performs the following steps:
 1. `load_module_specs()` discovers YAML-based Action DSL specifications from the configured spec directories and assigns private source-derived provenance: `CORE` for modules shipped as part of STAR core and `EXTENSION` for modules mounted under `/etc/star/actions.d`. Mounted modules retain the stable public `user.*` namespace.
 2. Loader safety checks reject invalid file sizes, invalid extensions, NUL bytes, disallowed control characters, and dangerous YAML patterns.
 3. `validate_modules()` enforces semantic DSL rules such as module uniqueness, supported DSL version, binary declarations, identifier format, action structure, and source-derived static-value path policy.
-4. `enforce_build_policies()` applies STAR-owned policy that is deliberately separate from DSL syntax. For `EXTENSION` modules it requires reviewed capabilities, verifies that each requested capability is operator-enabled, limits binaries to the reviewed catalog, and proves each command matches that binary's exact invocation grammar. `CORE` does not yet participate in this extension-specific catalog and retains its established binary controls until a dedicated core policy is designed.
-5. `build_actions()` compiles validated and policy-approved modules into immutable runtime `ActionSpec` objects with generated `params_model` classes, command templates, defaults, output declarations, stdout file policy, and effective binary execution policy.
+4. `enforce_build_policies()` applies STAR-owned policy that is deliberately separate from DSL syntax. For `EXTENSION` modules it requires reviewed capabilities, verifies that each requested capability is operator-enabled, limits binaries to the reviewed catalog, proves each command matches that binary's exact invocation grammar, and compiles the deterministically selected form plus every permitted template-token role. `CORE` does not yet participate in this extension-specific catalog and retains its established binary controls until a dedicated core policy is designed.
+5. `build_actions()` compiles validated and policy-approved modules into immutable runtime `ActionSpec` objects with loader-derived provenance, generated `params_model` classes, command templates, defaults, output declarations, stdout file policy, effective binary execution policy, and the compiled extension invocation policy when applicable.
 6. `ActionRegistry` stores the final action mapping and precomputes presentation summaries.
 
 This is the allowlist boundary. If a spec is invalid, the registry is not built and the application fails to start.
@@ -232,12 +232,13 @@ The catalog supports overlapping capability grants even where the initial profil
 
 1. Resolve the action from `ActionRegistry`.
 2. Validate request params and execution options, including `stdout_as_file` policy checks.
-3. Render the final argv list and any internal sensitive delivery payloads with `render_command()`.
+3. Render immutable `RenderedArgvToken` values and any internal sensitive delivery payloads with `render_command()`. Each token retains its command-template position, structural origin, extension policy role, DSL reference, and managed UUID where applicable; the plain argv list is only a derived compatibility view.
 4. Resolve `file_id` args and output placeholders through the managed file layer.
-5. Re-check binary policy and execute the argv with `asyncio.create_subprocess_exec()` in `execute_command()`, using the configured runtime timeout and POSIX process-group cleanup where supported.
-6. Process stdout and stderr through the output pipeline, including sanitization, declared command-output handling, and optional `stdout_file` materialization from sanitized stdout.
+5. Re-check simple-name, blocklist, allowlist, and compiled binary identity policy in `execute_command()`. For `EXTENSION`, the runtime policy verifier also revalidates the exact token origins, option invariants, bounded values, cardinalities, and managed resource ownership immediately before process creation.
+6. Derive a local argv only after policy verification and execute it with `asyncio.create_subprocess_exec()`, using the configured runtime timeout and POSIX process-group cleanup where supported.
+7. Process stdout and stderr through the output pipeline, including sanitization, declared command-output handling, and optional `stdout_file` materialization from sanitized stdout.
 
-The current runtime re-check remains the existing binary policy. A later policy phase will carry typed rendered argv tokens into a final invocation-policy revalidation immediately before execution; it is intentionally separate so this build-time layer remains small and auditable.
+Runtime verification consumes only immutable policy already compiled into `ActionSpec`; it does not reparse YAML or consult the mutable catalog. A verifier rejection is an internal execution-policy failure, never reaches process creation, and follows the normal dispatcher cleanup path for output placeholders and ephemeral secret files. `CORE` uses the typed render representation and retains the generic binary checks, but its command grammar remains outside this extension-specific verifier until a dedicated core policy is introduced.
 
 ```mermaid
 flowchart LR

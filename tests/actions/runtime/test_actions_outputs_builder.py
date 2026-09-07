@@ -22,8 +22,9 @@ from star.actions.models.runtime import (
     ActionExecutionOutput,
     ActionExecutionResult,
     RenderedAction,
+    RenderedArgvToken,
 )
-from star.actions.models.security import BinaryPolicy
+from star.actions.models.security import BinaryPolicy, CommandTokenSource
 from star.actions.runtime import file_manager
 from star.actions.runtime.outputs_builder import _cleanup_known_outputs, build_outputs
 from star.core.config import Settings
@@ -110,6 +111,28 @@ def _make_execution_result(*, returncode: int = 0) -> ActionExecutionResult:
         stderr=b"",
         exec_time=0.01,
         pid=123,
+    )
+
+
+def _make_rendered(output_files: dict[str, UUID]) -> RenderedAction:
+    """Build deterministic typed render state for output tests.
+
+    Args:
+        output_files: Invocation-owned output identifiers.
+
+    Returns:
+        Rendered action containing a harmless core binary token.
+    """
+
+    return RenderedAction(
+        tokens=(
+            RenderedArgvToken(
+                value="echo",
+                template_index=0,
+                source=CommandTokenSource.BINARY,
+            ),
+        ),
+        output_files=output_files,
     )
 
 
@@ -231,7 +254,7 @@ def test_outputs_builder__file_command_creates_ready_metadata(tmp_path, monkeypa
             "cmd_out": OutputDef(type=OutputType.FILE, source=OutputSource.COMMAND)
         }
     )
-    rendered = RenderedAction(argv=["echo"], output_files={"cmd_out": placeholder.id})
+    rendered = _make_rendered({"cmd_out": placeholder.id})
 
     result = build_outputs(
         spec,
@@ -265,7 +288,7 @@ def test_outputs_builder__file_command_updates_metadata_fields(tmp_path, monkeyp
             "cmd_out": OutputDef(type=OutputType.FILE, source=OutputSource.COMMAND)
         }
     )
-    rendered = RenderedAction(argv=["echo"], output_files={"cmd_out": placeholder.id})
+    rendered = _make_rendered({"cmd_out": placeholder.id})
 
     result = build_outputs(
         spec,
@@ -318,7 +341,7 @@ def test_outputs_builder__file_command_sets_unverified_before_ready(
             "cmd_out": OutputDef(type=OutputType.FILE, source=OutputSource.COMMAND)
         }
     )
-    rendered = RenderedAction(argv=["echo"], output_files={"cmd_out": placeholder.id})
+    rendered = _make_rendered({"cmd_out": placeholder.id})
 
     build_outputs(
         spec,
@@ -354,7 +377,7 @@ def test_outputs_builder__file_command_uses_existing_blob(tmp_path, monkeypatch)
             "cmd_out": OutputDef(type=OutputType.FILE, source=OutputSource.COMMAND)
         }
     )
-    rendered = RenderedAction(argv=["echo"], output_files={"cmd_out": placeholder.id})
+    rendered = _make_rendered({"cmd_out": placeholder.id})
 
     build_outputs(
         spec,
@@ -394,7 +417,7 @@ def test_outputs_builder__file_command_creates_empty_blob_if_missing(
             "cmd_out": OutputDef(type=OutputType.FILE, source=OutputSource.COMMAND)
         }
     )
-    rendered = RenderedAction(argv=["echo"], output_files={"cmd_out": placeholder.id})
+    rendered = _make_rendered({"cmd_out": placeholder.id})
 
     build_outputs(
         spec,
@@ -426,7 +449,7 @@ def test_outputs_builder__file_command_empty_blob_metadata_is_valid(
             "cmd_out": OutputDef(type=OutputType.FILE, source=OutputSource.COMMAND)
         }
     )
-    rendered = RenderedAction(argv=["echo"], output_files={"cmd_out": placeholder.id})
+    rendered = _make_rendered({"cmd_out": placeholder.id})
 
     result = build_outputs(
         spec,
@@ -469,7 +492,7 @@ def test_outputs_builder__file_command_failure_returns_none(tmp_path, monkeypatc
             "cmd_out": OutputDef(type=OutputType.FILE, source=OutputSource.COMMAND)
         }
     )
-    rendered = RenderedAction(argv=["echo"], output_files={"cmd_out": placeholder.id})
+    rendered = _make_rendered({"cmd_out": placeholder.id})
 
     result = build_outputs(
         spec,
@@ -501,7 +524,7 @@ def test_outputs_builder__file_command_failure_triggers_cleanup(tmp_path, monkey
             "cmd_out": OutputDef(type=OutputType.FILE, source=OutputSource.COMMAND)
         }
     )
-    rendered = RenderedAction(argv=["echo"], output_files={"cmd_out": placeholder.id})
+    rendered = _make_rendered({"cmd_out": placeholder.id})
 
     build_outputs(
         spec,
@@ -537,7 +560,7 @@ def test_outputs_builder__cleanup_is_not_duplicated(monkeypatch):
         updated_at=now,
         status="ready",
     )
-    rendered = RenderedAction(argv=["echo"], output_files={"cmd_out": file_id})
+    rendered = _make_rendered({"cmd_out": file_id})
 
     calls: list[UUID] = []
     monkeypatch.setattr(
@@ -566,7 +589,7 @@ def test_build_outputs_omits_stdout_file_when_not_requested(tmp_path, monkeypatc
     _patch_storage_to_settings(monkeypatch, cfg)
 
     spec = _make_spec(outputs={})
-    rendered = RenderedAction(argv=["echo"], output_files={})
+    rendered = _make_rendered({})
 
     result = build_outputs(
         spec,
@@ -591,7 +614,7 @@ def test_build_outputs_creates_stdout_file_when_requested(tmp_path, monkeypatch)
     stdout_bytes = b"STAR_STDOUT_BYTES\n"
     result = build_outputs(
         _make_spec(outputs={}),
-        RenderedAction(argv=["echo"], output_files={}),
+        _make_rendered({}),
         _make_execution_result(returncode=0),
         _make_sanitized_output(stdout=stdout_bytes),
         stdout_as_file=True,
@@ -620,7 +643,7 @@ def test_build_outputs_creates_empty_stdout_file_for_empty_stdout(
 
     result = build_outputs(
         _make_spec(outputs={}),
-        RenderedAction(argv=["echo"], output_files={}),
+        _make_rendered({}),
         _make_execution_result(returncode=0),
         _make_sanitized_output(stdout=b""),
         stdout_as_file=True,
@@ -647,7 +670,7 @@ def test_build_outputs_returns_null_stdout_file_on_failed_command(
 
     result = build_outputs(
         _make_spec(outputs={}),
-        RenderedAction(argv=["echo"], output_files={}),
+        _make_rendered({}),
         _make_execution_result(returncode=1),
         _make_sanitized_output(stdout=b"HELLO\n"),
         stdout_as_file=True,
@@ -681,7 +704,7 @@ def test_outputs_builder__preserves_output_order(tmp_path, monkeypatch):
             "cmd_out": OutputDef(type=OutputType.FILE, source=OutputSource.COMMAND),
         }
     )
-    rendered = RenderedAction(argv=["echo"], output_files={"cmd_out": placeholder.id})
+    rendered = _make_rendered({"cmd_out": placeholder.id})
 
     result = build_outputs(
         spec,
@@ -724,7 +747,7 @@ def test_outputs_builder__raises_on_internal_failure(tmp_path, monkeypatch):
             "cmd_out": OutputDef(type=OutputType.FILE, source=OutputSource.COMMAND)
         }
     )
-    rendered = RenderedAction(argv=["echo"], output_files={"cmd_out": placeholder.id})
+    rendered = _make_rendered({"cmd_out": placeholder.id})
 
     with pytest.raises(ActionRuntimeOutputError, match="Failed to materialize"):
         build_outputs(

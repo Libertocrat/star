@@ -40,6 +40,10 @@ class ActionRuntimeExecError(ActionRuntimeError):
     """Raised when command execution fails at the runtime layer."""
 
 
+class ActionInvocationPolicyError(ActionRuntimeExecError):
+    """Raised when rendered state violates its compiled invocation policy."""
+
+
 class ActionBinaryBlockedError(ActionRuntimeExecError):
     """Raised when execution targets a binary blocked by policy."""
 

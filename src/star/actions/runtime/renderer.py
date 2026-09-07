@@ -30,8 +30,10 @@ from star.actions.models.core import (
     FlagCmd,
     OutputCmd,
     ParamType,
+    SpecProvenance,
 )
-from star.actions.models.runtime import RenderedAction
+from star.actions.models.runtime import RenderedAction, RenderedArgvToken
+from star.actions.models.security import CommandTokenSource, InvocationTokenRole
 from star.actions.runtime.file_manager import (
     cleanup_output_placeholders,
     create_command_output_placeholders,
@@ -129,23 +131,41 @@ def render_command(
 
         output_files = create_command_output_placeholders(spec, settings=settings)
 
-        argv: list[str] = []
-        for token in spec.command_template:
+        argv_tokens: list[RenderedArgvToken] = []
+        for template_index, token in enumerate(spec.command_template):
             kind = token["kind"]
+            role = _compiled_token_role(spec, template_index)
 
             if kind == "binary":
                 binary_token = cast(BinaryCmd, token)
-                argv.append(binary_token["value"])
+                argv_tokens.append(
+                    RenderedArgvToken(
+                        value=binary_token["value"],
+                        template_index=template_index,
+                        source=CommandTokenSource.BINARY,
+                        role=role,
+                    )
+                )
                 continue
 
             if kind == "const":
                 const_token = cast(ConstCmd, token)
-                argv.append(
-                    _render_const_literal(
-                        const_token["value"],
-                        spec=spec,
-                        resolved=resolved,
-                        resolved_arg_values=resolved_arg_values,
+                argv_tokens.append(
+                    RenderedArgvToken(
+                        value=_render_const_literal(
+                            const_token["value"],
+                            spec=spec,
+                            resolved=resolved,
+                            resolved_arg_values=resolved_arg_values,
+                        ),
+                        template_index=template_index,
+                        source=CommandTokenSource.CONST,
+                        role=role,
+                        template_references=tuple(
+                            CONST_TEMPLATE_PLACEHOLDER_PATTERN.findall(
+                                const_token["value"]
+                            )
+                        ),
                     )
                 )
                 continue
@@ -160,14 +180,42 @@ def render_command(
                     raise ActionInvalidArgError(
                         "secret params cannot be rendered as argv"
                     )
-                argv.extend(resolved_arg_values[name])
+                managed_file_ids = _managed_file_ids_for_arg(
+                    name,
+                    arg_def,
+                    resolved[name],
+                )
+                for value_index, value in enumerate(resolved_arg_values[name]):
+                    managed_file_id = (
+                        managed_file_ids[value_index]
+                        if managed_file_ids is not None
+                        else None
+                    )
+                    argv_tokens.append(
+                        RenderedArgvToken(
+                            value=value,
+                            template_index=template_index,
+                            source=CommandTokenSource.ARG,
+                            role=role,
+                            reference=name,
+                            managed_file_id=managed_file_id,
+                        )
+                    )
                 continue
 
             if kind == "flag":
                 flag_token = cast(FlagCmd, token)
                 name = flag_token["name"]
                 if resolved[name] is True:
-                    argv.append(spec.flag_defs[name].value)
+                    argv_tokens.append(
+                        RenderedArgvToken(
+                            value=spec.flag_defs[name].value,
+                            template_index=template_index,
+                            source=CommandTokenSource.FLAG,
+                            role=role,
+                            reference=name,
+                        )
+                    )
                 continue
 
             if kind == "output":
@@ -178,13 +226,22 @@ def render_command(
                     raise ActionRuntimeRenderError(
                         f"Output '{output_name}' has no command placeholder"
                     )
-                argv.append(resolve_output_blob_path(file_id, settings=settings))
+                argv_tokens.append(
+                    RenderedArgvToken(
+                        value=resolve_output_blob_path(file_id, settings=settings),
+                        template_index=template_index,
+                        source=CommandTokenSource.OUTPUT,
+                        role=role,
+                        reference=output_name,
+                        managed_file_id=file_id,
+                    )
+                )
                 continue
 
             raise ActionRuntimeRenderError(f"Unsupported command token kind: {kind}")
 
         return RenderedAction(
-            argv=argv,
+            tokens=tuple(argv_tokens),
             output_files=output_files,
             stdin_data=stdin_data,
             secret_redactions=tuple(secret_redactions),
@@ -205,6 +262,66 @@ def render_command(
         raise ActionRuntimeRenderError(
             "Unexpected failure while rendering command"
         ) from exc
+
+
+def _compiled_token_role(
+    spec: ActionSpec,
+    template_index: int,
+) -> InvocationTokenRole | None:
+    """Return the compiled extension role for one template position.
+
+    Args:
+        spec: Compiled runtime action specification.
+        template_index: Zero-based command-template position.
+
+    Returns:
+        Compiled role for an extension token, or ``None`` for core actions.
+
+    Raises:
+        ActionRuntimeRenderError: If extension policy data is missing or
+            inconsistent with the command template.
+    """
+
+    if spec.provenance is SpecProvenance.CORE:
+        return None
+
+    policy = spec.extension_invocation_policy
+    if policy is None:
+        raise ActionRuntimeRenderError(
+            "Extension action has no compiled invocation policy"
+        )
+    for token_policy in policy.template_tokens:
+        if token_policy.template_index == template_index:
+            return token_policy.role
+    raise ActionRuntimeRenderError(
+        "Extension command template has no compiled token policy"
+    )
+
+
+def _managed_file_ids_for_arg(
+    name: str,
+    arg_def: ArgDef,
+    value: Any,
+) -> tuple[UUID, ...] | None:
+    """Return managed UUIDs corresponding to one rendered arg expansion.
+
+    Args:
+        name: Runtime argument name.
+        arg_def: Compiled argument definition.
+        value: Validated runtime value before path resolution.
+
+    Returns:
+        Managed UUID tuple for file arguments, otherwise ``None``.
+
+    Raises:
+        ActionInvalidArgError: If a managed identifier is malformed.
+    """
+
+    if arg_def.type is ParamType.FILE_ID:
+        return (_coerce_file_id(name, value),)
+    if arg_def.type is ParamType.LIST and arg_def.items is ParamType.FILE_ID:
+        return tuple(_coerce_file_id(name, item) for item in value)
+    return None
 
 
 def _render_const_literal(

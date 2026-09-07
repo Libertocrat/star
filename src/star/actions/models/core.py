@@ -19,6 +19,7 @@ Design principles:
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass, field, fields, is_dataclass
 from enum import Enum
 from typing import Any, Literal, Optional, Tuple, Type, TypedDict, Union
@@ -26,7 +27,10 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
-from star.actions.models.security import BinaryPolicy
+from star.actions.models.security import (
+    BinaryPolicy,
+    CompiledExtensionInvocationPolicy,
+)
 
 
 class ParamType(str, Enum):
@@ -239,6 +243,9 @@ class ActionSpec:
         binary: Primary binary extracted from command template.
         command_template: Normalized immutable command token sequence.
         execution_policy: Effective per-action binary execution policy.
+        provenance: Loader-derived module provenance.
+        extension_invocation_policy: Compiled reviewed invocation policy for
+            extension actions; absent for core actions.
         arg_defs: Runtime argument definitions keyed by arg name.
         flag_defs: Runtime flag definitions keyed by flag name.
         defaults: Flattened runtime defaults for args and flags.
@@ -268,6 +275,8 @@ class ActionSpec:
     arg_defs: dict[str, ArgDef]
     flag_defs: dict[str, FlagDef]
     defaults: dict[str, Any]
+    provenance: SpecProvenance = SpecProvenance.CORE
+    extension_invocation_policy: CompiledExtensionInvocationPolicy | None = None
     outputs: dict[str, OutputDef] = field(default_factory=dict)
     allow_stdout_as_file: bool = True
 
@@ -321,6 +330,8 @@ class ActionSpec:
             "binary": self.binary,
             "command_template": self.command_template,
             "execution_policy": self.execution_policy,
+            "provenance": self.provenance,
+            "extension_invocation_policy": self.extension_invocation_policy,
             "arg_defs": self.arg_defs,
             "flag_defs": self.flag_defs,
             "outputs": self.outputs,
@@ -371,10 +382,13 @@ def _to_jsonable(value: Any) -> Any:
             for field in fields(value)
         }
 
-    if isinstance(value, dict):
+    if isinstance(value, Mapping):
         return {str(key): _to_jsonable(item) for key, item in value.items()}
 
-    if isinstance(value, (list, tuple, set)):
+    if isinstance(value, (set, frozenset)):
+        return [_to_jsonable(item) for item in sorted(value, key=str)]
+
+    if isinstance(value, (list, tuple)):
         return [_to_jsonable(item) for item in value]
 
     return value

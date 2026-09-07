@@ -8,6 +8,9 @@ from __future__ import annotations
 
 import asyncio
 import signal
+from collections.abc import Sequence
+from dataclasses import replace
+from typing import cast
 
 import pytest
 from pydantic import BaseModel
@@ -17,10 +20,12 @@ from star.actions.exceptions import (
     ActionBinaryNotAllowedError,
     ActionBinaryPathForbiddenError,
     ActionExecutionTimeoutError,
+    ActionInvocationPolicyError,
     ActionRuntimeExecError,
 )
-from star.actions.models.core import ActionSpec
-from star.actions.models.security import BinaryPolicy
+from star.actions.models.core import ActionSpec, SpecProvenance
+from star.actions.models.runtime import RenderedAction, RenderedArgvToken
+from star.actions.models.security import BinaryPolicy, CommandTokenSource
 from star.actions.runtime import executor as executor_module
 from star.actions.runtime.executor import execute_command
 
@@ -90,6 +95,7 @@ class _FakeAsyncProcess:
 
 def _make_spec(
     *,
+    binary: str = "echo",
     allowed: tuple[str, ...] = (
         "echo",
         "cat",
@@ -101,6 +107,7 @@ def _make_spec(
     """Create a minimal ActionSpec configured for executor unit tests.
 
     Args:
+        binary: Exact compiled binary expected in the rendered invocation.
         allowed: Allowed binary tuple for effective policy.
         blocked: Blocked binary tuple for effective policy.
 
@@ -115,8 +122,8 @@ def _make_spec(
         action="exec",
         version=1,
         params_model=BaseModel,
-        binary="echo",
-        command_template=({"kind": "binary", "value": "echo"},),
+        binary=binary,
+        command_template=({"kind": "binary", "value": binary},),
         execution_policy=BinaryPolicy(allowed=allowed, blocked=blocked),
         arg_defs={},
         flag_defs={},
@@ -127,6 +134,39 @@ def _make_spec(
         description=None,
         deprecated=False,
         params_example=None,
+    )
+
+
+def _rendered(
+    argv: Sequence[object],
+    *,
+    stdin_data: object = None,
+) -> RenderedAction:
+    """Build typed rendered state for executor boundary tests.
+
+    Args:
+        argv: Final token values, including intentionally invalid test values.
+        stdin_data: Optional stdin payload, including intentionally invalid values.
+
+    Returns:
+        Rendered action with structural token origins.
+    """
+
+    return RenderedAction(
+        tokens=tuple(
+            RenderedArgvToken(
+                value=cast(str, value),
+                template_index=index,
+                source=(
+                    CommandTokenSource.BINARY
+                    if index == 0
+                    else CommandTokenSource.CONST
+                ),
+            )
+            for index, value in enumerate(argv)
+        ),
+        output_files={},
+        stdin_data=cast(bytes | None, stdin_data),
     )
 
 
@@ -144,7 +184,7 @@ async def test_execute_command__rejects_empty_argv():
     """
 
     with pytest.raises(ValueError, match="argv must not be empty"):
-        await execute_command([], _make_spec())
+        await execute_command(_rendered([]), _make_spec())
 
 
 @pytest.mark.parametrize(
@@ -165,7 +205,7 @@ async def test_execute_command__rejects_non_string_argv(argv):
     """
 
     with pytest.raises(TypeError, match="argv must contain only strings"):
-        await execute_command(argv, _make_spec())
+        await execute_command(_rendered(argv), _make_spec())
 
 
 @pytest.mark.asyncio
@@ -177,7 +217,9 @@ async def test_execute_command__rejects_non_bytes_stdin_data():
     """
 
     with pytest.raises(TypeError, match="stdin_data must be bytes"):
-        await execute_command(["cat"], _make_spec(), stdin_data="secret")
+        await execute_command(
+            _rendered(["cat"], stdin_data="secret"), _make_spec(binary="cat")
+        )
 
 
 @pytest.mark.parametrize(
@@ -196,7 +238,7 @@ async def test_execute_command__rejects_invalid_timeout(
     """
 
     with pytest.raises(ValueError, match="timeout must be greater than 0"):
-        await execute_command(["echo", "ok"], _make_spec(), timeout=timeout)
+        await execute_command(_rendered(["echo", "ok"]), _make_spec(), timeout=timeout)
 
 
 # ============================================================================
@@ -215,7 +257,7 @@ async def test_execute_command__blocked_binary_raises():
     spec = _make_spec(allowed=("echo",), blocked=("echo",))
 
     with pytest.raises(ActionBinaryBlockedError, match="blocked"):
-        await execute_command(["echo", "ok"], spec)
+        await execute_command(_rendered(["echo", "ok"]), spec)
 
 
 @pytest.mark.asyncio
@@ -229,7 +271,7 @@ async def test_execute_command__not_allowed_binary_raises():
     spec = _make_spec(allowed=("cat",), blocked=())
 
     with pytest.raises(ActionBinaryNotAllowedError, match="not allowed"):
-        await execute_command(["echo", "ok"], spec)
+        await execute_command(_rendered(["echo", "ok"]), spec)
 
 
 @pytest.mark.asyncio
@@ -243,7 +285,33 @@ async def test_execute_command__path_like_binary_raises():
     spec = _make_spec(allowed=("echo", "bin/echo"), blocked=())
 
     with pytest.raises(ActionBinaryPathForbiddenError, match="forbidden"):
-        await execute_command(["bin/echo", "ok"], spec)
+        await execute_command(_rendered(["bin/echo", "ok"]), spec)
+
+
+@pytest.mark.asyncio
+async def test_execute_command__rejects_binary_mismatch_before_spawn():
+    """
+    GIVEN typed core render state whose binary differs from the compiled action
+    WHEN execute_command reaches its final pre-spawn gate
+    THEN the invocation fails closed as an internal policy violation
+    """
+
+    with pytest.raises(ActionInvocationPolicyError):
+        await execute_command(_rendered(["cat"]), _make_spec(binary="echo"))
+
+
+@pytest.mark.asyncio
+async def test_execute_command__rejects_extension_without_compiled_policy():
+    """
+    GIVEN a runtime action marked EXTENSION without compiled invocation policy
+    WHEN execute_command reaches its final pre-spawn gate
+    THEN the invocation fails closed instead of falling back to core behavior
+    """
+
+    spec = replace(_make_spec(), provenance=SpecProvenance.EXTENSION)
+
+    with pytest.raises(ActionInvocationPolicyError):
+        await execute_command(_rendered(["echo"]), spec)
 
 
 # ============================================================================
@@ -259,7 +327,7 @@ async def test_execute_command__simple_success():
     THEN execution succeeds with expected output
     """
 
-    result = await execute_command(["echo", "hello"], _make_spec())
+    result = await execute_command(_rendered(["echo", "hello"]), _make_spec())
 
     assert result.returncode == 0
     assert result.stdout == b"hello\n"
@@ -273,7 +341,9 @@ async def test_execute_command__command_with_arguments():
     THEN stdout reflects correct argument ordering
     """
 
-    result = await execute_command(["echo", "alpha", "beta", "gamma"], _make_spec())
+    result = await execute_command(
+        _rendered(["echo", "alpha", "beta", "gamma"]), _make_spec()
+    )
 
     assert result.returncode == 0
     assert result.stdout == b"alpha beta gamma\n"
@@ -287,7 +357,9 @@ async def test_execute_command__writes_stdin_data_to_process():
     THEN the process receives those bytes and returns them on stdout
     """
 
-    result = await execute_command(["cat"], _make_spec(), stdin_data=b"hello secret")
+    result = await execute_command(
+        _rendered(["cat"], stdin_data=b"hello secret"), _make_spec(binary="cat")
+    )
 
     assert result.returncode == 0
     assert result.stdout == b"hello secret"
@@ -307,7 +379,8 @@ async def test_execute_command__non_zero_exit_returns_result():
     """
 
     result = await execute_command(
-        ["cat", "/definitely/missing-star-file"], _make_spec()
+        _rendered(["cat", "/definitely/missing-star-file"]),
+        _make_spec(binary="cat"),
     )
 
     assert result.returncode != 0
@@ -329,7 +402,9 @@ async def test_execute_command__timeout_raises_error():
     """
 
     with pytest.raises(ActionExecutionTimeoutError, match="timed out"):
-        await execute_command(["sleep", "1"], _make_spec(), timeout=0.01)
+        await execute_command(
+            _rendered(["sleep", "1"]), _make_spec(binary="sleep"), timeout=0.01
+        )
 
 
 @pytest.mark.asyncio
@@ -341,7 +416,9 @@ async def test_execute_command__timeout_error_message():
     """
 
     with pytest.raises(ActionExecutionTimeoutError, match="0.01"):
-        await execute_command(["sleep", "1"], _make_spec(), timeout=0.01)
+        await execute_command(
+            _rendered(["sleep", "1"]), _make_spec(binary="sleep"), timeout=0.01
+        )
 
 
 @pytest.mark.asyncio
@@ -376,10 +453,9 @@ async def test_execute_command__timeout_terminates_process_group(monkeypatch):
 
     with pytest.raises(ActionExecutionTimeoutError, match="timed out"):
         await execute_command(
-            ["sleep", "1"],
-            _make_spec(),
+            _rendered(["sleep", "1"], stdin_data=b"secret"),
+            _make_spec(binary="sleep"),
             timeout=0.001,
-            stdin_data=b"secret",
         )
 
     assert signals_sent == [signal.SIGTERM, signal.SIGKILL]
@@ -418,7 +494,10 @@ async def test_execute_command__cancellation_terminates_process_group(monkeypatc
     monkeypatch.setattr(executor_module.os, "killpg", _fake_killpg)
 
     task = asyncio.create_task(
-        execute_command(["sleep", "1"], _make_spec(), stdin_data=b"secret")
+        execute_command(
+            _rendered(["sleep", "1"], stdin_data=b"secret"),
+            _make_spec(binary="sleep"),
+        )
     )
     await asyncio.sleep(0)
 
@@ -446,7 +525,10 @@ async def test_execute_command__binary_not_found():
     """
 
     with pytest.raises(ActionRuntimeExecError, match="Failed to execute command"):
-        await execute_command(["star_binary_that_does_not_exist_123456"], _make_spec())
+        await execute_command(
+            _rendered(["star_binary_that_does_not_exist_123456"]),
+            _make_spec(binary="star_binary_that_does_not_exist_123456"),
+        )
 
 
 # ============================================================================
@@ -462,7 +544,7 @@ async def test_execute_command__exec_time_is_positive():
     THEN exec_time is greater than zero
     """
 
-    result = await execute_command(["echo", "ok"], _make_spec())
+    result = await execute_command(_rendered(["echo", "ok"]), _make_spec())
 
     assert result.returncode == 0
     assert result.exec_time > 0
@@ -476,7 +558,7 @@ async def test_execute_command__pid_is_set():
     THEN pid is a valid integer
     """
 
-    result = await execute_command(["echo", "ok"], _make_spec())
+    result = await execute_command(_rendered(["echo", "ok"]), _make_spec())
 
     assert result.returncode == 0
     assert isinstance(result.pid, int)
@@ -496,7 +578,7 @@ async def test_execute_command__stdout_is_bytes():
     THEN stdout is bytes
     """
 
-    result = await execute_command(["echo", "ok"], _make_spec())
+    result = await execute_command(_rendered(["echo", "ok"]), _make_spec())
 
     assert result.returncode == 0
     assert isinstance(result.stdout, bytes)
@@ -511,7 +593,8 @@ async def test_execute_command__stderr_is_bytes():
     """
 
     result = await execute_command(
-        ["cat", "/definitely/missing-star-file"], _make_spec()
+        _rendered(["cat", "/definitely/missing-star-file"]),
+        _make_spec(binary="cat"),
     )
 
     assert isinstance(result.stderr, bytes)
@@ -544,7 +627,7 @@ async def test_execute_command__wraps_unexpected_errors(monkeypatch):
         ActionRuntimeExecError,
         match="Unexpected failure during command execution",
     ):
-        await execute_command(["echo", "ok"], _make_spec())
+        await execute_command(_rendered(["echo", "ok"]), _make_spec())
 
 
 # ============================================================================
@@ -568,6 +651,6 @@ async def test_execute_command__multiple_valid_commands(argv: list[str]):
     THEN execution succeeds
     """
 
-    result = await execute_command(argv, _make_spec())
+    result = await execute_command(_rendered(argv), _make_spec())
 
     assert result.returncode == 0

@@ -11,8 +11,20 @@ from .core import (
     SpecProvenance,
 )
 from .presentation import ActionPublicSpec, ActionSummary, ModuleSummary
-from .runtime import ActionExecutionOutput, ActionExecutionResult, RenderedAction
-from .security import BinaryPolicy, EffectiveCatalogPolicy
+from .runtime import (
+    ActionExecutionOutput,
+    ActionExecutionResult,
+    RenderedAction,
+    RenderedArgvToken,
+)
+from .security import (
+    BinaryPolicy,
+    CommandTokenSource,
+    CompiledExtensionInvocationPolicy,
+    CompiledTemplateTokenPolicy,
+    EffectiveCatalogPolicy,
+    InvocationTokenRole,
+)
 
 __all__ = [
     "ActionSpec",
@@ -29,6 +41,11 @@ __all__ = [
     "ActionExecutionResult",
     "ActionExecutionOutput",
     "RenderedAction",
+    "RenderedArgvToken",
     "BinaryPolicy",
+    "CommandTokenSource",
+    "InvocationTokenRole",
+    "CompiledTemplateTokenPolicy",
+    "CompiledExtensionInvocationPolicy",
     "EffectiveCatalogPolicy",
 ]

@@ -18,6 +18,7 @@ from star.actions.dispatcher import DispatchedActionResult, dispatch_action
 from star.actions.exceptions import (
     ActionBinaryBlockedError,
     ActionExecutionTimeoutError,
+    ActionInvocationPolicyError,
     ActionNotFoundError,
     ActionRuntimeExecError,
 )
@@ -139,16 +140,17 @@ async def test_dispatch_action_passes_spec_to_executor(valid_registry, monkeypat
     captured: dict[str, object] = {}
 
     async def _fake_execute(
-        argv,
+        rendered,
         spec,
         timeout=None,  # noqa: ASYNC109
-        stdin_data=None,
+        settings=None,
     ):
         """Capture executor inputs and return deterministic success result."""
-        captured["argv"] = argv
+        captured["argv"] = rendered.argv
         captured["spec_name"] = spec.name
         captured["timeout"] = timeout
-        captured["stdin_data"] = stdin_data
+        captured["stdin_data"] = rendered.stdin_data
+        captured["settings"] = settings
         return ActionExecutionResult(
             returncode=0,
             stdout=b"ok",
@@ -212,15 +214,16 @@ async def test_dispatch_action_passes_secret_stdin_data_to_executor(monkeypatch)
     captured: dict[str, object] = {}
 
     async def _fake_execute(
-        argv,
+        rendered,
         _spec,
         timeout=None,  # noqa: ASYNC109
-        stdin_data=None,
+        settings=None,
     ):
         """Capture executor inputs and return deterministic success result."""
-        captured["argv"] = argv
+        captured["argv"] = rendered.argv
         captured["timeout"] = timeout
-        captured["stdin_data"] = stdin_data
+        captured["stdin_data"] = rendered.stdin_data
+        captured["settings"] = settings
         return ActionExecutionResult(
             returncode=0,
             stdout=b"ok",
@@ -259,12 +262,12 @@ async def test_dispatch_action_cleans_file_secret_after_success(
     registry = ActionRegistry({"secret_runtime.file_secret": spec}, [])
     captured: dict[str, object] = {}
 
-    async def _fake_execute(argv, _spec, **kwargs):
+    async def _fake_execute(rendered, _spec, **kwargs):
         """Verify the secret file exists during execution."""
-        secret_ref = argv[1]
+        secret_ref = rendered.argv[1]
         secret_path = get_secret_tmp_dir(settings) / secret_ref.removeprefix("file:")
         captured["secret_path"] = secret_path
-        captured["stdin_data"] = kwargs.get("stdin_data")
+        captured["stdin_data"] = rendered.stdin_data
         assert secret_path.exists()
         assert secret_path.read_text(encoding="utf-8") == "topsecret"
         return ActionExecutionResult(
@@ -307,9 +310,9 @@ async def test_dispatch_action_cleans_file_secret_after_nonzero_exit(
     registry = ActionRegistry({"secret_runtime.file_secret": spec}, [])
     captured: dict[str, object] = {}
 
-    async def _fake_execute(argv, _spec, **_kwargs):
+    async def _fake_execute(rendered, _spec, **_kwargs):
         """Return a deterministic nonzero result."""
-        secret_ref = argv[1]
+        secret_ref = rendered.argv[1]
         secret_path = get_secret_tmp_dir(settings) / secret_ref.removeprefix("file:")
         captured["secret_path"] = secret_path
         assert secret_path.exists()
@@ -344,8 +347,12 @@ async def test_dispatch_action_cleans_file_secret_after_nonzero_exit(
     [
         (ActionRuntimeExecError("failed"), "failed"),
         (ActionExecutionTimeoutError("timed out"), "timed out"),
+        (
+            ActionInvocationPolicyError("runtime policy rejected"),
+            "runtime policy rejected",
+        ),
     ],
-    ids=("exec_error", "timeout"),
+    ids=("exec_error", "timeout", "policy_rejection"),
 )
 async def test_dispatch_action_cleans_file_secret_after_executor_error(
     monkeypatch,
@@ -363,9 +370,9 @@ async def test_dispatch_action_cleans_file_secret_after_executor_error(
     registry = ActionRegistry({"secret_runtime.file_secret": spec}, [])
     captured: dict[str, object] = {}
 
-    async def _fake_execute(argv, _spec, **_kwargs):
+    async def _fake_execute(rendered, _spec, **_kwargs):
         """Raise after confirming the secret file exists."""
-        secret_ref = argv[1]
+        secret_ref = rendered.argv[1]
         secret_path = get_secret_tmp_dir(settings) / secret_ref.removeprefix("file:")
         captured["secret_path"] = secret_path
         assert secret_path.exists()
@@ -403,9 +410,9 @@ async def test_dispatch_action_cleans_file_secret_after_cancellation(
     registry = ActionRegistry({"secret_runtime.file_secret": spec}, [])
     captured: dict[str, object] = {}
 
-    async def _fake_execute(argv, _spec, **_kwargs):
+    async def _fake_execute(rendered, _spec, **_kwargs):
         """Raise cancellation after confirming the secret file exists."""
-        secret_ref = argv[1]
+        secret_ref = rendered.argv[1]
         secret_path = get_secret_tmp_dir(settings) / secret_ref.removeprefix("file:")
         captured["secret_path"] = secret_path
         assert secret_path.exists()
@@ -443,14 +450,15 @@ async def test_dispatch_action_passes_runtime_settings_timeout(
     captured: dict[str, object] = {}
 
     async def _fake_execute(
-        _argv,
+        rendered,
         _spec,
         timeout=None,  # noqa: ASYNC109
-        stdin_data=None,
+        settings=None,
     ):
         """Capture the timeout and return deterministic success result."""
         captured["timeout"] = timeout
-        captured["stdin_data"] = stdin_data
+        captured["stdin_data"] = rendered.stdin_data
+        captured["settings"] = settings
         return ActionExecutionResult(
             returncode=0,
             stdout=b"ok",
@@ -482,14 +490,14 @@ async def test_dispatch_action_propagates_policy_runtime_errors(
     """
 
     async def _raise_blocked(
-        _argv,
+        _rendered,
         _spec,
         timeout=None,  # noqa: ASYNC109
-        stdin_data=None,
+        settings=None,
     ):
         """Raise a deterministic blocked-binary runtime error for tests."""
         del timeout
-        del stdin_data
+        del settings
         raise ActionBinaryBlockedError("blocked")
 
     monkeypatch.setattr(
@@ -516,15 +524,15 @@ async def test_dispatch_action_cleans_placeholders_when_cancelled(
     captured: dict[str, object] = {}
 
     async def _raise_cancelled(
-        argv,
+        rendered,
         _spec,
         timeout=None,  # noqa: ASYNC109
-        stdin_data=None,
+        settings=None,
     ):
         """Raise cancellation after dispatcher has rendered the command."""
-        captured["argv"] = argv
+        captured["argv"] = rendered.argv
         del timeout
-        del stdin_data
+        del settings
         raise asyncio.CancelledError
 
     def _capture_cleanup(output_files, settings=None):
@@ -556,3 +564,48 @@ async def test_dispatch_action_cleans_placeholders_when_cancelled(
     assert set(output_files) == {"cmd_out"}
     assert load_file_metadata(output_files["cmd_out"], settings) is None
     assert captured["settings"] is settings
+
+
+@pytest.mark.asyncio
+async def test_dispatch_action_cleans_placeholders_after_policy_rejection(
+    valid_registry,
+    monkeypatch,
+    settings,
+):
+    """
+    GIVEN a rendered command with an invocation-owned output placeholder
+    WHEN the final executor policy gate rejects the invocation
+    THEN dispatcher deletes the placeholder before propagating the policy error
+    """
+
+    captured: dict[str, object] = {}
+
+    async def _raise_policy_error(
+        rendered,
+        _spec,
+        timeout=None,  # noqa: ASYNC109
+        settings=None,
+    ):
+        """Raise policy rejection after dispatcher has rendered the output."""
+
+        captured["output_files"] = rendered.output_files
+        del timeout
+        del settings
+        raise ActionInvocationPolicyError("runtime policy rejected")
+
+    monkeypatch.setattr(
+        "star.actions.dispatcher.runtime_executor.execute_command",
+        _raise_policy_error,
+    )
+
+    with pytest.raises(ActionInvocationPolicyError, match="runtime policy rejected"):
+        await dispatch_action(
+            valid_registry,
+            "test_runtime.write_output",
+            {},
+            settings=settings,
+        )
+
+    output_files = captured["output_files"]
+    assert output_files
+    assert load_file_metadata(output_files["cmd_out"], settings) is None

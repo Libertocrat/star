@@ -21,29 +21,32 @@ from star.actions.exceptions import (
     ActionRuntimeExecError,
 )
 from star.actions.models.core import ActionSpec
-from star.actions.models.runtime import ActionExecutionResult
+from star.actions.models.runtime import ActionExecutionResult, RenderedAction
+from star.actions.runtime.policy_verifier import verify_rendered_invocation
 from star.actions.security.policy import (
     is_binary_allowed,
     is_binary_blocked,
     is_simple_binary_name,
 )
+from star.core.config import Settings
 
 _TERMINATION_GRACE_SECONDS = 0.2
 _SUPPORTS_PROCESS_GROUPS = os.name == "posix"
 
 
 async def execute_command(
-    argv: list[str],
+    rendered: RenderedAction,
     spec: ActionSpec,
     timeout: float | None = None,  # noqa: ASYNC109
-    stdin_data: bytes | None = None,
+    settings: Settings | None = None,
 ) -> ActionExecutionResult:
     """Execute a validated command using an async subprocess.
 
     Args:
-        argv: Fully resolved command arguments.
+        rendered: Fully resolved typed invocation state.
+        spec: Compiled action specification authorizing the invocation.
         timeout: Optional timeout in seconds.
-        stdin_data: Optional bytes to write to subprocess stdin.
+        settings: Explicit runtime settings snapshot for managed resources.
 
     Returns:
         ActionExecutionResult containing process outputs.
@@ -55,17 +58,21 @@ async def execute_command(
         ActionExecutionTimeoutError: If execution exceeds timeout.
     """
 
-    if not argv:
+    if not isinstance(rendered, RenderedAction):
+        raise TypeError("rendered must be a RenderedAction")
+
+    stdin_data = rendered.stdin_data
+    if not rendered.tokens:
         raise ValueError("argv must not be empty")
 
-    for item in argv:
-        if not isinstance(item, str):
+    for token in rendered.tokens:
+        if not isinstance(token.value, str):
             raise TypeError("argv must contain only strings")
 
     if stdin_data is not None and not isinstance(stdin_data, bytes):
         raise TypeError("stdin_data must be bytes")
 
-    binary = argv[0]
+    binary = rendered.tokens[0].value
     if not is_simple_binary_name(binary):
         raise ActionBinaryPathForbiddenError("Binary paths are forbidden")
 
@@ -81,6 +88,9 @@ async def execute_command(
 
     if timeout is not None and timeout <= 0:
         raise ValueError("timeout must be greater than 0")
+
+    verify_rendered_invocation(rendered, spec, settings=settings)
+    argv = rendered.argv
 
     start = time.perf_counter()
     pid: int | None = None
