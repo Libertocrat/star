@@ -86,6 +86,7 @@ def build_docs_settings() -> Settings:
         star_enable_security_headers=True,
         star_blocked_binaries_extra=None,
         star_enabled_extension_capabilities="all",
+        star_storage_repair_min_age_seconds=3600,
     )
 
 

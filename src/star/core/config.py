@@ -132,6 +132,8 @@ class Settings(BaseSettings):
             binaries merged into the default blocklist.
         star_enabled_extension_capabilities: Operator selection of reviewed
             capabilities available to mounted DSL extensions.
+        star_storage_repair_min_age_seconds: Minimum age before offline storage
+            repair may remove a residual artifact.
     """
 
     # Loaded from Docker secret in `get_settings`, not from environment.
@@ -151,6 +153,7 @@ class Settings(BaseSettings):
     star_enable_security_headers: bool = Field(True)
     star_blocked_binaries_extra: str | None = Field(None)
     star_enabled_extension_capabilities: str = Field("all")
+    star_storage_repair_min_age_seconds: int = Field(3600)
 
     model_config = {
         "env_file": ".env",
@@ -193,6 +196,14 @@ class Settings(BaseSettings):
         if v is not None and v <= 0:
             raise ValueError("must be greater than 0")
         return v
+
+    @field_validator("star_storage_repair_min_age_seconds")
+    def _validate_storage_repair_min_age_seconds(cls, value: int) -> int:
+        """Require a conservative bounded grace period for offline repair."""
+
+        if not 60 <= value <= 604800:
+            raise ValueError("must be between 60 and 604800 seconds")
+        return value
 
     @field_validator("star_app_version", mode="before")
     def _validate_star_app_version(cls, v):

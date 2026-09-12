@@ -18,6 +18,7 @@ from star.core.files.layout import get_blob_filename, get_meta_filename
 _BLOB_DIRECTORY = "blobs"
 _METADATA_DIRECTORY = "meta"
 _DIRECTORY_COMPONENTS = ("data", "files")
+_STORAGE_DIRECTORIES = frozenset({_BLOB_DIRECTORY, _METADATA_DIRECTORY, "tmp"})
 
 
 class ManagedStoragePathError(ValueError):
@@ -132,6 +133,80 @@ def unlink_managed_metadata(file_id: UUID, settings: Settings) -> None:
     )
 
 
+@contextmanager
+def managed_storage_directory(
+    settings: Settings,
+    directory_name: str,
+) -> Iterator[int]:
+    """Yield an owned descriptor for a supported managed storage directory.
+
+    Args:
+        settings: Validated runtime settings that own the trusted root.
+        directory_name: Server-controlled storage leaf directory.
+
+    Yields:
+        An owned directory descriptor. The caller must not close it.
+
+    Raises:
+        ManagedStoragePathError: If the directory name or filesystem path is unsafe.
+        OSError: If the trusted directory cannot be opened.
+    """
+
+    if directory_name not in _STORAGE_DIRECTORIES:
+        raise ManagedStoragePathError("Unsupported managed storage directory.")
+    with _managed_storage_directory(settings, directory_name) as directory_fd:
+        yield directory_fd
+
+
+@contextmanager
+def maintenance_lock(
+    settings: Settings,
+    *,
+    exclusive: bool,
+    nonblocking: bool = False,
+) -> Iterator[None]:
+    """Hold STAR's global managed-storage maintenance lease.
+
+    The lease is separate from per-file metadata locks. API runtime instances
+    hold it shared for their lifespan, while offline maintenance acquires it
+    exclusively before inspecting or mutating managed storage.
+
+    Args:
+        settings: Validated runtime settings that own the trusted root.
+        exclusive: Whether the caller needs exclusive maintenance access.
+        nonblocking: Fail immediately instead of waiting for another lease holder.
+
+    Yields:
+        None while the advisory maintenance lease is held.
+
+    Raises:
+        BlockingIOError: If a nonblocking lease cannot be acquired.
+        ManagedStoragePathError: If the lock entry violates filesystem policy.
+        OSError: If the lock cannot be opened or locked.
+    """
+
+    import fcntl
+
+    flags = os.O_CREAT | os.O_RDWR | _required_open_flag("O_NOFOLLOW")
+    flags |= _close_on_exec_flag()
+    with _managed_files_directory(settings) as directory_fd:
+        lock_fd = os.open(".maintenance.lock", flags, 0o600, dir_fd=directory_fd)
+
+    try:
+        if not stat.S_ISREG(os.fstat(lock_fd).st_mode):
+            raise ManagedStoragePathError("Maintenance lock is not a regular file.")
+        operation = fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH
+        if nonblocking:
+            operation |= fcntl.LOCK_NB
+        fcntl.flock(lock_fd, operation)
+        yield
+    finally:
+        try:
+            fcntl.flock(lock_fd, fcntl.LOCK_UN)
+        finally:
+            os.close(lock_fd)
+
+
 def _canonical_uuid(file_id: UUID) -> UUID:
     """Parse one storage identifier into the canonical UUID representation."""
 
@@ -223,6 +298,23 @@ def _managed_storage_directory(
     current_fd = root_fd
     try:
         for component in (*_DIRECTORY_COMPONENTS, leaf_directory):
+            next_fd = _open_directory_at(current_fd, component)
+            os.close(current_fd)
+            current_fd = next_fd
+        yield current_fd
+    finally:
+        os.close(current_fd)
+
+
+@contextmanager
+def _managed_files_directory(settings: Settings) -> Iterator[int]:
+    """Yield an owned descriptor for `data/files` beneath the trusted root."""
+
+    root_path = Path(settings.star_root_dir)
+    root_fd = _open_directory_path(root_path)
+    current_fd = root_fd
+    try:
+        for component in _DIRECTORY_COMPONENTS:
             next_fd = _open_directory_at(current_fd, component)
             os.close(current_fd)
             current_fd = next_fd

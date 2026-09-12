@@ -60,6 +60,7 @@ def test_settings_defaults_applied(minimal_safe_env):
     assert s.star_metrics_require_auth is True
     assert s.star_enable_security_headers is True
     assert s.star_enabled_extension_capabilities == "all"
+    assert s.star_storage_repair_min_age_seconds == 3600
 
 
 def test_auth_surface_toggles_parse_from_env(minimal_safe_env, monkeypatch):
@@ -551,3 +552,21 @@ def test_get_settings_reads_token_from_secret_file(
     # Validate token was loaded and validated correctly
     assert s.star_api_token == token
     assert s.star_api_token == validate_api_token(token)
+
+
+@pytest.mark.parametrize("value", ["59", "604801"], ids=["too_low", "too_high"])
+def test_storage_repair_min_age_requires_conservative_bounds(
+    minimal_safe_env,
+    monkeypatch,
+    value,
+):
+    """
+    GIVEN a storage-repair grace period outside the supported bounds
+    WHEN Settings are validated
+    THEN startup rejects the unsafe configuration
+    """
+
+    monkeypatch.setenv("STAR_STORAGE_REPAIR_MIN_AGE_SECONDS", value)
+
+    with pytest.raises(ValidationError):
+        Settings.model_validate({})

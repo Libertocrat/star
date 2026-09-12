@@ -61,3 +61,16 @@ teardown() {
     run grep -F 'pull star-core' "${DEPLOY_TEST_DOCKER_LOG}"
     assert_success
 }
+
+@test "storage maintenance is routed through the official runtime image" {
+    run "${DEPLOY_TEST_PACKAGE_DIR}/star" configure --auto
+    assert_success
+
+    deploy_test_create_docker_stub
+
+    run env "PATH=${DEPLOY_TEST_DOCKER_STUB_BIN}:${PATH}" "DEPLOY_TEST_DOCKER_LOG=${DEPLOY_TEST_DOCKER_LOG}" "${DEPLOY_TEST_PACKAGE_DIR}/star" storage inspect --json
+    assert_success
+
+    run grep -F 'run --rm --no-deps star-core python -m star.core.maintenance.cli inspect --json' "${DEPLOY_TEST_DOCKER_LOG}"
+    assert_success
+}

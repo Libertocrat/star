@@ -212,6 +212,7 @@ Authentication coverage is as follows:
 - `safe_open_no_follow()` uses `O_NOFOLLOW` when available and verifies that the opened target is a regular file.
 - Storage helpers keep blobs and metadata rooted under `STAR_ROOT_DIR`.
 - Managed-file downloads and deletion independently traverse the fixed storage layout through no-follow directory descriptors. Downloads stream the already verified regular-file descriptor, and deletion unlinks only a server-derived regular entry relative to its verified parent directory.
+- Offline storage maintenance uses descriptor-relative no-follow inventory and deletion, an exclusive maintenance lock, bounded inventory/action caps, and an age grace period. It refuses to follow or automatically remove ambiguous, non-regular, corrupt, or inconsistent artifacts.
 - File download responses construct `Content-Disposition` through dedicated header helpers instead of interpolating stored filenames directly.
 
 ### Action output mitigations
