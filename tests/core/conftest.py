@@ -1,4 +1,4 @@
-"""Shared fixtures for core managed file tests."""
+"""Shared fixtures for core tests that consume managed-file metadata."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from star.core.schemas.files import FileMetadata
 
 @pytest.fixture
 def make_file_metadata() -> Callable[..., FileMetadata]:
-    """Return a factory for valid managed file metadata records."""
+    """Return a factory for valid managed-file metadata records."""
 
     def create(**overrides: Any) -> FileMetadata:
         """Build valid `FileMetadata` with explicit field overrides.

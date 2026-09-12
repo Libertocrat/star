@@ -94,6 +94,7 @@ Commands:
   demo         Run guided STAR API demos
   status       Show local runtime status
   logs         Show STAR runtime logs
+  storage      Inspect or conservatively repair managed file storage
   help         Show this help
 
 Global options (no command):
@@ -116,6 +117,8 @@ Examples:
   ./star demo --demo encrypt
   ./star status
   ./star logs -f
+  ./star storage inspect
+  ./star storage repair --apply
   ./star down
 
 Command help:
@@ -700,6 +703,63 @@ run_logs_command() {
     run_command compose_runtime "${logs_args[@]}"
 }
 
+storage_usage() {
+    cat << 'EOF'
+Usage:
+  ./star storage inspect [--json] [--max-entries N]
+  ./star storage repair [--apply] [--json] [--max-entries N] [--max-actions N]
+
+Description:
+  Inspects STAR-managed file storage or plans conservative cleanup. Applying
+  repair requires the STAR runtime to be stopped and acquires an exclusive
+  storage maintenance lock inside the official STAR image.
+EOF
+}
+
+run_storage_command() {
+    local operation="${1:-}"
+    shift || true
+
+    case "${operation}" in
+        inspect | repair) ;;
+        -h | --help | '')
+            storage_usage
+            return 0
+            ;;
+        *)
+            error "Unknown storage command: ${operation}"
+            storage_usage
+            return 2
+            ;;
+    esac
+
+    validate_deployment_package || return 1
+    source_common || return 1
+
+    if ! has_env_file; then
+        error "STAR runtime is not configured. Run: './star configure'"
+        return 1
+    fi
+    load_env required
+
+    if ! command_exists docker || ! docker info > /dev/null 2>&1; then
+        error "Docker daemon is required for storage maintenance."
+        return 1
+    fi
+    if ! docker compose version > /dev/null 2>&1; then
+        error "Docker Compose v2 is required for storage maintenance."
+        return 1
+    fi
+
+    if [[ "${operation}" == "repair" && " $* " == *" --apply "* ]] && runtime_appears_running; then
+        error "Stop STAR with './star down' before running 'storage repair --apply'."
+        return 1
+    fi
+
+    run_command compose_runtime run --rm --no-deps star-core \
+        python -m star.core.maintenance.cli "${operation}" "$@"
+}
+
 run_global_auto_flow() {
     local -a configure_args=("--auto")
     local -a up_args=()
@@ -900,6 +960,9 @@ dispatch_subcommand() {
         logs)
             run_logs_command "$@"
             ;;
+        storage)
+            run_storage_command "$@"
+            ;;
         help)
             print_banner
             usage
@@ -920,7 +983,7 @@ main() {
     fi
 
     case "$1" in
-        configure | up | down | demo | status | logs | help)
+        configure | up | down | demo | status | logs | storage | help)
             dispatch_subcommand "$@"
             ;;
         -h | --help)

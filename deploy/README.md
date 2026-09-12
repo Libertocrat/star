@@ -103,6 +103,7 @@ Built-in demos use `curl` and `jq`. If they are missing, the demo flow can promp
 ./star demo
 ./star demo --demo encrypt --auto
 ./star logs -f
+./star storage inspect
 ./star down
 ```
 
@@ -112,6 +113,8 @@ Useful explicit subcommands:
 ./star configure --auto
 ./star up --pull
 ./star logs --tail 200
+./star storage repair
+./star storage repair --apply
 ./star down --docker-cleanup --force
 ```
 

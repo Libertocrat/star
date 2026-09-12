@@ -7,6 +7,8 @@ exported as `app` for use by ASGI servers (for example, uvicorn).
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import FastAPI
@@ -23,6 +25,7 @@ from star.core import (
 )
 from star.core.errors import FILE_TOO_LARGE
 from star.core.files import ensure_storage_dirs
+from star.core.files.filesystem import maintenance_lock
 from star.core.openapi import build_openapi_schema
 from star.core.security.http_policies import BodyLimitPolicy, ContentTypePolicy
 from star.middleware.auth import AuthMiddleware
@@ -63,6 +66,14 @@ class STARApp(FastAPI):
         schema = build_openapi_schema(self)
         self.openapi_schema = schema
         return schema
+
+
+@asynccontextmanager
+async def _runtime_lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Hold a shared storage-maintenance lease for this API instance."""
+
+    with maintenance_lock(app.state.settings, exclusive=False):
+        yield
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -131,6 +142,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "showExtensions": True,
             "showCommonExtensions": True,
         },
+        lifespan=_runtime_lifespan,
     )
 
     # Attach settings to app state (single source of truth)

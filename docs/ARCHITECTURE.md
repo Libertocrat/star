@@ -66,7 +66,7 @@ The main implementation lives under `src/star`.
 | `src/star/actions/presentation` | Public action catalog, request/response contract generation, and OpenAPI-facing serializers. |
 | `src/star/actions/specs` | Built-in YAML action modules that define the shipped action catalog. |
 | `src/star/middleware` | Authentication, request integrity, request ID, observability, rate limiting, timeout, and optional security headers. |
-| `src/star/core` | Settings, errors, OpenAPI generation, managed file APIs, reusable security helpers, and shared response/file schemas. |
+| `src/star/core` | Settings, errors, OpenAPI generation, managed file APIs, offline maintenance, reusable security helpers, and shared response/file schemas. |
 | `src/star/routes` | Thin HTTP handlers for `/v1/actions`, `/v1/files`, `/health`, and `/metrics`. |
 | `tests` | Smoke, unit, and integration tests covering startup, settings, middleware, action build/runtime layers, file APIs, and OpenAPI behavior. |
 | `scripts` | Helper scripts for OpenAPI export, docs site generation, and local port forwarding. |
@@ -303,6 +303,8 @@ The file API is UUID-based. Clients do not provide raw filesystem paths to retri
 
 `PUT /v1/files/{id}` uses an opaque strong ETag obtained from the metadata `GET` response in a required `If-Match` header. This prevents lost updates without exposing a mutable revision field: the write is serialized by the storage adapter, rejected with `412 PRECONDITION_FAILED` if stale, and returns the new ETag. Its JSON body forbids undeclared fields, replaces `tags` rather than merging them, and only accepts a safe ASCII `file_name` that preserves the existing extension. Tags are canonical lowercase ASCII labels matching `^[a-z0-9][a-z0-9_-]{0,47}$`; the maximum is 50 tags per file.
 
+Local storage maintenance is deliberately owned by `src/star/core/maintenance`, rather than `ManagedFileStore` in `core/files`. The former consumes `core/files` layout and descriptor-safe filesystem primitives but has its own offline availability, locking, and failure contract. The packaged `./star storage inspect` and `./star storage repair` commands run inside the official image and report only typed, path-redacted findings. `repair --apply` requires the Compose runtime to be stopped, obtains a nonblocking exclusive maintenance lock, revalidates each regular no-follow entry before deletion, and removes only aged, canonical residues. Corrupt metadata, inconsistent records, unknown entries, and non-regular filesystem objects remain for manual review; repair never reconstructs metadata or promotes unpublished content.
+
 Action outputs can also be materialized into STAR-managed storage. Declared `file + command` outputs use runtime placeholders created before subprocess execution and finalized into managed file records after successful output handling. Sanitized stdout can also be materialized into the reserved `outputs.stdout_file` entry when the client requests `stdout_as_file=true` and the selected action allows it.
 
 ### Storage layout
@@ -508,7 +510,7 @@ Testing is organized by scope:
 
 - `tests/test_app_smoke.py` covers basic application startup and health behavior.
 - `tests/actions` covers registry construction, DSL loader and validator behavior, runtime dispatch, presentation helpers, and execution-related slices.
-- `tests/core` covers schemas, settings, OpenAPI helpers, managed file primitives, and security utilities.
+- `tests/core` covers schemas, settings, OpenAPI helpers, managed file primitives, offline maintenance, and security utilities.
 - `tests/integration/middleware` exercises middleware behavior end to end.
 - `tests/integration/routes` exercises route-level behavior for `/v1/actions`, `/v1/files`, `/health`, `/metrics`, and `/openapi.json`.
 

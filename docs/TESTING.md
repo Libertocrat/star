@@ -85,7 +85,7 @@ The test suite is organized under `tests/`.
 | `tests/actions/build_engine` | Unit tests for DSL loading, semantic validation, extension policy enforcement, and action compilation. |
 | `tests/actions/presentation` | Unit tests for module catalogs, public contracts, and serializers. |
 | `tests/actions/runtime` | Unit tests for execution, rendering, output builders, and sanitization. |
-| `tests/core` | Unit tests for configuration, schemas, security helpers, response helpers, and managed file primitives. |
+| `tests/core` | Unit tests for configuration, schemas, security helpers, response helpers, managed file primitives, and offline maintenance. |
 | `tests/integration` | End-to-end HTTP validation for middleware, routes, files, and OpenAPI output. |
 | `deploy-tests/` | Bats Core validation of a freshly extracted deploy bundle and isolated Docker Compose lifecycle. |
 
@@ -120,12 +120,15 @@ Current unit coverage includes:
 - `tests/actions/runtime/test_actions_sanitizer.py` for stdout and stderr truncation, sensitive-prefix path redaction, invocation-secret redaction, and normalization
 - `tests/core/test_settings.py` for environment-backed settings, defaults, docs toggles, output byte limits, blocked binaries, and token loading rules
 - `tests/core/files/*` for managed file layout derivation, metadata sidecars, listing cursors and pagination, MIME policy validation, local storage helpers, streaming chunks, and safe download filename normalization
+- `tests/core/maintenance/*` for offline storage inventory, classification, repair planning, and safe CLI reporting
 - `tests/core/test_error_details.py` and `tests/core/test_responses.py` for allowlisted, bounded public error details and centralized HTTP error response helpers
 - `tests/core/security/*` for path validation, secure file access helpers, HTTP validation helpers, request body and integrity policy helpers, and security headers
 
 The unit suite does not assume a fixed public action catalog. Most action-specific tests build temporary DSL specs and compile deterministic registries inside the test process.
 
 `tests/core/files` intentionally mirrors the owning `src/star/core/files` package where behavior exists at submodule level. The suite keeps `descriptors.py` and `exceptions.py` covered indirectly because they are simple transport-neutral dataclasses and domain exception classes, while direct unit tests target `layout.py`, `metadata.py`, `listing.py`, `mime.py`, and `storage.py`.
+
+`tests/core/maintenance` separately mirrors `src/star/core/maintenance`, preserving the administrative reconciliation boundary apart from normal managed-file lifecycle behavior.
 
 ## 5. Integration Testing
 
@@ -175,6 +178,12 @@ In `tests/core/files`, the current tests validate:
 - opaque cursor encode/decode, filtering, deterministic sorting, and asc/desc pagination
 - SHA-256 helpers, extension-to-MIME policy validation, and executable type rejection
 - local storage descriptors, ready file creation, generated output finalization, safe download filename normalization, and fixed-size streaming chunks
+
+In `tests/core/maintenance`, the current tests validate:
+
+- conservative offline storage inspection and repair classification
+- grace-period eligibility and path-redacted report serialization
+- manual-review preservation and exclusive maintenance cleanup
 
 In `tests/core/security`, the current tests validate:
 
@@ -242,7 +251,7 @@ Shared fixtures in `tests/conftest.py` provide the common test environment.
 - `sandbox_file_factory` creates files inside the sandbox root and returns both absolute and sandbox-relative paths
 - `upload_file_id` uploads files through the real API and returns generated UUIDs
 - `file_factory` creates realistic sample files for MIME-sensitive tests
-- `tests/core/files/conftest.py` provides `make_file_metadata` for valid storage metadata records used only by managed file unit tests
+- `tests/core/conftest.py` provides `make_file_metadata` for valid storage metadata records shared by managed file and maintenance unit tests
 
 ## 8. Running Tests Locally
 
