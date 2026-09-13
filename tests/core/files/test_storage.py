@@ -8,6 +8,7 @@ from uuid import UUID, uuid4
 import pytest
 
 from star.core.files import (
+    InvalidFileListCursorError,
     InvalidManagedFileMetadataError,
     LocalManagedFileStore,
     ManagedFilePreconditionFailedError,
@@ -69,6 +70,78 @@ def test_local_store_resolves_content_descriptor_for_ready_file(settings):
         assert descriptor.size_bytes == 5
     finally:
         descriptor.stream.close()
+
+
+def test_local_store_continues_opaque_cursor_with_changed_page_size(settings):
+    """
+    GIVEN ready managed files and a cursor issued for an unfiltered query
+    WHEN the local store continues the same query with a different page size
+    THEN it returns the remaining files without exposing decoded cursor state
+    """
+
+    store = LocalManagedFileStore(settings)
+    metadata = [
+        store.create_ready_file_from_bytes(
+            original_filename=f"report-{index}.txt",
+            content=f"report-{index}".encode("ascii"),
+            extension=".txt",
+            mime_type="text/plain",
+        )
+        for index in range(3)
+    ]
+
+    first_page = store.list_files(
+        limit=1,
+        cursor=None,
+        sort="created_at",
+        order="asc",
+    )
+    second_page = store.list_files(
+        limit=2,
+        cursor=first_page.next_cursor,
+        sort="created_at",
+        order="asc",
+    )
+    expected = sorted(metadata, key=lambda item: (item.created_at, item.id))
+
+    assert [item.id for item in first_page.files] == [expected[0].id]
+    assert [item.id for item in second_page.files] == [
+        expected[1].id,
+        expected[2].id,
+    ]
+    assert second_page.next_cursor is None
+
+
+def test_local_store_rejects_cursor_from_different_query_context(settings):
+    """
+    GIVEN ready managed files and a cursor issued for an unfiltered query
+    WHEN the local store receives it with a different status filter
+    THEN it raises the focused cursor-domain error before pagination
+    """
+
+    store = LocalManagedFileStore(settings)
+    for index in range(2):
+        store.create_ready_file_from_bytes(
+            original_filename=f"report-{index}.txt",
+            content=f"report-{index}".encode("ascii"),
+            extension=".txt",
+            mime_type="text/plain",
+        )
+    first_page = store.list_files(
+        limit=1,
+        cursor=None,
+        sort="created_at",
+        order="asc",
+    )
+
+    with pytest.raises(InvalidFileListCursorError):
+        store.list_files(
+            limit=1,
+            cursor=first_page.next_cursor,
+            sort="created_at",
+            order="asc",
+            status="ready",
+        )
 
 
 def test_local_store_missing_metadata_raises_domain_error(settings):

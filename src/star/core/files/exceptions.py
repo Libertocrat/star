@@ -43,6 +43,10 @@ class ManagedFilePreconditionFailedError(ManagedFileError):
     """Raised when a metadata ETag no longer represents the current record."""
 
 
+class InvalidFileListCursorError(ManagedFileError):
+    """Raised when a file-list cursor is malformed or context-incompatible."""
+
+
 class ManagedFileTooLargeError(ManagedFileError):
     """Raised when an uploaded file exceeds the configured byte limit.
 

@@ -175,7 +175,7 @@ In `tests/core/files`, the current tests validate:
 - deterministic managed file paths under `STAR_ROOT_DIR/data/files/`
 - runtime secret file directory creation under `STAR_ROOT_DIR/data/runtime/secrets/` with restrictive permissions
 - metadata JSON sidecar save, load, placeholder, and delete helpers
-- opaque cursor encode/decode, filtering, deterministic sorting, and asc/desc pagination
+- bounded versioned cursor encode/decode, canonical query fingerprints, strict malformed and legacy-token rejection, filtering, deterministic sorting, and asc/desc pagination
 - SHA-256 helpers, extension-to-MIME policy validation, and executable type rejection
 - local storage descriptors, ready file creation, generated output finalization, safe download filename normalization, and fixed-size streaming chunks
 

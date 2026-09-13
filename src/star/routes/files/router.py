@@ -9,12 +9,26 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Header, Request, Response, UploadFile
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Header,
+    Query,
+    Request,
+    Response,
+    UploadFile,
+)
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import ValidationError
 
 from star.core.errors import INVALID_REQUEST, PRECONDITION_REQUIRED, StarError
-from star.core.files import is_metadata_etag, iter_file_chunks, metadata_etag
+from star.core.files import (
+    MAX_FILE_LIST_CURSOR_LENGTH,
+    is_metadata_etag,
+    iter_file_chunks,
+    metadata_etag,
+)
 from star.core.responses import error_json_response, star_error_json_response
 from star.core.schemas.envelope import ResponseEnvelope
 from star.core.security.headers import content_disposition_attachment
@@ -232,7 +246,9 @@ async def put_file_metadata(
 list_files_description = (
     "**List STAR-managed files with cursor pagination and deterministic ordering.**\n\n"
     "Supports filtering by `status`, `mime_type`, and `extension`, with "
-    "sorting by `created_at` and stable tiebreaking by file id."
+    "sorting by `created_at` and stable tiebreaking by file id. Returned cursors "
+    "are opaque and bound to the effective filters and ordering. Reusing a "
+    "cursor with a different query is rejected; `limit` may change between pages."
 )
 
 
@@ -245,7 +261,16 @@ list_files_description = (
 async def list_files(
     request: Request,
     limit: int = 20,
-    cursor: str | None = None,
+    cursor: Annotated[
+        str | None,
+        Query(
+            description=(
+                "Opaque continuation token returned by the previous page. It is "
+                "bound to the effective filters and ordering and is limited to "
+                f"{MAX_FILE_LIST_CURSOR_LENGTH} characters."
+            )
+        ),
+    ] = None,
     sort: str = "created_at",
     order: str = "asc",
     status: str | None = None,

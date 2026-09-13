@@ -6,6 +6,7 @@ error mapping, and resilience to malformed metadata entries.
 
 from __future__ import annotations
 
+import base64
 import json
 import time
 from datetime import datetime
@@ -16,6 +17,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from star.core.errors import INVALID_REQUEST, UNAUTHORIZED
+from star.core.files import MAX_FILE_LIST_CURSOR_LENGTH
 
 # ============================================================================
 # Helpers
@@ -88,8 +90,22 @@ def _list_files(
     return client.get("/v1/files", headers=auth_headers, params=params)
 
 
+def _encode_test_cursor_payload(payload: dict) -> str:
+    """Encode a synthetic payload for cursor rejection tests.
+
+    Args:
+        payload: JSON object representing intentionally invalid cursor state.
+
+    Returns:
+        Canonical URL-safe Base64 test token.
+    """
+
+    raw = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("ascii")
+    return base64.urlsafe_b64encode(raw).decode("ascii")
+
+
 # ============================================================================
-# Happy path
+# Happy Path
 # ============================================================================
 
 
@@ -134,6 +150,11 @@ def test_list_files_basic_success(create_upload_app, auth_headers):
     assert len(body["data"]["files"]) == 3
     assert body["data"]["pagination"]["count"] == 3
     assert body["data"]["pagination"]["next_cursor"] is None
+
+
+# ============================================================================
+# Cursor Contract And Pagination
+# ============================================================================
 
 
 def test_list_files_with_limit(create_upload_app, auth_headers):
@@ -277,6 +298,132 @@ def test_list_files_cursor_pagination_full_walk(create_upload_app, auth_headers)
                 break
 
     assert len(seen_ids) == total_files
+
+
+def test_list_files_cursor_allows_page_size_change(create_upload_app, auth_headers):
+    """
+    GIVEN a cursor issued for an unfiltered ascending file-list query
+    WHEN the next page requests a different limit with the same query context
+    THEN pagination succeeds without duplicate file ids
+    """
+
+    app = create_upload_app()
+
+    with TestClient(app) as client:
+        for index in range(4):
+            _upload_file_and_get_data(
+                client,
+                auth_headers,
+                filename=f"page-size-{index}.txt",
+                content=f"page-size-{index}\n".encode("utf-8"),
+                content_type="text/plain",
+            )
+
+        first = _list_files(client, auth_headers, limit=1)
+        assert first.status_code == 200
+        first_body = first.json()
+        cursor = first_body["data"]["pagination"]["next_cursor"]
+        assert cursor is not None
+
+        second = _list_files(client, auth_headers, limit=2, cursor=cursor)
+
+    assert second.status_code == 200
+    first_ids = {item["id"] for item in first_body["data"]["files"]}
+    second_ids = {item["id"] for item in second.json()["data"]["files"]}
+    assert len(second_ids) == 2
+    assert first_ids.isdisjoint(second_ids)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("order", "desc"),
+        ("status", "ready"),
+        ("mime_type", "text/plain"),
+        ("extension", ".txt"),
+    ],
+    ids=["order", "status", "mime_type", "extension"],
+)
+def test_list_files_cursor_rejects_changed_query_context(
+    create_upload_app,
+    auth_headers,
+    field,
+    value,
+):
+    """
+    GIVEN a cursor issued for an unfiltered ascending file-list query
+    WHEN the cursor is reused with a different filter or ordering context
+    THEN the endpoint rejects it with the safe INVALID_REQUEST contract
+    """
+
+    app = create_upload_app()
+
+    with TestClient(app) as client:
+        for index in range(3):
+            _upload_file_and_get_data(
+                client,
+                auth_headers,
+                filename=f"context-{index}.txt",
+                content=f"context-{index}\n".encode("utf-8"),
+                content_type="text/plain",
+            )
+
+        first = _list_files(client, auth_headers, limit=1)
+        assert first.status_code == 200
+        cursor = first.json()["data"]["pagination"]["next_cursor"]
+        assert cursor is not None
+
+        response = _list_files(
+            client,
+            auth_headers,
+            limit=1,
+            cursor=cursor,
+            **{field: value},
+        )
+
+    assert response.status_code == INVALID_REQUEST.http_status
+    body = response.json()
+    assert body["success"] is False
+    assert body["data"] is None
+    assert body["error"] == {
+        "code": INVALID_REQUEST.code,
+        "message": "Invalid cursor.",
+        "details": {},
+    }
+
+
+def test_list_files_cursor_stability(create_upload_app, auth_headers):
+    """
+    GIVEN a paginated list flow across multiple pages
+    WHEN next_cursor is used on subsequent request
+    THEN there are no duplicate ids across pages
+    """
+
+    app = create_upload_app()
+
+    with TestClient(app) as client:
+        for index in range(6):
+            _upload_file_and_get_data(
+                client,
+                auth_headers,
+                filename=f"stable-{index}.txt",
+                content=f"stable-{index}\n".encode("utf-8"),
+                content_type="text/plain",
+            )
+            time.sleep(0.01)
+
+        first = _list_files(client, auth_headers, limit=2)
+        assert first.status_code == 200
+        first_body = first.json()
+        first_ids = [item["id"] for item in first_body["data"]["files"]]
+        cursor = first_body["data"]["pagination"]["next_cursor"]
+        assert cursor is not None
+
+        second = _list_files(client, auth_headers, limit=2, cursor=cursor)
+        assert second.status_code == 200
+        second_ids = [item["id"] for item in second.json()["data"]["files"]]
+
+    assert set(first_ids).isdisjoint(set(second_ids))
 
 
 # ============================================================================
@@ -602,7 +749,7 @@ def test_list_files_filter_combined_with_extension(
 
 
 # ============================================================================
-# Invalid params
+# Invalid Params
 # ============================================================================
 
 
@@ -661,26 +808,64 @@ def test_list_files_invalid_order(create_upload_app, auth_headers):
     assert body["error"]["code"] == INVALID_REQUEST.code
 
 
-def test_list_files_invalid_cursor(create_upload_app, auth_headers):
+@pytest.mark.parametrize(
+    "cursor",
+    [
+        "not_base64",
+        "A" * (MAX_FILE_LIST_CURSOR_LENGTH + 1),
+        _encode_test_cursor_payload(
+            {
+                "created_at": "2026-01-01T00:00:00+00:00",
+                "id": "00000000-0000-0000-0000-000000000001",
+            }
+        ),
+        _encode_test_cursor_payload(
+            {
+                "backend": "local",
+                "position": {
+                    "created_at": "2026-01-01T00:00:00+00:00",
+                    "id": "00000000-0000-0000-0000-000000000001",
+                },
+                "query_fingerprint": "0" * 64,
+                "version": 2,
+            }
+        ),
+        _encode_test_cursor_payload(
+            {
+                "backend": "s3",
+                "position": {
+                    "created_at": "2026-01-01T00:00:00+00:00",
+                    "id": "00000000-0000-0000-0000-000000000001",
+                },
+                "query_fingerprint": "0" * 64,
+                "version": 1,
+            }
+        ),
+    ],
+    ids=["malformed", "oversized", "legacy", "unknown_version", "wrong_backend"],
+)
+def test_list_files_invalid_cursor(create_upload_app, auth_headers, cursor):
     """
-    GIVEN a malformed cursor token
-    WHEN GET /v1/files?cursor=not_base64 is called
+    GIVEN a malformed, oversized, or legacy cursor token
+    WHEN GET /v1/files is called with that cursor
     THEN endpoint returns INVALID_REQUEST with HTTP 400
     """
 
     app = create_upload_app()
 
     with TestClient(app) as client:
-        response = _list_files(client, auth_headers, cursor="not_base64")
+        response = _list_files(client, auth_headers, cursor=cursor)
 
     assert response.status_code == INVALID_REQUEST.http_status
     body = response.json()
     assert body["success"] is False
     assert body["error"]["code"] == INVALID_REQUEST.code
+    assert body["error"]["message"] == "Invalid cursor."
+    assert body["error"]["details"] == {}
 
 
 # ============================================================================
-# Authorization and contract
+# Authorization And Contract
 # ============================================================================
 
 
@@ -737,42 +922,8 @@ def test_list_files_response_structure(create_upload_app, auth_headers):
     )
 
 
-def test_list_files_cursor_stability(create_upload_app, auth_headers):
-    """
-    GIVEN a paginated list flow across multiple pages
-    WHEN next_cursor is used on subsequent request
-    THEN there are no duplicate ids across pages
-    """
-
-    app = create_upload_app()
-
-    with TestClient(app) as client:
-        for index in range(6):
-            _upload_file_and_get_data(
-                client,
-                auth_headers,
-                filename=f"stable-{index}.txt",
-                content=f"stable-{index}\n".encode("utf-8"),
-                content_type="text/plain",
-            )
-            time.sleep(0.01)
-
-        first = _list_files(client, auth_headers, limit=2)
-        assert first.status_code == 200
-        first_body = first.json()
-        first_ids = [item["id"] for item in first_body["data"]["files"]]
-        cursor = first_body["data"]["pagination"]["next_cursor"]
-        assert cursor is not None
-
-        second = _list_files(client, auth_headers, limit=2, cursor=cursor)
-        assert second.status_code == 200
-        second_ids = [item["id"] for item in second.json()["data"]["files"]]
-
-    assert set(first_ids).isdisjoint(set(second_ids))
-
-
 # ============================================================================
-# Edge cases
+# Edge Cases
 # ============================================================================
 
 
@@ -798,7 +949,7 @@ def test_list_files_empty_result(create_upload_app, auth_headers):
 
 
 # ============================================================================
-# Metadata edge cases
+# Metadata Edge Cases
 # ============================================================================
 
 

@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added reviewed build-time capabilities and per-binary invocation policy for mounted action extensions, controlled through `STAR_ENABLED_EXTENSION_CAPABILITIES`.
 - Added offline `./star storage` inspection, dry-run, and conservative repair for local managed storage, including bounded inventory/action caps and JSON reports.
 
+### Changed
+
+- Replaced legacy file-list cursors with bounded versioned opaque tokens interpreted by the active storage adapter and bound to the effective filter and ordering context. Existing cursors are intentionally incompatible; page size may still change between requests.
+
 ### Fixed
 
 - Pinned AnyIO to `4.14.2` so Starlette `TestClient` imports remain compatible with STAR's strict deprecation-warning policy in fresh CI environments.

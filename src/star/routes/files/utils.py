@@ -22,6 +22,7 @@ from star.core.files import (
     EmptyManagedFileError,
     FileExtensionMissingError,
     InvalidChecksumAlgorithmError,
+    InvalidFileListCursorError,
     InvalidManagedFileMetadataError,
     LocalManagedFileStore,
     ManagedFileError,
@@ -70,6 +71,8 @@ def map_managed_file_error(
         return StarError(FILE_NOT_FOUND, details=details)
     if isinstance(exc, ManagedFilePreconditionFailedError):
         return StarError(PRECONDITION_FAILED, details=details)
+    if isinstance(exc, InvalidFileListCursorError):
+        return StarError(INVALID_REQUEST, "Invalid cursor.")
     if isinstance(exc, InvalidManagedFileMetadataError):
         return StarError(
             INVALID_REQUEST,
