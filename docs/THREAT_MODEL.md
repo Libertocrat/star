@@ -131,6 +131,7 @@ Authentication coverage is as follows:
 ### Input validation threats
 
 - malformed request paths containing disallowed bytes or separators
+- malformed, oversized, ambiguous, stale, or context-mismatched file-list cursors
 - malformed raw headers
 - unsupported content types for `POST /v1/actions/{action_id}`
 - unsupported content types for `/v1/files` uploads
@@ -189,6 +190,7 @@ Authentication coverage is as follows:
 - Action execution validates params against the action-specific generated `params_model`.
 - Runtime rendering rejects invalid placeholder values and `None` values before execution.
 - Public `StarError` details are allowlisted and bounded before serialization; Pydantic validation errors retain only `type`, `loc`, and `msg`, while rejected input values, context, and external documentation URLs are omitted.
+- File-list cursors are bounded before decoding and validated by the active storage adapter as canonical, versioned, backend-specific tokens. The local adapter rejects duplicate or unknown fields, invalid types and ordering positions, unsupported versions, and fingerprints that do not match the effective filters and ordering. Cursor contents and fingerprints are omitted from public errors and logs. The fingerprint prevents accidental or stale reuse across query contexts but is not an authorization mechanism or cryptographic signature.
 
 ### DSL build and execution mitigations
 

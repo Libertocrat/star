@@ -21,6 +21,7 @@ from star.core.files.exceptions import (
     ChecksumMismatchError,
     EmptyManagedFileError,
     InvalidChecksumAlgorithmError,
+    InvalidFileListCursorError,
     InvalidManagedFileMetadataError,
     ManagedFileNotFoundError,
     ManagedFilePreconditionFailedError,
@@ -44,6 +45,8 @@ from star.core.files.listing import (
     apply_filters,
     apply_pagination,
     apply_sort,
+    decode_cursor,
+    file_list_query_fingerprint,
 )
 from star.core.files.metadata import (
     EMPTY_SHA256,
@@ -136,7 +139,8 @@ class ManagedFileStore(Protocol):
         self,
         *,
         limit: int,
-        cursor: tuple[datetime, uuid.UUID] | None,
+        cursor: str | None,
+        sort: str,
         order: str,
         status: str | None = None,
         mime_type: str | None = None,
@@ -146,7 +150,8 @@ class ManagedFileStore(Protocol):
 
         Args:
             limit: Maximum records in the returned page.
-            cursor: Optional decoded cursor from a previous page.
+            cursor: Optional opaque cursor from a previous page.
+            sort: Effective sort field bound to cursor continuation.
             order: Sort order used for deterministic pagination.
             status: Optional lifecycle status filter.
             mime_type: Optional MIME type filter.
@@ -500,7 +505,8 @@ class LocalManagedFileStore:
         self,
         *,
         limit: int,
-        cursor: tuple[datetime, uuid.UUID] | None,
+        cursor: str | None,
+        sort: str,
         order: str,
         status: str | None = None,
         mime_type: str | None = None,
@@ -510,7 +516,8 @@ class LocalManagedFileStore:
 
         Args:
             limit: Maximum records to return.
-            cursor: Optional decoded pagination cursor.
+            cursor: Optional opaque pagination cursor.
+            sort: Effective sort field bound to cursor continuation.
             order: Sort order, asc or desc.
             status: Optional status filter.
             mime_type: Optional MIME type filter.
@@ -524,6 +531,22 @@ class LocalManagedFileStore:
         """
 
         try:
+            query_fingerprint = file_list_query_fingerprint(
+                sort=sort,
+                order=order,
+                status=status,
+                mime_type=mime_type,
+                extension=extension,
+            )
+            cursor_position = (
+                decode_cursor(
+                    cursor,
+                    expected_query_fingerprint=query_fingerprint,
+                )
+                if cursor is not None
+                else None
+            )
+
             meta_dir = get_meta_dir(self.settings)
             items: list[FileMetadata] = []
             for meta_path in sorted(meta_dir.glob("file_*.json")):
@@ -568,11 +591,12 @@ class LocalManagedFileStore:
             page, next_cursor = apply_pagination(
                 sorted_items,
                 limit=limit,
-                cursor=cursor,
+                cursor=cursor_position,
                 order=order,
+                query_fingerprint=query_fingerprint,
             )
             return FileListPage(files=page, next_cursor=next_cursor)
-        except ManagedFileStorageError:
+        except (InvalidFileListCursorError, ManagedFileStorageError):
             raise
         except Exception as exc:
             logger.exception("file.list.failed")

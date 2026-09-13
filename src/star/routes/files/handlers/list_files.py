@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from star.core.config import Settings, get_settings
 from star.core.errors import INTERNAL_ERROR, INVALID_REQUEST, StarError
-from star.core.files import decode_cursor
+from star.core.files import InvalidFileListCursorError
 from star.core.files.layout import logger
 from star.routes.files.schemas import FileListData, Pagination
 from star.routes.files.utils import get_file_store, map_managed_file_error
@@ -58,21 +58,11 @@ async def list_files_handler(
             INVALID_REQUEST, "Invalid order. Allowed values: 'asc', 'desc'."
         )
 
-    cursor_tuple = None
-    if cursor:
-        try:
-            cursor_tuple = decode_cursor(cursor)
-        except Exception as exc:
-            logger.warning(
-                "file.list.invalid_request",
-                extra={"reason": "invalid_cursor"},
-            )
-            raise StarError(INVALID_REQUEST, "Invalid cursor.") from exc
-
     try:
         page = get_file_store(cfg).list_files(
             limit=limit,
-            cursor=cursor_tuple,
+            cursor=cursor,
+            sort=sort,
             order=order,
             status=status,
             mime_type=mime_type,
@@ -84,7 +74,7 @@ async def list_files_handler(
             extra={
                 "count": len(page.files),
                 "limit": limit,
-                "cursor": cursor,
+                "has_cursor": cursor is not None,
                 "filters": {
                     "status": status,
                     "mime_type": mime_type,
@@ -104,6 +94,11 @@ async def list_files_handler(
         raise
     except Exception as exc:
         mapped = map_managed_file_error(exc)
-        if mapped.code == INTERNAL_ERROR.code:
+        if isinstance(exc, InvalidFileListCursorError):
+            logger.warning(
+                "file.list.invalid_request",
+                extra={"reason": "invalid_cursor"},
+            )
+        elif mapped.code == INTERNAL_ERROR.code:
             logger.exception("file.list.failed")
         raise mapped from exc

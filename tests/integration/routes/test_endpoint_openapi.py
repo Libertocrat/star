@@ -796,6 +796,17 @@ def test_openapi_documents_files_list_contract(
 
     list_get = schema["paths"]["/v1/files"]["get"]
     responses = list_get["responses"]
+    cursor_parameter = next(
+        parameter
+        for parameter in list_get["parameters"]
+        if parameter["in"] == "query" and parameter["name"] == "cursor"
+    )
+
+    assert "Opaque continuation token" in cursor_parameter["description"]
+    assert (
+        "bound to the effective filters and ordering" in cursor_parameter["description"]
+    )
+    assert "4096 characters" in cursor_parameter["description"]
 
     success_example = responses["200"]["content"]["application/json"]["example"]
     assert success_example["success"] is True
