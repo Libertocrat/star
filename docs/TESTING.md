@@ -119,7 +119,7 @@ Current unit coverage includes:
 - `tests/actions/runtime/test_actions_outputs_builder.py` for output payload shaping and file finalization
 - `tests/actions/runtime/test_actions_sanitizer.py` for stdout and stderr truncation, sensitive-prefix path redaction, invocation-secret redaction, and normalization
 - `tests/core/test_settings.py` for environment-backed settings, defaults, docs toggles, output byte limits, blocked binaries, and token loading rules
-- `tests/core/files/*` for managed file layout derivation, metadata sidecars, listing cursors and pagination, MIME policy validation, local storage helpers, streaming chunks, and safe download filename normalization
+- `tests/core/files/*` for managed file layout derivation, metadata sidecars, listing filters, context-bound cursors and pagination, MIME policy validation, local storage helpers, streaming chunks, and safe download filename normalization
 - `tests/core/maintenance/*` for offline storage inventory, classification, repair planning, and safe CLI reporting
 - `tests/core/test_error_details.py` and `tests/core/test_responses.py` for allowlisted, bounded public error details and centralized HTTP error response helpers
 - `tests/core/security/*` for path validation, secure file access helpers, HTTP validation helpers, request body and integrity policy helpers, and security headers

@@ -6,6 +6,22 @@ responsible for mapping them to stable public `StarError` responses.
 
 from __future__ import annotations
 
+from typing import Literal, TypeAlias
+
+FileListQueryErrorReason: TypeAlias = Literal[
+    "invalid_limit",
+    "invalid_sort",
+    "invalid_order",
+    "invalid_status",
+    "invalid_mime_type",
+    "missing_extension_dot",
+    "invalid_extension",
+    "invalid_file_name",
+    "invalid_tags",
+    "invalid_cursor",
+]
+"""Finite reasons for a rejected managed-file listing query."""
+
 
 class ManagedFileError(Exception):
     """Base class for transport-neutral managed file failures.
@@ -45,6 +61,25 @@ class ManagedFilePreconditionFailedError(ManagedFileError):
 
 class InvalidFileListCursorError(ManagedFileError):
     """Raised when a file-list cursor is malformed or context-incompatible."""
+
+
+class InvalidFileListQueryError(ManagedFileError):
+    """Raised when a file-list query violates STAR's canonical policy.
+
+    Attributes:
+        reason: Low-cardinality policy reason used only for safe mapping and
+            structured logging.
+    """
+
+    def __init__(self, reason: FileListQueryErrorReason):
+        """Initialize the rejected query with its finite policy reason.
+
+        Args:
+            reason: Canonical reason identifying the rejected query shape.
+        """
+
+        self.reason = reason
+        super().__init__(reason)
 
 
 class ManagedFileTooLargeError(ManagedFileError):

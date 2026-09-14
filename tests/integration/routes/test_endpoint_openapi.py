@@ -808,6 +808,24 @@ def test_openapi_documents_files_list_contract(
     )
     assert "4096 characters" in cursor_parameter["description"]
 
+    parameters = {
+        parameter["name"]: parameter
+        for parameter in list_get["parameters"]
+        if parameter["in"] == "query"
+    }
+    assert {"file_name", "tags"}.issubset(parameters)
+    assert "case-insensitive substring" in parameters["file_name"]["description"]
+    assert "Every listed tag" in parameters["tags"]["description"]
+    assert parameters["status"]["schema"]["anyOf"][0]["enum"] == [
+        "pending",
+        "unverified",
+        "ready",
+    ]
+    assert "all-of CSV `tags` filter" in list_get["description"]
+    assert "Unknown, repeated, and empty query parameters are rejected." in (
+        list_get["description"]
+    )
+
     success_example = responses["200"]["content"]["application/json"]["example"]
     assert success_example["success"] is True
     assert success_example["error"] is None
@@ -815,7 +833,7 @@ def test_openapi_documents_files_list_contract(
     assert success_example["data"]["pagination"]["count"] == 0
     assert success_example["data"]["pagination"]["next_cursor"] is None
 
-    for status in ("400", "401", "500"):
+    for status in ("400", "401", "422", "500"):
         assert status in responses
         examples = responses[status]["content"]["application/json"]["examples"]
         assert isinstance(examples, dict)

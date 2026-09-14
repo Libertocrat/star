@@ -16,7 +16,7 @@ from uuid import UUID
 import pytest
 from fastapi.testclient import TestClient
 
-from star.core.errors import INVALID_REQUEST, UNAUTHORIZED
+from star.core.errors import INVALID_REQUEST, UNAUTHORIZED, UNPROCESSABLE_ENTITY
 from star.core.files import MAX_FILE_LIST_CURSOR_LENGTH
 
 # ============================================================================
@@ -74,20 +74,59 @@ def _meta_path_for(tmp_path: Path, file_id: UUID) -> Path:
 def _list_files(
     client: TestClient,
     auth_headers: dict[str, str],
-    **params,
+    raw_params: list[tuple[str, str | int | float | bool | None]] | None = None,
+    **query_params: str | int | float | bool | None,
 ):
     """Call GET /v1/files with auth headers and query params.
 
     Args:
             client: Test client bound to the STAR app.
             auth_headers: Authorization headers.
-            **params: Query parameters forwarded to endpoint.
+            raw_params: Optional raw query pairs, including intentionally repeated keys.
+            **query_params: Query parameters forwarded to endpoint.
 
     Returns:
             Raw HTTP response.
     """
 
-    return client.get("/v1/files", headers=auth_headers, params=params)
+    if raw_params is not None and query_params:
+        raise AssertionError("Use either params or keyword query parameters, not both.")
+    if raw_params is not None:
+        return client.get("/v1/files", headers=auth_headers, params=raw_params)
+    return client.get("/v1/files", headers=auth_headers, params=query_params)
+
+
+def _metadata_etag(
+    client: TestClient,
+    auth_headers: dict[str, str],
+    file_id: str,
+) -> str:
+    """Return the current public metadata ETag for a managed file."""
+
+    response = client.get(f"/v1/files/{file_id}", headers=auth_headers)
+    assert response.status_code == 200
+    return response.headers["etag"]
+
+
+def _replace_editable_metadata(
+    client: TestClient,
+    auth_headers: dict[str, str],
+    file_id: str,
+    *,
+    file_name: str,
+    tags: list[str],
+) -> None:
+    """Replace editable metadata through the conditional public endpoint."""
+
+    response = client.put(
+        f"/v1/files/{file_id}",
+        headers={
+            **auth_headers,
+            "If-Match": _metadata_etag(client, auth_headers, file_id),
+        },
+        json={"file_name": file_name, "tags": tags},
+    )
+    assert response.status_code == 200
 
 
 def _encode_test_cursor_payload(payload: dict) -> str:
@@ -341,8 +380,10 @@ def test_list_files_cursor_allows_page_size_change(create_upload_app, auth_heade
         ("status", "ready"),
         ("mime_type", "text/plain"),
         ("extension", ".txt"),
+        ("file_name", "context"),
+        ("tags", "context"),
     ],
-    ids=["order", "status", "mime_type", "extension"],
+    ids=["order", "status", "mime_type", "extension", "file_name", "tags"],
 )
 def test_list_files_cursor_rejects_changed_query_context(
     create_upload_app,
@@ -662,13 +703,13 @@ def test_list_files_filter_combined(create_upload_app, auth_headers):
     assert all(item["mime_type"] == "text/plain" for item in files)
 
 
-def test_list_files_filter_extension_without_dot_returns_empty(
+def test_list_files_filter_extension_without_dot_is_rejected(
     create_upload_app, auth_headers
 ):
     """
     GIVEN uploaded files with extensions
     WHEN GET /v1/files?extension without leading dot is called
-    THEN response succeeds but no items match the filter
+    THEN the endpoint rejects the malformed extension with INVALID_REQUEST
     """
 
     app = create_upload_app()
@@ -684,11 +725,18 @@ def test_list_files_filter_extension_without_dot_returns_empty(
 
         response = _list_files(client, auth_headers, extension="txt")
 
-    assert response.status_code == 200
+    assert response.status_code == INVALID_REQUEST.http_status
     body = response.json()
-    assert body["data"]["files"] == []
-    assert body["data"]["pagination"]["count"] == 0
-    assert body["data"]["pagination"]["next_cursor"] is None
+    assert body["success"] is False
+    assert body["data"] is None
+    assert body["error"] == {
+        "code": INVALID_REQUEST.code,
+        "message": (
+            "Invalid extension. Expected a lowercase value beginning with '.', "
+            "for example '.txt'."
+        ),
+        "details": {},
+    }
 
 
 def test_list_files_filter_combined_with_extension(
@@ -748,9 +796,244 @@ def test_list_files_filter_combined_with_extension(
     assert all(item["extension"] == target["extension"] for item in files)
 
 
+def test_list_files_filters_editable_file_name_and_tags(
+    create_upload_app, auth_headers
+):
+    """
+    GIVEN files whose editable names and tag sets differ from their upload names
+    WHEN GET /v1/files filters by a name substring and all requested tags
+    THEN it returns only files satisfying the combined editable metadata query
+    """
+
+    app = create_upload_app()
+
+    with TestClient(app) as client:
+        quarterly = _upload_file_and_get_data(
+            client,
+            auth_headers,
+            filename="source-quarterly.txt",
+            content=b"quarterly\n",
+            content_type="text/plain",
+        )
+        annual = _upload_file_and_get_data(
+            client,
+            auth_headers,
+            filename="source-annual.txt",
+            content=b"annual\n",
+            content_type="text/plain",
+        )
+        _replace_editable_metadata(
+            client,
+            auth_headers,
+            quarterly["id"],
+            file_name="Quarterly Report.txt",
+            tags=["Finance", "Q3"],
+        )
+        _replace_editable_metadata(
+            client,
+            auth_headers,
+            annual["id"],
+            file_name="Annual Report.txt",
+            tags=["finance"],
+        )
+
+        response = _list_files(
+            client,
+            auth_headers,
+            file_name="REPORT",
+            tags="q3,finance",
+            status="ready",
+            extension=".txt",
+        )
+        original_name_only = _list_files(
+            client,
+            auth_headers,
+            file_name="source-quarterly",
+        )
+
+    assert response.status_code == 200
+    files = response.json()["data"]["files"]
+    assert [item["id"] for item in files] == [quarterly["id"]]
+    assert files[0]["file_name"] == "Quarterly Report.txt"
+    assert files[0]["tags"] == ["finance", "q3"]
+    assert original_name_only.status_code == 200
+    assert original_name_only.json()["data"]["files"] == []
+
+
+def test_list_files_cursor_accepts_equivalent_name_and_tag_context(
+    create_upload_app,
+    auth_headers,
+):
+    """
+    GIVEN a filtered first page with an emitted cursor
+    WHEN continuation uses equivalent filename case and tag ordering
+    THEN the cursor remains valid and returns the remaining matching record
+    """
+
+    app = create_upload_app()
+
+    with TestClient(app) as client:
+        uploaded_ids: list[str] = []
+        for index in range(2):
+            file_data = _upload_file_and_get_data(
+                client,
+                auth_headers,
+                filename=f"source-{index}.txt",
+                content=f"report-{index}\n".encode("ascii"),
+                content_type="text/plain",
+            )
+            uploaded_ids.append(file_data["id"])
+            _replace_editable_metadata(
+                client,
+                auth_headers,
+                file_data["id"],
+                file_name=f"Quarterly Report {index}.txt",
+                tags=["finance", "q3"],
+            )
+
+        first = _list_files(
+            client,
+            auth_headers,
+            limit=1,
+            file_name="report",
+            tags="finance,q3",
+        )
+        cursor = first.json()["data"]["pagination"]["next_cursor"]
+        continued = _list_files(
+            client,
+            auth_headers,
+            limit=1,
+            cursor=cursor,
+            file_name="REPORT",
+            tags="q3,finance",
+        )
+
+    assert first.status_code == 200
+    assert cursor is not None
+    assert continued.status_code == 200
+    first_files = first.json()["data"]["files"]
+    continued_files = continued.json()["data"]["files"]
+    assert len(first_files) == 1
+    assert len(continued_files) == 1
+    assert {first_files[0]["id"], continued_files[0]["id"]} == set(uploaded_ids)
+
+
 # ============================================================================
 # Invalid Params
 # ============================================================================
+
+
+@pytest.mark.parametrize(
+    ("raw_params", "message"),
+    [
+        ([("unknown", "value")], "Unknown query parameter."),
+        (
+            [("tags", "finance"), ("tags", "q3")],
+            "Repeated query parameters are not allowed.",
+        ),
+        ([("file_name", "")], "Query parameter values cannot be empty."),
+        ([("mime_type", "   ")], "Query parameter values cannot be empty."),
+    ],
+    ids=["unknown", "repeated", "empty", "whitespace"],
+)
+def test_list_files_rejects_ambiguous_query_parameters(
+    create_upload_app,
+    auth_headers,
+    raw_params,
+    message,
+):
+    """
+    GIVEN a file-list request with an unknown, repeated, or empty query value
+    WHEN GET /v1/files is called
+    THEN STAR rejects the ambiguous request using the safe invalid-request contract
+    """
+
+    app = create_upload_app()
+
+    with TestClient(app) as client:
+        response = _list_files(client, auth_headers, raw_params=raw_params)
+
+    assert response.status_code == INVALID_REQUEST.http_status
+    assert response.json()["error"] == {
+        "code": INVALID_REQUEST.code,
+        "message": message,
+        "details": {},
+    }
+
+
+@pytest.mark.parametrize(
+    ("params", "message"),
+    [
+        ({"file_name": "../report.txt"}, "Invalid file_name filter."),
+        ({"file_name": "réport.txt"}, "Invalid file_name filter."),
+        ({"tags": "finance,not allowed"}, "Invalid tags filter."),
+        ({"tags": "finance, q3"}, "Invalid tags filter."),
+        ({"tags": "finance,Finance"}, "Invalid tags filter."),
+        (
+            {"mime_type": "textplain"},
+            "Invalid mime_type filter. Expected lowercase 'type/subtype'.",
+        ),
+        (
+            {"extension": "txt"},
+            (
+                "Invalid extension. Expected a lowercase value beginning with '.', "
+                "for example '.txt'."
+            ),
+        ),
+    ],
+    ids=[
+        "unsafe_name",
+        "unicode_name",
+        "invalid_tag",
+        "tag_whitespace",
+        "duplicate_tag",
+        "invalid_mime",
+        "missing_extension_dot",
+    ],
+)
+def test_list_files_rejects_invalid_filter_values(
+    create_upload_app,
+    auth_headers,
+    params,
+    message,
+):
+    """
+    GIVEN an unsafe or policy-invalid listing filter
+    WHEN GET /v1/files is called
+    THEN STAR rejects it without reflecting the supplied value
+    """
+
+    app = create_upload_app()
+
+    with TestClient(app) as client:
+        response = _list_files(client, auth_headers, **params)
+
+    assert response.status_code == INVALID_REQUEST.http_status
+    body = response.json()
+    assert body["error"] == {
+        "code": INVALID_REQUEST.code,
+        "message": message,
+        "details": {},
+    }
+
+
+def test_list_files_rejects_unknown_status_through_typed_contract(
+    create_upload_app,
+    auth_headers,
+):
+    """
+    GIVEN a lifecycle status outside the shared metadata vocabulary
+    WHEN GET /v1/files is called
+    THEN FastAPI returns STAR's sanitized typed-validation envelope
+    """
+
+    app = create_upload_app()
+
+    with TestClient(app) as client:
+        response = _list_files(client, auth_headers, status="deleted")
+
+    assert response.status_code == UNPROCESSABLE_ENTITY.http_status
+    assert response.json()["error"]["code"] == UNPROCESSABLE_ENTITY.code
 
 
 @pytest.mark.parametrize("limit", [0, 1000], ids=["limit_zero", "limit_too_high"])

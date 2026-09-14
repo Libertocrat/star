@@ -103,7 +103,7 @@ Attack inputs include:
 - request headers, especially `Authorization`, `Content-Type`, `Content-Length`, `Transfer-Encoding`, and `X-Request-Id`
 - request body content sent to body-capable endpoints, including `POST /v1/actions/{action_id}`, multipart form uploads sent to `/v1/files`, and JSON metadata replacements sent to `PUT /v1/files/{id}`
 - `action_id` path parameters on `GET /v1/actions/{action_id}` and `POST /v1/actions/{action_id}`
-- discovery query parameters such as `q`, `tags`, and `match` on `GET /v1/actions`
+- discovery query parameters such as `q`, `tags`, and `match` on `GET /v1/actions`, plus strict listing filters on `GET /v1/files`
 - `file_id` path parameters and file query or filter parameters on `/v1/files` routes
 - environment and secret based configuration such as `STAR_ROOT_DIR` and the API token secret
 
@@ -132,6 +132,7 @@ Authentication coverage is as follows:
 
 - malformed request paths containing disallowed bytes or separators
 - malformed, oversized, ambiguous, stale, or context-mismatched file-list cursors
+- unknown, repeated, empty, or policy-invalid file-list query values, including unsafe filename text and non-canonical tag CSV tokens
 - malformed raw headers
 - unsupported content types for `POST /v1/actions/{action_id}`
 - unsupported content types for `/v1/files` uploads

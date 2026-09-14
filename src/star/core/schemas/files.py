@@ -3,10 +3,22 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Final, Literal, TypeAlias, get_args
 from uuid import UUID
 
 from pydantic import BaseModel, Field
+
+FileStatus: TypeAlias = Literal["pending", "unverified", "ready"]
+"""Permitted lifecycle values for persisted managed-file metadata."""
+
+FILE_STATUS_VALUES: Final[frozenset[FileStatus]] = frozenset(get_args(FileStatus))
+"""Immutable runtime vocabulary for managed-file lifecycle validation."""
+
+FILE_MIME_TYPE_PATTERN: Final = r"^[a-z0-9.+-]+/[a-z0-9.+-]+$"
+"""Canonical lowercase grammar for persisted MIME types."""
+
+FILE_EXTENSION_PATTERN: Final = r"^\.[a-z0-9]+$"
+"""Canonical lowercase grammar for persisted file extensions."""
 
 
 class FileMetadata(BaseModel):
@@ -37,10 +49,10 @@ class FileMetadata(BaseModel):
     file_name: str = Field(..., min_length=1, max_length=255)
     tags: list[str] = Field(..., max_length=50)
     stored_filename: str = Field(..., min_length=1)
-    mime_type: str = Field(..., pattern=r"^[a-z0-9.+-]+/[a-z0-9.+-]+$")
-    extension: str = Field(..., pattern=r"^\.[a-z0-9]+$")
+    mime_type: str = Field(..., pattern=FILE_MIME_TYPE_PATTERN)
+    extension: str = Field(..., pattern=FILE_EXTENSION_PATTERN)
     size_bytes: int = Field(..., ge=0)
     sha256: str = Field(..., min_length=64, max_length=64, pattern=r"^[a-f0-9]{64}$")
     created_at: datetime
     updated_at: datetime
-    status: Literal["pending", "unverified", "ready"] = "ready"
+    status: FileStatus = "ready"

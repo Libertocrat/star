@@ -7,10 +7,12 @@ content-length parsing, and path character hygiene.
 import pytest
 
 from star.core.security.http_validation import (
+    QueryParameterShapeError,
     is_supported_json_content_type,
     normalize_content_type,
     parse_content_length_strict,
     path_has_disallowed_characters,
+    validate_query_parameter_shape,
 )
 
 # ============================================================================
@@ -133,6 +135,47 @@ def test_parse_content_length_strict_invalid_values_raise_value_error(value):
     """
     with pytest.raises(ValueError):
         parse_content_length_strict(value)
+
+
+# ============================================================================
+# Query Parameter Shape
+# ============================================================================
+
+
+def test_query_parameter_shape_accepts_unique_nonempty_allowed_values():
+    """
+    GIVEN unique nonempty query pairs permitted by one endpoint contract
+    WHEN structural query validation runs without FastAPI or Starlette objects
+    THEN the query is accepted
+    """
+
+    validate_query_parameter_shape(
+        [("limit", "20"), ("tags", "finance,q3")],
+        allowed_names={"limit", "tags"},
+    )
+
+
+@pytest.mark.parametrize(
+    ("pairs", "reason"),
+    [
+        ([("unknown", "value")], "unknown"),
+        ([("tags", "finance"), ("tags", "q3")], "repeated"),
+        ([("tags", "")], "empty"),
+        ([("tags", "   ")], "empty"),
+    ],
+    ids=["unknown", "repeated", "empty", "whitespace"],
+)
+def test_query_parameter_shape_rejects_ambiguous_values(pairs, reason):
+    """
+    GIVEN an unknown, repeated, empty, or whitespace-only decoded query pair
+    WHEN structural query validation runs
+    THEN it raises a focused low-cardinality reason without raw query data
+    """
+
+    with pytest.raises(QueryParameterShapeError) as exc_info:
+        validate_query_parameter_shape(pairs, allowed_names={"tags"})
+
+    assert exc_info.value.reason == reason
 
 
 # ============================================================================

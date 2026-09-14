@@ -12,6 +12,7 @@ from star.core.files import (
     InvalidManagedFileMetadataError,
     LocalManagedFileStore,
     ManagedFilePreconditionFailedError,
+    build_file_list_query,
     get_blob_path,
     iter_file_chunks,
     load_file_metadata,
@@ -91,16 +92,30 @@ def test_local_store_continues_opaque_cursor_with_changed_page_size(settings):
     ]
 
     first_page = store.list_files(
-        limit=1,
-        cursor=None,
-        sort="created_at",
-        order="asc",
+        build_file_list_query(
+            limit=1,
+            cursor=None,
+            sort="created_at",
+            order="asc",
+            status=None,
+            mime_type=None,
+            extension=None,
+            file_name=None,
+            tags=None,
+        )
     )
     second_page = store.list_files(
-        limit=2,
-        cursor=first_page.next_cursor,
-        sort="created_at",
-        order="asc",
+        build_file_list_query(
+            limit=2,
+            cursor=first_page.next_cursor,
+            sort="created_at",
+            order="asc",
+            status=None,
+            mime_type=None,
+            extension=None,
+            file_name=None,
+            tags=None,
+        )
     )
     expected = sorted(metadata, key=lambda item: (item.created_at, item.id))
 
@@ -128,20 +143,117 @@ def test_local_store_rejects_cursor_from_different_query_context(settings):
             mime_type="text/plain",
         )
     first_page = store.list_files(
-        limit=1,
-        cursor=None,
-        sort="created_at",
-        order="asc",
+        build_file_list_query(
+            limit=1,
+            cursor=None,
+            sort="created_at",
+            order="asc",
+            status=None,
+            mime_type=None,
+            extension=None,
+            file_name=None,
+            tags=None,
+        )
     )
 
     with pytest.raises(InvalidFileListCursorError):
         store.list_files(
+            build_file_list_query(
+                limit=1,
+                cursor=first_page.next_cursor,
+                sort="created_at",
+                order="asc",
+                status="ready",
+                mime_type=None,
+                extension=None,
+                file_name=None,
+                tags=None,
+            )
+        )
+
+
+def test_local_store_filters_editable_names_and_tags_with_cursor_context(settings):
+    """
+    GIVEN managed files with independently updated display names and tags
+    WHEN the local store lists a filtered query and its cursor is reused
+    THEN matching uses canonical metadata and changing tags rejects continuation
+    """
+
+    store = LocalManagedFileStore(settings)
+    first = store.create_ready_file_from_bytes(
+        original_filename="source-alpha.txt",
+        content=b"alpha",
+        extension=".txt",
+        mime_type="text/plain",
+    )
+    second = store.create_ready_file_from_bytes(
+        original_filename="source-beta.txt",
+        content=b"beta",
+        extension=".txt",
+        mime_type="text/plain",
+    )
+    first = store.update_metadata(
+        first.id,
+        file_name="Quarterly Report.txt",
+        tags=("finance", "q3"),
+        expected_etag=metadata_etag(first),
+    ).metadata
+    store.update_metadata(
+        second.id,
+        file_name="Annual Report.txt",
+        tags=("finance",),
+        expected_etag=metadata_etag(second),
+    )
+
+    page = store.list_files(
+        build_file_list_query(
             limit=1,
-            cursor=first_page.next_cursor,
+            cursor=None,
             sort="created_at",
             order="asc",
-            status="ready",
+            status=None,
+            mime_type=None,
+            extension=None,
+            file_name="report",
+            tags="finance",
         )
+    )
+
+    assert page.files
+    assert page.files[0].file_name.endswith("Report.txt")
+    assert page.next_cursor is not None
+
+    with pytest.raises(InvalidFileListCursorError):
+        store.list_files(
+            build_file_list_query(
+                limit=1,
+                cursor=page.next_cursor,
+                sort="created_at",
+                order="asc",
+                status=None,
+                mime_type=None,
+                extension=None,
+                file_name="report",
+                tags="finance,q3",
+            )
+        )
+
+    continued = store.list_files(
+        build_file_list_query(
+            limit=2,
+            cursor=page.next_cursor,
+            sort="created_at",
+            order="asc",
+            status=None,
+            mime_type=None,
+            extension=None,
+            file_name="REPORT",
+            tags="finance",
+        )
+    )
+
+    expected_remaining = {first.id, second.id} - {page.files[0].id}
+    assert {item.id for item in continued.files} == expected_remaining
 
 
 def test_local_store_missing_metadata_raises_domain_error(settings):
