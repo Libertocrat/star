@@ -15,10 +15,13 @@ from star.core.files import (
     FILE_LIST_CURSOR_VERSION,
     LOCAL_FILE_LIST_CURSOR_BACKEND,
     MAX_FILE_LIST_CURSOR_LENGTH,
+    FileListQuery,
     InvalidFileListCursorError,
+    InvalidFileListQueryError,
     apply_filters,
     apply_pagination,
     apply_sort,
+    build_file_list_query,
     decode_cursor,
     encode_cursor,
     file_list_query_fingerprint,
@@ -48,6 +51,9 @@ def _metadata_items(make_file_metadata):
             mime_type="text/plain",
             extension=".txt",
             status="ready",
+            original_filename="source-one.txt",
+            file_name="Quarterly Report.txt",
+            tags=["finance", "q3"],
         ),
         make_file_metadata(
             id=UUID("00000000-0000-0000-0000-000000000002"),
@@ -56,6 +62,9 @@ def _metadata_items(make_file_metadata):
             mime_type="image/png",
             extension=".png",
             status="pending",
+            original_filename="source-two.png",
+            file_name="Image Draft.png",
+            tags=["q3"],
         ),
         make_file_metadata(
             id=UUID("00000000-0000-0000-0000-000000000003"),
@@ -64,11 +73,14 @@ def _metadata_items(make_file_metadata):
             mime_type="text/plain",
             extension=".txt",
             status="ready",
+            original_filename="source-three.txt",
+            file_name="Annual Report.txt",
+            tags=["approved", "finance"],
         ),
     ]
 
 
-def _query_fingerprint(**overrides: str | None) -> str:
+def _query_fingerprint(**overrides: Any) -> str:
     """Return a fingerprint for the default test listing context.
 
     Args:
@@ -78,20 +90,41 @@ def _query_fingerprint(**overrides: str | None) -> str:
         Deterministic query fingerprint.
     """
 
-    context: dict[str, str | None] = {
+    return file_list_query_fingerprint(_query(**overrides))
+
+
+def _query(**overrides: Any):
+    """Build a canonical default listing query for unit tests.
+
+    Args:
+        **overrides: Boundary values replacing the default query fields.
+
+    Returns:
+        Canonical query accepted by the file-listing core.
+    """
+
+    context: dict[str, Any] = {
+        "limit": 20,
+        "cursor": None,
         "sort": "created_at",
         "order": "asc",
         "status": None,
         "mime_type": None,
         "extension": None,
+        "file_name": None,
+        "tags": None,
     }
     context.update(overrides)
-    return file_list_query_fingerprint(
-        sort=str(context["sort"]),
-        order=str(context["order"]),
+    return build_file_list_query(
+        limit=context["limit"],
+        cursor=context["cursor"],
+        sort=context["sort"],
+        order=context["order"],
         status=context["status"],
         mime_type=context["mime_type"],
         extension=context["extension"],
+        file_name=context["file_name"],
+        tags=context["tags"],
     )
 
 
@@ -156,7 +189,7 @@ def test_cursor_round_trips_versioned_local_position(make_file_metadata):
         "version": FILE_LIST_CURSOR_VERSION,
     }
     assert fingerprint == (
-        "9a5afaffb694cf469b4fe34fbacddc316eda7ba04a27c74fd9f9796a92431991"
+        "9fce7d73db4918632c638b8d22b544cfa5dd1cd33fa32e0f95cfd6c42a149f57"
     )
     assert encode_cursor(metadata, query_fingerprint=fingerprint) == cursor
 
@@ -164,13 +197,14 @@ def test_cursor_round_trips_versioned_local_position(make_file_metadata):
 @pytest.mark.parametrize(
     ("field", "value"),
     [
-        ("sort", "updated_at"),
         ("order", "desc"),
         ("status", "ready"),
         ("mime_type", "text/plain"),
         ("extension", ".txt"),
+        ("file_name", "report"),
+        ("tags", "finance"),
     ],
-    ids=["sort", "order", "status", "mime_type", "extension"],
+    ids=["order", "status", "mime_type", "extension", "file_name", "tags"],
 )
 def test_query_fingerprint_changes_with_effective_query_field(field, value):
     """
@@ -187,17 +221,120 @@ def test_query_fingerprint_changes_with_effective_query_field(field, value):
     assert changed == _query_fingerprint(**{field: value})
 
 
-def test_query_fingerprint_normalizes_empty_optional_filters():
+def test_query_builder_rejects_empty_optional_filters():
     """
-    GIVEN absent and empty optional filters with equivalent listing behavior
-    WHEN their effective query fingerprints are calculated
-    THEN both contexts produce the same canonical fingerprint
+    GIVEN empty optional filter values
+    WHEN a canonical listing query is constructed
+    THEN the ambiguous values are rejected rather than normalized silently
     """
 
-    absent = _query_fingerprint()
-    empty = _query_fingerprint(status="", mime_type="", extension="")
+    with pytest.raises(InvalidFileListQueryError):
+        _query(file_name="")
 
-    assert empty == absent
+
+@pytest.mark.parametrize(
+    ("overrides", "reason"),
+    [
+        ({"limit": 0}, "invalid_limit"),
+        ({"limit": 101}, "invalid_limit"),
+        ({"cursor": ""}, "invalid_cursor"),
+        ({"sort": "name"}, "invalid_sort"),
+        ({"order": "sideways"}, "invalid_order"),
+        ({"status": "deleted"}, "invalid_status"),
+        ({"mime_type": "textplain"}, "invalid_mime_type"),
+        ({"extension": "txt"}, "missing_extension_dot"),
+        ({"extension": ".TXT"}, "invalid_extension"),
+        ({"file_name": "../report.txt"}, "invalid_file_name"),
+        ({"file_name": " report.txt"}, "invalid_file_name"),
+        ({"file_name": "r\u00e9port.txt"}, "invalid_file_name"),
+        ({"file_name": "report\x00.txt"}, "invalid_file_name"),
+        ({"file_name": "report\x1f.txt"}, "invalid_file_name"),
+        ({"tags": "finance,"}, "invalid_tags"),
+        ({"tags": "finance,Finance"}, "invalid_tags"),
+        ({"tags": "finance, q3"}, "invalid_tags"),
+    ],
+    ids=[
+        "limit-zero",
+        "limit-too-high",
+        "empty-cursor",
+        "unsupported-sort",
+        "unsupported-order",
+        "unsupported-status",
+        "invalid-mime",
+        "missing-extension-dot",
+        "uppercase-extension",
+        "path-like-name",
+        "leading-whitespace-name",
+        "unicode-name",
+        "nul-name",
+        "control-name",
+        "empty-tag",
+        "duplicate-tag",
+        "whitespace-tag",
+    ],
+)
+def test_query_builder_rejects_policy_invalid_values(overrides, reason):
+    """
+    GIVEN one policy-invalid file-list boundary value
+    WHEN the canonical query builder receives it
+    THEN it raises the focused domain reason without an HTTP dependency
+    """
+
+    with pytest.raises(InvalidFileListQueryError) as exc_info:
+        _query(**overrides)
+
+    assert exc_info.value.reason == reason
+
+
+def test_query_builder_rejects_more_than_the_maximum_tag_count():
+    """
+    GIVEN a CSV filter containing more tags than managed metadata allows
+    WHEN the canonical query builder parses it
+    THEN the shared tag-count policy rejects the request
+    """
+
+    tags = ",".join(f"tag{index}" for index in range(51))
+
+    with pytest.raises(InvalidFileListQueryError) as exc_info:
+        _query(tags=tags)
+
+    assert exc_info.value.reason == "invalid_tags"
+
+
+def test_query_builder_canonicalizes_name_and_tags():
+    """
+    GIVEN valid mixed-case editable-name and tag filters
+    WHEN the canonical query builder receives the boundary values
+    THEN it lowercases the name and returns sorted unique canonical tags
+    """
+
+    query = _query(file_name="REPORT", tags="q3,finance")
+
+    assert query.file_name == "report"
+    assert query.tags == ("finance", "q3")
+
+
+def test_direct_query_construction_rejects_noncanonical_state():
+    """
+    GIVEN an internal listing query built without the boundary constructor
+    WHEN its filename or tag state requires normalization
+    THEN the value object rejects the noncanonical state defensively
+    """
+
+    with pytest.raises(InvalidFileListQueryError) as exc_info:
+        FileListQuery(
+            limit=20,
+            cursor=None,
+            sort="created_at",
+            order="asc",
+            status=None,
+            mime_type=None,
+            extension=None,
+            file_name="REPORT",
+            tags=("q3", "finance"),
+        )
+
+    assert exc_info.value.reason == "invalid_file_name"
 
 
 @pytest.mark.parametrize(
@@ -313,12 +450,72 @@ def test_filters_apply_intersection_without_reordering(make_file_metadata):
 
     filtered = apply_filters(
         items,
-        status="ready",
-        mime_type="text/plain",
-        extension=".txt",
+        query=_query(
+            status="ready",
+            mime_type="text/plain",
+            extension=".txt",
+        ),
     )
 
     assert [item.id.int for item in filtered] == [1, 3]
+
+
+def test_filters_match_editable_file_name_and_required_tags(make_file_metadata):
+    """
+    GIVEN metadata with distinct original names, editable names, and tag sets
+    WHEN file-name and tag filters are applied with existing filters
+    THEN only records satisfying their full intersection are returned in order
+    """
+
+    items = _metadata_items(make_file_metadata)
+
+    filtered = apply_filters(
+        items,
+        query=_query(
+            status="ready",
+            mime_type="text/plain",
+            extension=".txt",
+            file_name="REPORT",
+            tags="finance",
+        ),
+    )
+
+    assert [item.id.int for item in filtered] == [1, 3]
+
+    all_of = apply_filters(
+        items,
+        query=_query(tags="finance,q3"),
+    )
+
+    assert [item.id.int for item in all_of] == [1]
+
+
+def test_file_name_filter_does_not_match_original_filename(make_file_metadata):
+    """
+    GIVEN metadata whose original and editable names differ
+    WHEN listing filters by text found only in the original filename
+    THEN no record is returned
+    """
+
+    filtered = apply_filters(
+        _metadata_items(make_file_metadata),
+        query=_query(file_name="source-one"),
+    )
+
+    assert filtered == []
+
+
+def test_query_fingerprint_accepts_equivalent_canonical_name_and_tag_contexts():
+    """
+    GIVEN logically equivalent file-name and tag filter contexts
+    WHEN their fingerprints are calculated
+    THEN case and tag ordering do not change the continuation context
+    """
+
+    first = _query_fingerprint(file_name="report", tags="finance,q3")
+    equivalent = _query_fingerprint(file_name="REPORT", tags="q3,finance")
+
+    assert first == equivalent
 
 
 def test_sort_orders_by_created_at_and_uuid(make_file_metadata):

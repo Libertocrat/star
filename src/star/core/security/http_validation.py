@@ -7,6 +7,31 @@ to be used by middleware and other HTTP-facing modules.
 
 from __future__ import annotations
 
+from collections.abc import Collection, Iterable
+from typing import Literal, TypeAlias
+
+QueryParameterShapeReason: TypeAlias = Literal["unknown", "repeated", "empty"]
+"""Finite reasons for a structurally invalid decoded HTTP query."""
+
+
+class QueryParameterShapeError(ValueError):
+    """Raised when decoded HTTP query pairs have an unsafe shape.
+
+    Attributes:
+        reason: Low-cardinality structural reason that never includes raw query
+            names or values.
+    """
+
+    def __init__(self, reason: QueryParameterShapeReason):
+        """Initialize the query-shape failure.
+
+        Args:
+            reason: Canonical structural query violation.
+        """
+
+        self.reason = reason
+        super().__init__(reason)
+
 
 def is_supported_json_content_type(content_type: str | None) -> bool:
     """Return whether `content_type` carries application/json.
@@ -82,9 +107,38 @@ def normalize_content_type(value: str | None) -> str | None:
     return value.split(";", 1)[0].strip().lower()
 
 
+def validate_query_parameter_shape(
+    pairs: Iterable[tuple[str, str]],
+    *,
+    allowed_names: Collection[str],
+) -> None:
+    """Reject unknown, repeated, empty, or whitespace-only query parameters.
+
+    Args:
+        pairs: Decoded HTTP query pairs in their original multiplicity.
+        allowed_names: Parameter names accepted by the owning HTTP contract.
+
+    Raises:
+        QueryParameterShapeError: If a pair is unknown, repeated, empty, or
+            whitespace-only.
+    """
+
+    seen: set[str] = set()
+    for name, value in pairs:
+        if name not in allowed_names:
+            raise QueryParameterShapeError("unknown")
+        if name in seen:
+            raise QueryParameterShapeError("repeated")
+        if not value or not value.strip():
+            raise QueryParameterShapeError("empty")
+        seen.add(name)
+
+
 __all__ = [
     "is_supported_json_content_type",
     "parse_content_length_strict",
     "path_has_disallowed_characters",
     "normalize_content_type",
+    "QueryParameterShapeError",
+    "validate_query_parameter_shape",
 ]

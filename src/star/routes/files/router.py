@@ -24,7 +24,6 @@ from pydantic import ValidationError
 
 from star.core.errors import INVALID_REQUEST, PRECONDITION_REQUIRED, StarError
 from star.core.files import (
-    MAX_FILE_LIST_CURSOR_LENGTH,
     is_metadata_etag,
     iter_file_chunks,
     metadata_etag,
@@ -32,6 +31,10 @@ from star.core.files import (
 from star.core.responses import error_json_response, star_error_json_response
 from star.core.schemas.envelope import ResponseEnvelope
 from star.core.security.headers import content_disposition_attachment
+from star.core.security.http_validation import (
+    QueryParameterShapeError,
+    validate_query_parameter_shape,
+)
 from star.routes.dependencies import get_runtime_settings
 from star.routes.files.handlers.delete_file import delete_file_handler
 from star.routes.files.handlers.get_file_content import get_file_content_handler
@@ -46,11 +49,13 @@ from star.routes.files.schemas import (
     DeleteFileData,
     FileListData,
     FileMetadataData,
+    ListFilesRequest,
     UpdateFileMetadataRequest,
     UploadFileData,
     UploadFileRequest,
     VerifyChecksumParams,
 )
+from star.routes.files.utils import map_file_list_query_shape_error
 
 router = APIRouter(prefix="/v1", tags=["Files"])
 
@@ -245,10 +250,13 @@ async def put_file_metadata(
 
 list_files_description = (
     "**List STAR-managed files with cursor pagination and deterministic ordering.**\n\n"
-    "Supports filtering by `status`, `mime_type`, and `extension`, with "
-    "sorting by `created_at` and stable tiebreaking by file id. Returned cursors "
-    "are opaque and bound to the effective filters and ordering. Reusing a "
-    "cursor with a different query is rejected; `limit` may change between pages."
+    "Supports exact `status`, `mime_type`, and `extension` filters, plus a "
+    "case-insensitive substring filter over editable `file_name` and an all-of "
+    "CSV `tags` filter. Sorting uses `created_at` with file id as a stable "
+    "tiebreaker. Returned cursors are opaque and bound to the effective filters "
+    "and ordering. Reusing a cursor with a different query is rejected; `limit` "
+    "may change between pages. Unknown, repeated, and empty query parameters are "
+    "rejected."
 )
 
 
@@ -260,38 +268,23 @@ list_files_description = (
 )
 async def list_files(
     request: Request,
-    limit: int = 20,
-    cursor: Annotated[
-        str | None,
-        Query(
-            description=(
-                "Opaque continuation token returned by the previous page. It is "
-                "bound to the effective filters and ordering and is limited to "
-                f"{MAX_FILE_LIST_CURSOR_LENGTH} characters."
-            )
-        ),
-    ] = None,
-    sort: str = "created_at",
-    order: str = "asc",
-    status: str | None = None,
-    mime_type: str | None = None,
-    extension: str | None = None,
+    list_request: Annotated[ListFilesRequest, Query()],
 ) -> JSONResponse | ResponseEnvelope[FileListData]:
     """List persisted files using cursor pagination."""
 
     try:
+        validate_query_parameter_shape(
+            request.query_params.multi_items(),
+            allowed_names=ListFilesRequest.model_fields,
+        )
         settings = get_runtime_settings(request)
         result = await list_files_handler(
-            limit=limit,
-            cursor=cursor,
-            sort=sort,
-            order=order,
-            status=status,
-            mime_type=mime_type,
-            extension=extension,
+            list_request,
             settings=settings,
         )
         return ResponseEnvelope.from_success(result)
+    except QueryParameterShapeError as exc:
+        return star_error_json_response(map_file_list_query_shape_error(exc))
     except StarError as exc:
         return star_error_json_response(exc)
 

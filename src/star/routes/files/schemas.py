@@ -12,8 +12,9 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from star.core.files import MAX_FILE_LIST_CURSOR_LENGTH
 from star.core.files.metadata_validation import canonicalize_tags, validate_file_name
-from star.core.schemas.files import FileMetadata
+from star.core.schemas.files import FileMetadata, FileStatus
 
 
 class UploadFileData(BaseModel):
@@ -130,6 +131,81 @@ class FileListData(BaseModel):
 
     files: list[FileMetadata]
     pagination: Pagination
+
+
+class ListFilesRequest(BaseModel):
+    """Typed query parameters for `GET /v1/files`.
+
+    Semantic policy validation is performed by the transport-neutral
+    `core.files` listing layer so the same canonical query can serve future
+    storage adapters.
+
+    Attributes:
+        limit: Requested maximum records for the current page. Defaults to 20.
+        cursor: Optional opaque continuation token from a previous page.
+        sort: Requested deterministic sort field. Defaults to `created_at`.
+        order: Requested sort direction. Defaults to `asc`.
+        status: Optional exact managed-file lifecycle status.
+        mime_type: Optional exact lowercase MIME-type filter.
+        extension: Optional exact lowercase extension including the leading dot.
+        file_name: Optional ASCII case-insensitive editable-name substring.
+        tags: Optional comma-separated canonical all-of tag filter.
+    """
+
+    limit: int = Field(
+        default=20,
+        description="Maximum records to return. Allowed values: 1 through 100.",
+        examples=[20],
+    )
+    cursor: str | None = Field(
+        default=None,
+        description=(
+            "Opaque continuation token returned by the previous page. It is "
+            "bound to the effective filters and ordering and is limited to "
+            f"{MAX_FILE_LIST_CURSOR_LENGTH} characters."
+        ),
+    )
+    sort: str = Field(
+        default="created_at",
+        description="Deterministic sort field. Only `created_at` is supported.",
+        examples=["created_at"],
+    )
+    order: str = Field(
+        default="asc",
+        description="Sort direction. Allowed values: `asc` or `desc`.",
+        examples=["asc"],
+    )
+    status: FileStatus | None = Field(
+        default=None,
+        description="Optional exact lifecycle status filter.",
+        examples=["ready"],
+    )
+    mime_type: str | None = Field(
+        default=None,
+        description="Optional exact lowercase MIME-type filter.",
+        examples=["text/plain"],
+    )
+    extension: str | None = Field(
+        default=None,
+        description="Optional exact lowercase extension including '.'.",
+        examples=[".txt"],
+    )
+    file_name: str | None = Field(
+        default=None,
+        description=(
+            "Optional ASCII case-insensitive substring filter over the "
+            "editable file name."
+        ),
+        examples=["report"],
+    )
+    tags: str | None = Field(
+        default=None,
+        description=(
+            "Optional comma-separated canonical tags. Every listed tag must "
+            "be present on a matching file."
+        ),
+        examples=["finance,q3"],
+    )
 
 
 # Lightweight enum for algorithms supported in v1. Expand as needed.

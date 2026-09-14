@@ -22,6 +22,7 @@ from star.core.files.exceptions import (
     EmptyManagedFileError,
     InvalidChecksumAlgorithmError,
     InvalidFileListCursorError,
+    InvalidFileListQueryError,
     InvalidManagedFileMetadataError,
     ManagedFileNotFoundError,
     ManagedFilePreconditionFailedError,
@@ -42,6 +43,7 @@ from star.core.files.layout import (
     get_tmp_dir,
 )
 from star.core.files.listing import (
+    FileListQuery,
     apply_filters,
     apply_pagination,
     apply_sort,
@@ -135,27 +137,11 @@ class ManagedFileStore(Protocol):
             Descriptor with an owned local blob stream and safe response metadata.
         """
 
-    def list_files(
-        self,
-        *,
-        limit: int,
-        cursor: str | None,
-        sort: str,
-        order: str,
-        status: str | None = None,
-        mime_type: str | None = None,
-        extension: str | None = None,
-    ) -> FileListPage:
+    def list_files(self, query: FileListQuery) -> FileListPage:
         """List metadata records with filters and cursor pagination.
 
         Args:
-            limit: Maximum records in the returned page.
-            cursor: Optional opaque cursor from a previous page.
-            sort: Effective sort field bound to cursor continuation.
-            order: Sort order used for deterministic pagination.
-            status: Optional lifecycle status filter.
-            mime_type: Optional MIME type filter.
-            extension: Optional extension filter.
+            query: Canonical backend-neutral listing query.
 
         Returns:
             Storage-level page containing records and optional next cursor.
@@ -501,27 +487,11 @@ class LocalManagedFileStore:
             opened_blob.stream.close()
             raise
 
-    def list_files(
-        self,
-        *,
-        limit: int,
-        cursor: str | None,
-        sort: str,
-        order: str,
-        status: str | None = None,
-        mime_type: str | None = None,
-        extension: str | None = None,
-    ) -> FileListPage:
+    def list_files(self, query: FileListQuery) -> FileListPage:
         """List persisted metadata records with deterministic ordering.
 
         Args:
-            limit: Maximum records to return.
-            cursor: Optional opaque pagination cursor.
-            sort: Effective sort field bound to cursor continuation.
-            order: Sort order, asc or desc.
-            status: Optional status filter.
-            mime_type: Optional MIME type filter.
-            extension: Optional extension filter.
+            query: Canonical backend-neutral listing query.
 
         Returns:
             Storage-level file list page.
@@ -531,19 +501,13 @@ class LocalManagedFileStore:
         """
 
         try:
-            query_fingerprint = file_list_query_fingerprint(
-                sort=sort,
-                order=order,
-                status=status,
-                mime_type=mime_type,
-                extension=extension,
-            )
+            query_fingerprint = file_list_query_fingerprint(query)
             cursor_position = (
                 decode_cursor(
-                    cursor,
+                    query.cursor,
                     expected_query_fingerprint=query_fingerprint,
                 )
-                if cursor is not None
+                if query.cursor is not None
                 else None
             )
 
@@ -581,22 +545,21 @@ class LocalManagedFileStore:
 
                 items.append(metadata)
 
-            filtered = apply_filters(
-                items,
-                status=status,
-                mime_type=mime_type,
-                extension=extension,
-            )
-            sorted_items = apply_sort(filtered, order=order)
+            filtered = apply_filters(items, query=query)
+            sorted_items = apply_sort(filtered, order=query.order)
             page, next_cursor = apply_pagination(
                 sorted_items,
-                limit=limit,
+                limit=query.limit,
                 cursor=cursor_position,
-                order=order,
+                order=query.order,
                 query_fingerprint=query_fingerprint,
             )
             return FileListPage(files=page, next_cursor=next_cursor)
-        except (InvalidFileListCursorError, ManagedFileStorageError):
+        except (
+            InvalidFileListCursorError,
+            InvalidFileListQueryError,
+            ManagedFileStorageError,
+        ):
             raise
         except Exception as exc:
             logger.exception("file.list.failed")

@@ -23,6 +23,7 @@ from star.core.files import (
     FileExtensionMissingError,
     InvalidChecksumAlgorithmError,
     InvalidFileListCursorError,
+    InvalidFileListQueryError,
     InvalidManagedFileMetadataError,
     LocalManagedFileStore,
     ManagedFileError,
@@ -34,6 +35,29 @@ from star.core.files import (
     UnsupportedMediaTypeValidationError,
 )
 from star.core.schemas.files import FileMetadata
+from star.core.security.http_validation import QueryParameterShapeError
+
+_FILE_LIST_QUERY_MESSAGES = {
+    "invalid_limit": "Invalid limit. Must be between 1 and 100.",
+    "invalid_sort": "Invalid sort field. Only 'created_at' is supported.",
+    "invalid_order": "Invalid order. Allowed values: 'asc', 'desc'.",
+    "invalid_status": "Invalid status filter.",
+    "invalid_mime_type": "Invalid mime_type filter. Expected lowercase 'type/subtype'.",
+    "missing_extension_dot": (
+        "Invalid extension. Expected a lowercase value beginning with '.', "
+        "for example '.txt'."
+    ),
+    "invalid_extension": "Invalid extension filter.",
+    "invalid_file_name": "Invalid file_name filter.",
+    "invalid_tags": "Invalid tags filter.",
+    "invalid_cursor": "Invalid cursor.",
+}
+
+_FILE_LIST_QUERY_SHAPE_MESSAGES = {
+    "unknown": "Unknown query parameter.",
+    "repeated": "Repeated query parameters are not allowed.",
+    "empty": "Query parameter values cannot be empty.",
+}
 
 
 def get_file_store(settings: Settings | None = None) -> LocalManagedFileStore:
@@ -48,6 +72,22 @@ def get_file_store(settings: Settings | None = None) -> LocalManagedFileStore:
 
     cfg = settings if settings is not None else get_settings()
     return LocalManagedFileStore(cfg)
+
+
+def map_file_list_query_shape_error(exc: QueryParameterShapeError) -> StarError:
+    """Map one structural HTTP query failure to STAR's public contract.
+
+    Args:
+        exc: Focused structural query failure from the HTTP validation layer.
+
+    Returns:
+        Transport-ready invalid-request error without raw query data.
+    """
+
+    return StarError(
+        INVALID_REQUEST,
+        _FILE_LIST_QUERY_SHAPE_MESSAGES.get(exc.reason, "Invalid query parameter."),
+    )
 
 
 def map_managed_file_error(
@@ -73,6 +113,11 @@ def map_managed_file_error(
         return StarError(PRECONDITION_FAILED, details=details)
     if isinstance(exc, InvalidFileListCursorError):
         return StarError(INVALID_REQUEST, "Invalid cursor.")
+    if isinstance(exc, InvalidFileListQueryError):
+        return StarError(
+            INVALID_REQUEST,
+            _FILE_LIST_QUERY_MESSAGES.get(exc.reason, "Invalid file-list query."),
+        )
     if isinstance(exc, InvalidManagedFileMetadataError):
         return StarError(
             INVALID_REQUEST,

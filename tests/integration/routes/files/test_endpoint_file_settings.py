@@ -13,6 +13,7 @@ from uuid import UUID, uuid4
 import pytest
 from fastapi import Request, UploadFile
 from fastapi.responses import JSONResponse, Response
+from starlette.datastructures import QueryParams
 
 from star.core.files import FileMetadataUpdateResult
 from star.core.schemas.files import FileMetadata
@@ -21,6 +22,7 @@ from star.routes.files.handlers.get_file_content import FileContentDescriptor
 from star.routes.files.schemas import (
     DeleteFileResult,
     FileListData,
+    ListFilesRequest,
     Pagination,
     UpdateFileMetadataRequest,
     UploadFileRequest,
@@ -39,7 +41,10 @@ def _request_with_settings(settings: object) -> Request:
 
     return cast(
         Request,
-        SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(settings=settings))),
+        SimpleNamespace(
+            app=SimpleNamespace(state=SimpleNamespace(settings=settings)),
+            query_params=QueryParams(),
+        ),
     )
 
 
@@ -207,7 +212,8 @@ async def test_list_files_passes_runtime_settings_to_list_handler(
     captured: dict[str, object] = {}
     data = FileListData(files=[], pagination=Pagination(count=0))
 
-    async def _fake_list_handler(**kwargs):
+    async def _fake_list_handler(request, **kwargs):
+        captured["request"] = request
         captured.update(kwargs)
         return data
 
@@ -215,24 +221,28 @@ async def test_list_files_passes_runtime_settings_to_list_handler(
 
     response = await files_router.list_files(
         request=_request_with_settings(settings),
-        limit=5,
-        cursor="cursor",
-        sort="created_at",
-        order="desc",
-        status="ready",
-        mime_type="text/plain",
-        extension=".txt",
+        list_request=ListFilesRequest(
+            limit=5,
+            cursor="cursor",
+            sort="created_at",
+            order="desc",
+            status="ready",
+            mime_type="text/plain",
+            extension=".txt",
+        ),
     )
 
     assert not isinstance(response, JSONResponse)
     assert captured == {
-        "limit": 5,
-        "cursor": "cursor",
-        "sort": "created_at",
-        "order": "desc",
-        "status": "ready",
-        "mime_type": "text/plain",
-        "extension": ".txt",
+        "request": ListFilesRequest(
+            limit=5,
+            cursor="cursor",
+            sort="created_at",
+            order="desc",
+            status="ready",
+            mime_type="text/plain",
+            extension=".txt",
+        ),
         "settings": settings,
     }
     assert response.data is data
@@ -261,6 +271,7 @@ async def test_list_files_returns_internal_error_when_runtime_settings_are_inval
 
     response = await files_router.list_files(
         request=_request_with_settings(settings_value),
+        list_request=ListFilesRequest(),
     )
 
     assert isinstance(response, JSONResponse)

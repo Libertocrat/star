@@ -13,17 +13,68 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from star.core.files.exceptions import InvalidFileListCursorError
-from star.core.schemas.files import FileMetadata
+from star.core.files.exceptions import (
+    InvalidFileListCursorError,
+    InvalidFileListQueryError,
+)
+from star.core.files.metadata_validation import canonicalize_tags, validate_file_name
+from star.core.schemas.files import (
+    FILE_EXTENSION_PATTERN,
+    FILE_MIME_TYPE_PATTERN,
+    FILE_STATUS_VALUES,
+    FileMetadata,
+    FileStatus,
+)
 
 FILE_LIST_CURSOR_VERSION = 1
 LOCAL_FILE_LIST_CURSOR_BACKEND = "local"
 MAX_FILE_LIST_CURSOR_LENGTH = 4096
+MAX_FILE_LIST_LIMIT = 100
+FILE_LIST_SORT = "created_at"
 
 _CURSOR_KEYS = frozenset({"backend", "position", "query_fingerprint", "version"})
 _POSITION_KEYS = frozenset({"created_at", "id"})
 _BACKEND_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_-]{0,31}$")
 _SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+_MIME_TYPE_PATTERN = re.compile(FILE_MIME_TYPE_PATTERN)
+_EXTENSION_PATTERN = re.compile(FILE_EXTENSION_PATTERN)
+
+
+@dataclass(slots=True, frozen=True)
+class FileListQuery:
+    """Canonical, backend-neutral query for managed-file listing.
+
+    Attributes:
+        limit: Maximum number of records returned in the current page.
+        cursor: Optional opaque continuation token owned by the active backend.
+        sort: Deterministic sort field accepted by STAR.
+        order: Canonical ascending or descending sort direction.
+        status: Optional exact lifecycle-status filter.
+        mime_type: Optional exact lowercase MIME-type filter.
+        extension: Optional exact lowercase extension filter including the dot.
+        file_name: Optional lowercase editable-filename substring filter.
+        tags: Sorted unique lowercase tags required on every matching record.
+    """
+
+    limit: int
+    cursor: str | None
+    sort: str
+    order: str
+    status: FileStatus | None
+    mime_type: str | None
+    extension: str | None
+    file_name: str | None
+    tags: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        """Reject direct construction that bypasses canonical query building.
+
+        Raises:
+            InvalidFileListQueryError: If any field is policy-invalid or not
+                already canonical.
+        """
+
+        _validate_canonical_query(self)
 
 
 @dataclass(slots=True, frozen=True)
@@ -39,38 +90,85 @@ class FileListCursorPosition:
     file_id: UUID
 
 
-def file_list_query_fingerprint(
+def build_file_list_query(
     *,
+    limit: int,
+    cursor: str | None,
     sort: str,
     order: str,
-    status: str | None,
+    status: FileStatus | None,
     mime_type: str | None,
     extension: str | None,
-) -> str:
+    file_name: str | None,
+    tags: str | None,
+) -> FileListQuery:
+    """Validate boundary values and build one canonical listing query.
+
+    Args:
+        limit: Requested maximum page size.
+        cursor: Optional opaque continuation token.
+        sort: Requested sort field.
+        order: Requested sort direction.
+        status: Optional lifecycle-status filter.
+        mime_type: Optional exact MIME-type filter.
+        extension: Optional exact file-extension filter.
+        file_name: Optional editable-name substring filter.
+        tags: Optional comma-separated all-of tag filter.
+
+    Returns:
+        Fully validated and canonical backend-neutral listing query.
+
+    Raises:
+        InvalidFileListQueryError: If any boundary value violates listing policy.
+    """
+
+    _validate_limit(limit)
+    _validate_cursor(cursor)
+    _validate_sort(sort)
+    _validate_order(order)
+    _validate_status(status)
+    _validate_mime_type(mime_type)
+    _validate_extension(extension)
+
+    return FileListQuery(
+        limit=limit,
+        cursor=cursor,
+        sort=sort,
+        order=order,
+        status=status,
+        mime_type=mime_type,
+        extension=extension,
+        file_name=_normalize_file_name_filter(file_name),
+        tags=_parse_tags_filter(tags),
+    )
+
+
+def file_list_query_fingerprint(query: FileListQuery) -> str:
     """Return a deterministic fingerprint for effective file-list semantics.
 
     Page size and cursor are intentionally excluded so clients may change the
     requested page size while continuing the same logical query.
 
     Args:
-        sort: Effective sort field.
-        order: Effective sort direction.
-        status: Optional lifecycle-status filter.
-        mime_type: Optional exact MIME-type filter.
-        extension: Optional exact extension filter.
+        query: Canonical effective query. Its page size and cursor are excluded
+            from the query identity.
 
     Returns:
         Lowercase SHA-256 digest of the canonical query context.
     """
 
+    _validate_canonical_query(query)
+
     context = {
         "filters": {
-            "extension": extension or None,
-            "mime_type": mime_type or None,
-            "status": status or None,
+            "extension": query.extension,
+            "file_name": query.file_name,
+            "mime_type": query.mime_type,
+            "status": query.status,
+            "tags": list(query.tags) or None,
         },
-        "order": order,
-        "sort": sort,
+        "order": query.order,
+        "sort": query.sort,
     }
     raw = json.dumps(
         context,
@@ -226,35 +324,249 @@ def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return result
 
 
+def _validate_limit(value: int) -> None:
+    """Validate one listing page-size value.
+
+    Args:
+        value: Candidate maximum page size.
+
+    Raises:
+        InvalidFileListQueryError: If the value is outside STAR's supported
+            range or is not an integer.
+    """
+
+    if type(value) is not int or value <= 0 or value > MAX_FILE_LIST_LIMIT:
+        raise InvalidFileListQueryError("invalid_limit")
+
+
+def _validate_cursor(value: str | None) -> None:
+    """Validate common opaque cursor bounds before backend interpretation.
+
+    Args:
+        value: Candidate opaque continuation token.
+
+    Raises:
+        InvalidFileListQueryError: If the token is empty, non-string, or too
+            large.
+    """
+
+    if value is not None and (
+        type(value) is not str or not value or len(value) > MAX_FILE_LIST_CURSOR_LENGTH
+    ):
+        raise InvalidFileListQueryError("invalid_cursor")
+
+
+def _validate_sort(value: str) -> None:
+    """Validate the deterministic listing sort field.
+
+    Args:
+        value: Candidate sort field.
+
+    Raises:
+        InvalidFileListQueryError: If STAR does not support the field.
+    """
+
+    if value != FILE_LIST_SORT:
+        raise InvalidFileListQueryError("invalid_sort")
+
+
+def _validate_order(value: str) -> None:
+    """Validate one deterministic listing sort direction.
+
+    Args:
+        value: Candidate sort direction.
+
+    Raises:
+        InvalidFileListQueryError: If the direction is unsupported.
+    """
+
+    if value not in {"asc", "desc"}:
+        raise InvalidFileListQueryError("invalid_order")
+
+
+def _validate_status(value: FileStatus | None) -> None:
+    """Defensively validate a lifecycle-status filter.
+
+    Args:
+        value: Candidate lifecycle-status filter.
+
+    Raises:
+        InvalidFileListQueryError: If the value is outside the shared metadata
+            vocabulary.
+    """
+
+    if value is not None and (
+        type(value) is not str or value not in FILE_STATUS_VALUES
+    ):
+        raise InvalidFileListQueryError("invalid_status")
+
+
+def _validate_mime_type(value: str | None) -> None:
+    """Validate one exact canonical MIME-type filter.
+
+    Args:
+        value: Candidate MIME-type filter.
+
+    Raises:
+        InvalidFileListQueryError: If the value violates persisted metadata
+            grammar.
+    """
+
+    if value is not None and (
+        type(value) is not str or not _MIME_TYPE_PATTERN.fullmatch(value)
+    ):
+        raise InvalidFileListQueryError("invalid_mime_type")
+
+
+def _validate_extension(value: str | None) -> None:
+    """Validate one exact canonical file-extension filter.
+
+    Args:
+        value: Candidate extension filter.
+
+    Raises:
+        InvalidFileListQueryError: If the extension lacks its leading dot or
+            violates persisted metadata grammar.
+    """
+
+    if value is None:
+        return
+    if type(value) is not str or not value.startswith("."):
+        raise InvalidFileListQueryError("missing_extension_dot")
+    if not _EXTENSION_PATTERN.fullmatch(value):
+        raise InvalidFileListQueryError("invalid_extension")
+
+
+def _normalize_file_name_filter(value: str | None) -> str | None:
+    """Validate and canonicalize one editable-filename substring filter.
+
+    Args:
+        value: Candidate display-name substring filter.
+
+    Returns:
+        Lowercase filter, or None when the filter is omitted.
+
+    Raises:
+        InvalidFileListQueryError: If the filter violates the existing safe
+            display-filename grammar.
+    """
+
+    if value is None:
+        return None
+    if type(value) is not str:
+        raise InvalidFileListQueryError("invalid_file_name")
+    try:
+        return validate_file_name(value).lower()
+    except (TypeError, ValueError) as exc:
+        raise InvalidFileListQueryError("invalid_file_name") from exc
+
+
+def _parse_tags_filter(value: str | None) -> tuple[str, ...]:
+    """Parse one comma-separated all-of tag filter into canonical tags.
+
+    Args:
+        value: Candidate CSV tag filter.
+
+    Returns:
+        Sorted unique lowercase tags, or an empty tuple when omitted.
+
+    Raises:
+        InvalidFileListQueryError: If the filter has empty or policy-invalid
+            tokens.
+    """
+
+    if value is None:
+        return ()
+    if type(value) is not str:
+        raise InvalidFileListQueryError("invalid_tags")
+    tokens = value.split(",")
+    if not tokens or any(not token for token in tokens):
+        raise InvalidFileListQueryError("invalid_tags")
+    return _canonicalize_tag_tuple(tokens)
+
+
+def _canonicalize_tag_tuple(tags: tuple[str, ...] | list[str]) -> tuple[str, ...]:
+    """Return canonical tags or reject noncanonical values.
+
+    Args:
+        tags: Candidate tag values supplied by a query constructor.
+
+    Returns:
+        Sorted unique lowercase tag tuple.
+
+    Raises:
+        InvalidFileListQueryError: If a tag fails the shared metadata policy.
+    """
+
+    try:
+        return canonicalize_tags(tags)
+    except (TypeError, ValueError) as exc:
+        raise InvalidFileListQueryError("invalid_tags") from exc
+
+
+def _validate_canonical_query(query: FileListQuery) -> None:
+    """Reject a direct query instance that is not already canonical.
+
+    Args:
+        query: Candidate internal listing query.
+
+    Raises:
+        InvalidFileListQueryError: If any query field is invalid or needs
+            normalization.
+    """
+
+    _validate_limit(query.limit)
+    _validate_cursor(query.cursor)
+    _validate_sort(query.sort)
+    _validate_order(query.order)
+    _validate_status(query.status)
+    _validate_mime_type(query.mime_type)
+    _validate_extension(query.extension)
+    if query.file_name != _normalize_file_name_filter(query.file_name):
+        raise InvalidFileListQueryError("invalid_file_name")
+    if type(query.tags) is not tuple or query.tags != _canonicalize_tag_tuple(
+        query.tags
+    ):
+        raise InvalidFileListQueryError("invalid_tags")
+
+
 def apply_filters(
     items: list[FileMetadata],
     *,
-    status: str | None,
-    mime_type: str | None,
-    extension: str | None,
+    query: FileListQuery,
 ) -> list[FileMetadata]:
     """Apply intersection filters to managed file metadata records.
 
     Args:
         items: Metadata records to filter.
-        status: Optional lifecycle status filter.
-        mime_type: Optional exact MIME type filter.
-        extension: Optional exact file extension filter.
+        query: Canonical filters applied to every returned record.
 
     Returns:
         Records matching every provided filter, preserving input order.
     """
 
+    _validate_canonical_query(query)
     filtered = items
 
-    if status:
-        filtered = [item for item in filtered if item.status == status]
+    if query.status:
+        filtered = [item for item in filtered if item.status == query.status]
 
-    if mime_type:
-        filtered = [item for item in filtered if item.mime_type == mime_type]
+    if query.mime_type:
+        filtered = [item for item in filtered if item.mime_type == query.mime_type]
 
-    if extension:
-        filtered = [item for item in filtered if item.extension == extension]
+    if query.extension:
+        filtered = [item for item in filtered if item.extension == query.extension]
+
+    if query.file_name:
+        filtered = [
+            item for item in filtered if query.file_name in item.file_name.lower()
+        ]
+
+    if query.tags:
+        required_tags = frozenset(query.tags)
+        filtered = [
+            item for item in filtered if required_tags.issubset(frozenset(item.tags))
+        ]
 
     return filtered
 
