@@ -37,7 +37,8 @@ from star.actions.engine_config import (
     WINDOWS_DRIVE_REFERENCE_PATTERN,
 )
 from star.actions.exceptions import ActionSpecsParseError
-from star.actions.models.core import ParamType, SpecProvenance
+from star.actions.models.core import ParamType
+from star.actions.models.provenance import SpecProvenance
 from star.actions.schemas.action import ActionSpecInput
 from star.actions.schemas.dsl import (
     ArgCmd,

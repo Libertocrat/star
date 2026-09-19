@@ -34,8 +34,8 @@ from star.actions.models.core import (
     OutputType,
     ParamType,
     SecretDelivery,
-    SpecProvenance,
 )
+from star.actions.models.provenance import SpecProvenance
 from star.actions.models.security import EffectiveCatalogPolicy
 from star.actions.schemas.action import ActionSpecInput
 from star.actions.schemas.dsl import ArgCmd as SchemaArgCmd
@@ -144,27 +144,18 @@ def _build_action(
                 f"Failed to build action '{action_fqdn}': binary '{binary}' "
                 "is not allowed by effective policy"
             )
-        extension_invocation_policy = catalog_policy.invocation_for_action(action_fqdn)
-        if (
-            module.provenance is SpecProvenance.EXTENSION
-            and extension_invocation_policy is None
-        ):
+        invocation_policy = catalog_policy.invocation_for_action(action_fqdn)
+        if module.provenance is SpecProvenance.EXTENSION and invocation_policy is None:
             raise ActionSpecsBuildError(
                 f"Failed to build action '{action_fqdn}': missing extension "
                 "invocation policy"
             )
-        if (
-            module.provenance is SpecProvenance.CORE
-            and extension_invocation_policy is not None
-        ):
+        if module.provenance is SpecProvenance.CORE and invocation_policy is not None:
             raise ActionSpecsBuildError(
                 f"Failed to build action '{action_fqdn}': unexpected extension "
                 "invocation policy for core action"
             )
-        if (
-            extension_invocation_policy is not None
-            and extension_invocation_policy.binary != binary
-        ):
+        if invocation_policy is not None and invocation_policy.binary != binary:
             raise ActionSpecsBuildError(
                 f"Failed to build action '{action_fqdn}': extension invocation "
                 "policy binary mismatch"
@@ -185,7 +176,7 @@ def _build_action(
             command_template=command_template,
             execution_policy=execution_policy,
             provenance=module.provenance,
-            extension_invocation_policy=extension_invocation_policy,
+            invocation_policy=invocation_policy,
             arg_defs=arg_defs,
             flag_defs=flag_defs,
             defaults=defaults,

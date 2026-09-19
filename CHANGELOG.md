@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- Added provenance-scoped reviewed invocation forms for built-in CORE actions, including exact OpenSSL and `cat` operations, bounded `grep -e` patterns, and SHA-256 batches limited to 32 managed files.
 - Added typed rendered argv tokens, pre-render validation for request-dependent extension option policy, and final pre-spawn integrity verification that requires every mounted extension invocation to match its immutable build-time form, bounded value policy, and managed resource ownership before process creation.
 - Added strong opaque metadata ETags with required `If-Match` preconditions to prevent lost file-metadata updates, plus storage-side serialization and missing-blob readiness checks.
 - Rejected unknown metadata request fields and normalized public FastAPI validation failures into the standard safe `UNPROCESSABLE_ENTITY` envelope.

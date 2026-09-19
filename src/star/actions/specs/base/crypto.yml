@@ -73,6 +73,7 @@ actions:
         items: file_id
         constraints:
           min_items: 2
+          max_items: 32
         description: "Ordered list of managed file IDs to hash"
 
     command:

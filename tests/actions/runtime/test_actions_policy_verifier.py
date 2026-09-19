@@ -23,7 +23,7 @@ from star.actions.models import (
     ArgDef,
     BinaryPolicy,
     CommandTokenSource,
-    CompiledExtensionInvocationPolicy,
+    CompiledInvocationPolicy,
     CompiledTemplateTokenPolicy,
     InvocationTokenRole,
     OutputDef,
@@ -51,6 +51,7 @@ from star.actions.security.binary_policies import (
     InvocationForm,
     OperandKind,
     OperandPolicy,
+    OptionPolicy,
 )
 from star.core.config import Settings
 from star.core.files import get_blob_path
@@ -333,11 +334,11 @@ def test_verifier_rejects_corrupted_rendered_extension_state(
         ):
             verify_rendered_invocation(corrupted, spec, settings=settings)
 
-    policy = spec.extension_invocation_policy
+    policy = spec.invocation_policy
     assert policy is not None
     corrupted_spec = replace(
         spec,
-        extension_invocation_policy=replace(
+        invocation_policy=replace(
             policy,
             template_tokens=(policy.template_tokens[0], *policy.template_tokens[2:]),
         ),
@@ -779,13 +780,14 @@ def test_verifier_checks_output_and_secret_file_invocation_ownership(
 
     settings = _settings(tmp_path)
     form = InvocationForm(
+        allowed_provenances=frozenset({SpecProvenance.EXTENSION}),
         options=(),
         positional_operands=(
             OperandPolicy(OperandKind.MANAGED_OUTPUT),
             OperandPolicy(OperandKind.SECRET_FILE),
         ),
     )
-    invocation_policy = CompiledExtensionInvocationPolicy(
+    invocation_policy = CompiledInvocationPolicy(
         binary="echo",
         form=form,
         template_tokens=(
@@ -803,9 +805,10 @@ def test_verifier_checks_output_and_secret_file_invocation_ownership(
             ),
             CompiledTemplateTokenPolicy(
                 2,
-                CommandTokenSource.ARG,
+                CommandTokenSource.CONST,
                 InvocationTokenRole.SECRET_FILE,
-                reference="password",
+                template_references=("password",),
+                value_prefix="file:",
             ),
         ),
     )
@@ -820,7 +823,7 @@ def test_verifier_checks_output_and_secret_file_invocation_ownership(
         command_template=(
             {"kind": "binary", "value": "echo"},
             {"kind": "output", "name": "result"},
-            {"kind": "arg", "name": "password"},
+            {"kind": "const", "value": "file:{password}"},
         ),
         execution_policy=BinaryPolicy(("echo",), ()),
         arg_defs={
@@ -833,7 +836,7 @@ def test_verifier_checks_output_and_secret_file_invocation_ownership(
         flag_defs={},
         defaults={},
         provenance=SpecProvenance.EXTENSION,
-        extension_invocation_policy=invocation_policy,
+        invocation_policy=invocation_policy,
         outputs={"result": OutputDef(OutputType.FILE, OutputSource.COMMAND)},
     )
     output_files = create_command_output_placeholders(spec, settings=settings)
@@ -860,11 +863,11 @@ def test_verifier_checks_output_and_secret_file_invocation_ownership(
                 managed_file_id=output_id,
             ),
             RenderedArgvToken(
-                value=str(secret_path),
+                value=f"file:{secret_path}",
                 template_index=2,
-                source=CommandTokenSource.ARG,
+                source=CommandTokenSource.CONST,
                 role=InvocationTokenRole.SECRET_FILE,
-                reference="password",
+                template_references=("password",),
             ),
         ),
         output_files=output_files,
@@ -879,3 +882,88 @@ def test_verifier_checks_output_and_secret_file_invocation_ownership(
     finally:
         cleanup_secret_files((secret_path,), settings=settings)
         cleanup_output_placeholders(output_files, settings=settings)
+
+
+def test_verifier_enforces_finite_rendered_option_domain():
+    """
+    GIVEN a compiled const option with a finite rendered-value domain
+    WHEN final verification receives an allowed or unreviewed rendered option
+    THEN it accepts only the option value captured by the immutable policy
+    """
+    option_values = ("-sha256", "-sha512")
+    form = InvocationForm(
+        allowed_provenances=frozenset({SpecProvenance.EXTENSION}),
+        options=(OptionPolicy(option_values, required=True),),
+    )
+    invocation_policy = CompiledInvocationPolicy(
+        binary="testbin",
+        form=form,
+        template_tokens=(
+            CompiledTemplateTokenPolicy(
+                0,
+                CommandTokenSource.BINARY,
+                InvocationTokenRole.BINARY,
+                exact_value="testbin",
+            ),
+            CompiledTemplateTokenPolicy(
+                1,
+                CommandTokenSource.CONST,
+                InvocationTokenRole.OPTION,
+                template_references=("algorithm",),
+                allowed_values=option_values,
+            ),
+        ),
+    )
+    spec = ActionSpec(
+        name="user.synthetic.digest",
+        namespace=("user",),
+        module="synthetic",
+        action="digest",
+        version=1,
+        params_model=BaseModel,
+        binary="testbin",
+        command_template=(
+            {"kind": "binary", "value": "testbin"},
+            {"kind": "const", "value": "-{algorithm}"},
+        ),
+        execution_policy=BinaryPolicy(("testbin",), ()),
+        arg_defs={
+            "algorithm": ArgDef(
+                ParamType.STRING,
+                required=True,
+                constraints={"allowed_values": ["sha256", "sha512"]},
+            )
+        },
+        flag_defs={},
+        defaults={},
+        provenance=SpecProvenance.EXTENSION,
+        invocation_policy=invocation_policy,
+    )
+    rendered = RenderedAction(
+        tokens=(
+            RenderedArgvToken(
+                value="testbin",
+                template_index=0,
+                source=CommandTokenSource.BINARY,
+                role=InvocationTokenRole.BINARY,
+            ),
+            RenderedArgvToken(
+                value="-sha256",
+                template_index=1,
+                source=CommandTokenSource.CONST,
+                role=InvocationTokenRole.OPTION,
+                template_references=("algorithm",),
+            ),
+        ),
+        output_files={},
+    )
+
+    validate_extension_invocation_params(spec, {"algorithm": "sha256"})
+    verify_rendered_invocation(rendered, spec)
+
+    corrupted = replace(
+        rendered,
+        tokens=(rendered.tokens[0], replace(rendered.tokens[1], value="-sha3")),
+    )
+    with pytest.raises(ActionInvocationIntegrityError):
+        verify_rendered_invocation(corrupted, spec)

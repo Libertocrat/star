@@ -34,7 +34,7 @@ STAR also exposes `/v1/files`, which provides the supported external lifecycle f
 ```mermaid
 flowchart TD
 
-subgraph Startup["Startup Phase (Build-Time)"]
+subgraph Startup["Startup (Build-Time)"]
     ActionDSLSpecs["Action DSL Specs"] --> DSLBuildEngine["DSL Build Engine"]
     DSLBuildEngine --> ActionRegistry["Action Registry"]
 end
@@ -73,7 +73,7 @@ The main implementation lives under `src/star`.
 
 `src/star/core/security` owns reusable HTTP, ASGI body, header, path, MIME, and file-access security helpers. Concrete middleware such as `RequestIntegrityMiddleware` remains responsible for ASGI orchestration, rejection envelopes, request IDs, metrics, and logs.
 
-Within `src/star/actions/runtime`, ownership stays split by execution phase. `renderer.py` resolves params and command templates, `secret_manager.py` creates and cleans invocation-owned secret files for file-delivered `secret` args, `executor.py` runs the rendered argv without a shell, `sanitizer.py` bounds and redacts subprocess output, and `outputs_builder.py` shapes declared outputs into response payloads or managed files.
+Within `src/star/actions/runtime`, ownership stays split by execution stage. `renderer.py` resolves params and command templates, `secret_manager.py` creates and cleans invocation-owned secret files for file-delivered `secret` args, `executor.py` runs the rendered argv without a shell, `sanitizer.py` bounds and redacts subprocess output, and `outputs_builder.py` shapes declared outputs into response payloads or managed files.
 
 ## 3. FastAPI Application Layer
 
@@ -208,7 +208,7 @@ At startup, `build_registry_from_specs()` performs the following steps:
 1. `load_module_specs()` discovers YAML-based Action DSL specifications from the configured spec directories and assigns private source-derived provenance: `CORE` for modules shipped as part of STAR core and `EXTENSION` for modules mounted under `/etc/star/actions.d`. Mounted modules retain the stable public `user.*` namespace.
 2. Loader safety checks reject invalid file sizes, invalid extensions, NUL bytes, disallowed control characters, and dangerous YAML patterns.
 3. `validate_modules()` enforces semantic DSL rules such as module uniqueness, supported DSL version, binary declarations, identifier format, action structure, and source-derived static-value path policy.
-4. `enforce_build_policies()` applies STAR-owned policy that is deliberately separate from DSL syntax. For `EXTENSION` modules it requires reviewed capabilities, verifies that each requested capability is operator-enabled, limits binaries to the reviewed catalog, proves each command matches that binary's exact invocation grammar, and compiles the deterministically selected form plus every permitted template-token role. `CORE` does not yet participate in this extension-specific catalog and retains its established binary controls until a dedicated core policy is designed.
+4. `enforce_build_policies()` applies STAR-owned policy that is deliberately separate from DSL syntax. For `EXTENSION` modules it requires reviewed capabilities, verifies that each requested capability is operator-enabled, proves each command matches an authorized exact invocation grammar, and compiles the selected form plus every permitted template-token role.
 5. `build_actions()` compiles validated and policy-approved modules into immutable runtime `ActionSpec` objects with loader-derived provenance, generated `params_model` classes, command templates, defaults, output declarations, stdout file policy, effective binary execution policy, and the compiled extension invocation policy when applicable.
 6. `ActionRegistry` stores the final action mapping and precomputes presentation summaries.
 
@@ -216,7 +216,7 @@ This is the allowlist boundary. If a spec is invalid, the registry is not built 
 
 ### Extension capability policy
 
-The policy enforcer owns the reviewed extension catalog; its capabilities and invocation forms are not DSL-defined and are not part of the public API or OpenAPI contract. A mounted module asks for one or more capabilities in its module YAML, but that declaration grants nothing by itself. Startup admits it only when every requested capability is operator-enabled and every declared binary and command form is covered by the immutable catalog.
+The policy enforcer owns the reviewed invocation catalog; its provenance scopes, capabilities, and command forms are not DSL-defined and are not part of the public API or OpenAPI contract. Authorization belongs to each form rather than to a binary as a whole. A mounted module asks for one or more capabilities in its module YAML, but that declaration grants nothing by itself. Startup admits it only when every requested capability is operator-enabled and every command matches a form that both authorizes `EXTENSION` and names one of the declared capabilities.
 
 | Capability | Reviewed binaries | Enforced command shape |
 | --- | --- | --- |
@@ -224,7 +224,7 @@ The policy enforcer owns the reviewed extension catalog; its capabilities and in
 | `text-search` | `grep` | Exact non-mutating search options, required `-e` or `--regexp`, a bounded string pattern, and one managed `file_id` operand. |
 | `checksum` | `sha256sum` | No options and one to 32 managed `file_id` operands. |
 
-The catalog supports overlapping capability grants even where the initial profiles do not need one. It rejects `--`, inline option values, short-option clusters, unrecognized options, raw path operands, unbounded numeric or string argument domains, and command shapes not explicitly represented by a reviewed form. These checks apply only to `EXTENSION` modules; `CORE` modules retain their established behavior until a dedicated core policy is designed.
+Invocation forms may require one or more capabilities. The catalog rejects `--`, inline option values, short-option clusters, unrecognized options, raw path operands, unbounded numeric or string argument domains, and command shapes not explicitly represented by a reviewed form.
 
 ### Runtime execution path
 
@@ -239,7 +239,7 @@ The catalog supports overlapping capability grants even where the initial profil
 7. Derive a local argv only after policy verification and execute it with `asyncio.create_subprocess_exec()`, using the configured runtime timeout and POSIX process-group cleanup where supported.
 8. Process stdout and stderr through the output pipeline, including sanitization, declared command-output handling, and optional `stdout_file` materialization from sanitized stdout.
 
-Runtime policy validation and final verification consume only immutable policy already compiled into `ActionSpec`; neither reparses YAML nor consults the mutable catalog. The pre-render validator owns request-dependent extension option conditions and maps them as invalid parameters. The final verifier owns inconsistent compiled or rendered state, never permits process creation after rejection, and follows the normal dispatcher cleanup path for output placeholders and ephemeral secret files. `CORE` uses the typed render representation and retains the generic binary checks, but its command grammar remains outside this extension-specific policy until a dedicated core policy is introduced.
+Runtime policy validation and final verification consume only immutable policy already compiled into `ActionSpec`; neither reparses YAML nor consults the mutable catalog. The pre-render validator owns request-dependent extension option conditions and maps them as invalid parameters. The final verifier owns inconsistent compiled or rendered state, never permits process creation after rejection, and follows the normal dispatcher cleanup path for output placeholders and ephemeral secret files.
 
 ```mermaid
 flowchart LR
