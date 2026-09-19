@@ -6,11 +6,12 @@ from typing import NoReturn
 
 from star.actions.engine_config import CONST_TEMPLATE_PLACEHOLDER_PATTERN
 from star.actions.exceptions import ActionSpecsPolicyError
-from star.actions.models.core import ParamType, SpecProvenance
+from star.actions.models.core import ParamType
+from star.actions.models.provenance import SpecProvenance
 from star.actions.models.security import (
     BinaryPolicy,
     CommandTokenSource,
-    CompiledExtensionInvocationPolicy,
+    CompiledInvocationPolicy,
     CompiledTemplateTokenPolicy,
     EffectiveCatalogPolicy,
     InvocationTokenRole,
@@ -61,34 +62,41 @@ def enforce_build_policies(
         raise ActionSpecsPolicyError(str(exc)) from exc
 
     policies: dict[str, BinaryPolicy] = {}
-    invocation_policies: dict[str, CompiledExtensionInvocationPolicy] = {}
+    invocation_policies: dict[str, CompiledInvocationPolicy] = {}
     for module in modules:
         declared_capabilities = _parse_module_capabilities(module)
         module_policy = _build_module_binary_policy(module, settings)
 
         if module.provenance is SpecProvenance.EXTENSION:
-            _enforce_extension_module_capabilities(
+            _enforce_enabled_extension_capabilities(
                 module,
                 declared_capabilities,
                 enabled_capabilities,
             )
 
+            compiled_module_policies: list[CompiledInvocationPolicy] = []
             for action_name, action in module.actions.items():
-                invocation_policies[_action_fqdn(module, action_name)] = (
-                    _enforce_extension_action_policy(
-                        module,
-                        action_name,
-                        action,
-                        declared_capabilities,
-                    )
+                compiled_policy = compile_invocation_policy(
+                    module,
+                    action_name,
+                    action,
+                    declared_capabilities,
                 )
+                compiled_module_policies.append(compiled_policy)
+                invocation_policies[_action_fqdn(module, action_name)] = compiled_policy
+
+            _enforce_declared_extension_capabilities(
+                module,
+                declared_capabilities,
+                compiled_module_policies,
+            )
 
         for action_name in module.actions:
             policies[_action_fqdn(module, action_name)] = module_policy
 
     return EffectiveCatalogPolicy(
         action_policies=policies,
-        extension_invocation_policies=invocation_policies,
+        invocation_policies=invocation_policies,
     )
 
 
@@ -130,12 +138,12 @@ def _build_module_binary_policy(
         _raise_module_error(module, str(exc))
 
 
-def _enforce_extension_module_capabilities(
+def _enforce_enabled_extension_capabilities(
     module: ModuleSpec,
     declared_capabilities: tuple[ExtensionCapability, ...],
     enabled_capabilities: frozenset[ExtensionCapability],
 ) -> None:
-    """Authorize all extension-declared and action-used binaries.
+    """Require every declared extension capability to be operator-enabled.
 
     Args:
         module: Extension module assigned by the loader.
@@ -143,8 +151,7 @@ def _enforce_extension_module_capabilities(
         enabled_capabilities: Operator-enabled capabilities.
 
     Raises:
-        ActionSpecsPolicyError: If the module requests disabled capabilities or
-            declares binaries that are not reviewed by its capabilities.
+        ActionSpecsPolicyError: If the module requests disabled capabilities.
     """
 
     declared_set = frozenset(declared_capabilities)
@@ -158,14 +165,30 @@ def _enforce_extension_module_capabilities(
             + ", ".join(disabled),
         )
 
-    action_binaries = frozenset(
-        _action_binary(action) for action in module.actions.values()
+
+def _enforce_declared_extension_capabilities(
+    module: ModuleSpec,
+    declared_capabilities: tuple[ExtensionCapability, ...],
+    compiled_policies: list[CompiledInvocationPolicy],
+) -> None:
+    """Require every declared capability to authorize a selected action form.
+
+    Args:
+        module: Extension module assigned by the loader.
+        declared_capabilities: Canonical capabilities requested by the module.
+        compiled_policies: Forms selected for every action in the module.
+
+    Raises:
+        ActionSpecsPolicyError: If a declared capability remains unused.
+    """
+
+    used_capabilities = frozenset(
+        capability
+        for policy in compiled_policies
+        for capability in policy.form.extension_capabilities
     )
     for capability in declared_capabilities:
-        if any(
-            capability in _policy_for_binary(binary, module).capabilities
-            for binary in action_binaries
-        ):
+        if capability in used_capabilities:
             continue
         _raise_module_error(
             module,
@@ -175,46 +198,63 @@ def _enforce_extension_module_capabilities(
             ),
         )
 
-    for binary in module.binaries:
-        policy = _policy_for_binary(binary, module)
-        if policy.capabilities & declared_set:
-            continue
-        _raise_module_error(
-            module,
-            f"binary '{binary}' is not authorized by declared capabilities",
-        )
 
-
-def _enforce_extension_action_policy(
+def compile_invocation_policy(
     module: ModuleSpec,
     action_name: str,
     action: ActionSpecInput,
-    declared_capabilities: tuple[ExtensionCapability, ...],
-) -> CompiledExtensionInvocationPolicy:
-    """Require an extension action to match a reviewed binary grammar.
+    declared_capabilities: tuple[ExtensionCapability, ...] = (),
+) -> CompiledInvocationPolicy:
+    """Match and compile one provenance-authorized invocation form.
 
     Args:
-        module: Parent extension module.
+        module: Parent module with loader-derived provenance.
         action_name: Action identifier within the module.
         action: Validated action AST.
-        declared_capabilities: Module capabilities already authorized.
+        declared_capabilities: Extension capabilities already parsed.
+
+    Returns:
+        Immutable compiled invocation policy selected for the action.
 
     Raises:
-        ActionSpecsPolicyError: If the action binary or invocation is not
-            covered by the reviewed policy.
+        ActionSpecsPolicyError: If no authorized reviewed form matches.
     """
 
     binary = _action_binary(action)
     policy = _policy_for_binary(binary, module)
-    if not policy.capabilities.intersection(declared_capabilities):
+    declared_set = frozenset(declared_capabilities)
+    provenance_forms = tuple(
+        form for form in policy.forms if module.provenance in form.allowed_provenances
+    )
+    authorized_forms = tuple(
+        form
+        for form in provenance_forms
+        if module.provenance is SpecProvenance.CORE
+        or (
+            form.extension_capabilities
+            and form.extension_capabilities.issubset(declared_set)
+        )
+    )
+
+    if module.provenance is SpecProvenance.EXTENSION and not authorized_forms:
         _raise_action_error(
             module,
             action_name,
             f"binary '{binary}' is not authorized by declared capabilities",
         )
 
+    if not provenance_forms:
+        _raise_action_error(
+            module,
+            action_name,
+            (
+                f"binary '{binary}' has no reviewed "
+                f"{module.provenance.value} invocation form"
+            ),
+        )
+
     errors: list[str] = []
-    for form in policy.forms:
+    for form in authorized_forms:
         try:
             _enforce_invocation_form(module, action_name, action, form)
             return _compile_invocation_policy(action, binary, form)
@@ -229,8 +269,8 @@ def _compile_invocation_policy(
     action: ActionSpecInput,
     binary: str,
     form: InvocationForm,
-) -> CompiledExtensionInvocationPolicy:
-    """Compile one already-matched extension invocation form.
+) -> CompiledInvocationPolicy:
+    """Compile one already-matched invocation form.
 
     Args:
         action: Validated action whose command matched the reviewed form.
@@ -256,17 +296,32 @@ def _compile_invocation_policy(
     )
     index = 1
 
+    for prefix_literal in form.prefix_literals:
+        compiled.append(
+            _compile_template_token(
+                action,
+                action.command[index],
+                template_index=index,
+                role=InvocationTokenRole.LITERAL,
+                exact_value=prefix_literal,
+            )
+        )
+        index += 1
+
     while index < len(action.command):
         token = action.command[index]
         option = _resolve_option_token(token, action, options_by_name)
         if option is not None and not reached_positional:
+            option_value = _option_token_value(token, action)
+            allowed_values = _finite_template_values(option_value, action) or ()
             compiled.append(
                 _compile_template_token(
                     action,
                     token,
                     template_index=index,
                     role=InvocationTokenRole.OPTION,
-                    exact_value=_option_token_value(token, action),
+                    exact_value=None if allowed_values else option_value,
+                    allowed_values=allowed_values,
                     optional=isinstance(token, FlagCmd),
                 )
             )
@@ -281,6 +336,7 @@ def _compile_invocation_policy(
                         min_value=option.min_value,
                         max_value=option.max_value,
                         max_length=option.max_length,
+                        value_prefix=option.value_prefix,
                     )
                 )
                 index += 2
@@ -291,7 +347,7 @@ def _compile_invocation_policy(
         reached_positional = True
         if positional_policy is None:
             raise ActionSpecsPolicyError(
-                "validated extension invocation has unexpected positional operand"
+                "validated invocation has unexpected positional operand"
             )
         compiled.append(
             _compile_template_token(
@@ -299,11 +355,15 @@ def _compile_invocation_policy(
                 token,
                 template_index=index,
                 role=_role_for_operand_kind(positional_policy.kind),
+                min_value=positional_policy.min_value,
+                max_value=positional_policy.max_value,
+                max_length=positional_policy.max_length,
+                value_prefix=positional_policy.value_prefix,
             )
         )
         index += 1
 
-    return CompiledExtensionInvocationPolicy(
+    return CompiledInvocationPolicy(
         binary=binary,
         form=form,
         template_tokens=tuple(compiled),
@@ -317,10 +377,12 @@ def _compile_template_token(
     template_index: int,
     role: InvocationTokenRole,
     exact_value: str | None = None,
+    allowed_values: tuple[str, ...] = (),
     optional: bool = False,
     min_value: int | None = None,
     max_value: int | None = None,
     max_length: int | None = None,
+    value_prefix: str | None = None,
 ) -> CompiledTemplateTokenPolicy:
     """Compile the expected origin and cardinality for one template token.
 
@@ -330,10 +392,12 @@ def _compile_template_token(
         template_index: Zero-based position in the command template.
         role: Semantic invocation role proven by the selected form.
         exact_value: Optional exact rendered value required by policy.
+        allowed_values: Optional finite rendered-value domain.
         optional: Whether the template position may render no token.
         min_value: Optional inclusive numeric lower bound.
         max_value: Optional inclusive numeric upper bound.
         max_length: Optional rendered string length bound.
+        value_prefix: Optional exact wrapper prefix.
 
     Returns:
         Immutable compiled policy for the template position.
@@ -354,11 +418,13 @@ def _compile_template_token(
             else ()
         ),
         exact_value=exact_value if exact_value is not None else literal,
+        allowed_values=allowed_values,
         min_count=minimum,
         max_count=maximum,
         min_value=min_value,
         max_value=max_value,
         max_length=max_length,
+        value_prefix=value_prefix,
     )
 
 
@@ -392,7 +458,7 @@ def _command_token_identity(
         return CommandTokenSource.OUTPUT, token.output, None
     if isinstance(token, BinaryCmd):
         return CommandTokenSource.BINARY, None, token.binary
-    raise ActionSpecsPolicyError("validated extension command has unsupported token")
+    raise ActionSpecsPolicyError("validated command has unsupported token")
 
 
 def _option_token_value(token: object, action: ActionSpecInput) -> str:
@@ -459,7 +525,7 @@ def _enforce_invocation_form(
     action: ActionSpecInput,
     form: InvocationForm,
 ) -> None:
-    """Validate one extension command template against one invocation form."""
+    """Validate one command template against one invocation form."""
 
     options_by_name = {name: option for option in form.options for name in option.names}
     seen_options: set[str] = set()
@@ -468,6 +534,13 @@ def _enforce_invocation_form(
     index = 1
     command = action.command
     reached_positional = False
+
+    for prefix_literal in form.prefix_literals:
+        if index >= len(command) or command[index] != prefix_literal:
+            raise _FormMismatch(
+                f"required literal '{prefix_literal}' is missing or misplaced"
+            )
+        index += 1
 
     while index < len(command):
         token = command[index]
@@ -501,6 +574,7 @@ def _enforce_invocation_form(
                 min_value=option.min_value,
                 max_value=option.max_value,
                 max_length=option.max_length,
+                value_prefix=option.value_prefix,
             )
             index += 2
             continue
@@ -536,20 +610,76 @@ def _resolve_option_token(
 
     value: str | None = None
     if isinstance(token, str) and token.startswith("-"):
+        rendered_values = _finite_template_values(token, action)
+        if rendered_values is not None:
+            matching = {
+                option
+                for rendered_value in rendered_values
+                for option in (options_by_name.get(rendered_value),)
+                if option is not None
+            }
+            if len(matching) != 1:
+                raise _FormMismatch("option template is not allowed")
+            option = next(iter(matching))
+            if not all(
+                rendered_value in option.names for rendered_value in rendered_values
+            ):
+                raise _FormMismatch("option template is not allowed")
+            return option
         value = token
     elif isinstance(token, FlagCmd):
         value = (action.flags or {})[token.flag].value
 
     if value is None:
         return None
+    exact_option = options_by_name.get(value)
+    if exact_option is not None:
+        if isinstance(token, FlagCmd) and exact_option.value_kind is not None:
+            raise _FormMismatch(f"option '{value}' requires a non-flag value")
+        return exact_option
     if value == "--" or "=" in value or _looks_like_short_option_cluster(value):
         raise _FormMismatch(f"unsupported option syntax '{value}'")
-    option = options_by_name.get(value)
-    if option is None:
-        raise _FormMismatch(f"option '{value}' is not allowed")
-    if isinstance(token, FlagCmd) and option.value_kind is not None:
-        raise _FormMismatch(f"option '{value}' requires a non-flag value")
-    return option
+    raise _FormMismatch(f"option '{value}' is not allowed")
+
+
+def _finite_template_values(
+    value: str,
+    action: ActionSpecInput,
+) -> tuple[str, ...] | None:
+    """Return a finite rendered domain for one single-placeholder template.
+
+    Args:
+        value: Static token that may contain a validated placeholder.
+        action: Action that owns the referenced argument definition.
+
+    Returns:
+        Every possible rendered token, or ``None`` for a literal token.
+
+    Raises:
+        _FormMismatch: If a template is not backed by a finite string domain.
+    """
+
+    placeholders = tuple(CONST_TEMPLATE_PLACEHOLDER_PATTERN.findall(value))
+    if not placeholders:
+        return None
+    if len(placeholders) != 1 or value.count(f"{{{placeholders[0]}}}") != 1:
+        raise _FormMismatch("option template must contain one finite placeholder")
+
+    arg_spec = (action.args or {}).get(placeholders[0])
+    allowed_values = (
+        None if arg_spec is None else (arg_spec.constraints or {}).get("allowed_values")
+    )
+    if (
+        arg_spec is None
+        or arg_spec.type is not ParamType.STRING
+        or not isinstance(allowed_values, list)
+        or not allowed_values
+        or not all(isinstance(item, str) for item in allowed_values)
+    ):
+        raise _FormMismatch("option template requires finite string allowed_values")
+
+    placeholder = f"{{{placeholders[0]}}}"
+    return tuple(value.replace(placeholder, item) for item in allowed_values)
 
 
 def _looks_like_short_option_cluster(value: str) -> bool:
@@ -567,6 +697,10 @@ def _validate_positional_operands(
 ) -> None:
     """Validate positional command tokens against the canonical grammar."""
 
+    if not policies:
+        if tokens:
+            raise _FormMismatch("positional operands are not allowed")
+        return
     if len(policies) != 1:
         raise _FormMismatch("unsupported positional invocation form")
 
@@ -580,6 +714,10 @@ def _validate_positional_operands(
             action,
             token,
             policy.kind,
+            min_value=policy.min_value,
+            max_value=policy.max_value,
+            max_length=policy.max_length,
+            value_prefix=policy.value_prefix,
         )
         minimum += min_count
         maximum += max_count
@@ -600,6 +738,7 @@ def _validate_value_token(
     min_value: int | None = None,
     max_value: int | None = None,
     max_length: int | None = None,
+    value_prefix: str | None = None,
 ) -> tuple[int, int]:
     """Prove one DSL token domain fits one reviewed operand kind.
 
@@ -616,15 +755,8 @@ def _validate_value_token(
         raise _FormMismatch("operand must reference a managed output")
 
     if kind is OperandKind.SECRET_FILE:
-        if isinstance(token, ArgCmd):
-            arg_spec = (action.args or {}).get(token.arg)
-            if (
-                arg_spec is not None
-                and arg_spec.type is ParamType.SECRET
-                and arg_spec.delivery is not None
-                and arg_spec.delivery.type == "file"
-            ):
-                return (1, 1)
+        if _is_file_delivered_secret_token(action, token, value_prefix):
+            return (1, 1)
         raise _FormMismatch("operand must reference a file-delivered secret")
 
     if kind is OperandKind.POSITIVE_INT:
@@ -636,6 +768,43 @@ def _validate_value_token(
         return (1, 1)
 
     raise _FormMismatch(f"unsupported operand kind '{kind.value}'")
+
+
+def _is_file_delivered_secret_token(
+    action: ActionSpecInput,
+    token: object,
+    value_prefix: str | None,
+) -> bool:
+    """Return whether one token is an exact file-delivered secret reference.
+
+    Args:
+        action: Action that owns the referenced secret argument.
+        token: Direct arg token or wrapped const-template token.
+        value_prefix: Required exact wrapper prefix, when applicable.
+
+    Returns:
+        Whether the token resolves only to one file-delivered secret reference.
+    """
+
+    if isinstance(token, ArgCmd):
+        if value_prefix is not None:
+            return False
+        arg_name = token.arg
+    elif isinstance(token, str) and value_prefix is not None:
+        placeholders = tuple(CONST_TEMPLATE_PLACEHOLDER_PATTERN.findall(token))
+        if len(placeholders) != 1 or token != f"{value_prefix}{{{placeholders[0]}}}":
+            return False
+        arg_name = placeholders[0]
+    else:
+        return False
+
+    arg_spec = (action.args or {}).get(arg_name)
+    return bool(
+        arg_spec is not None
+        and arg_spec.type is ParamType.SECRET
+        and arg_spec.delivery is not None
+        and arg_spec.delivery.type == "file"
+    )
 
 
 def _validate_managed_input_token(
@@ -781,12 +950,12 @@ def _action_binary(action: ActionSpecInput) -> str:
 
 
 def _policy_for_binary(binary: str, module: ModuleSpec) -> BinaryInvocationPolicy:
-    """Resolve one reviewed extension binary profile or raise safely."""
+    """Resolve one reviewed binary profile or raise safely."""
 
     policy = get_binary_invocation_policy(binary)
     if policy is None:
         _raise_module_error(
-            module, f"binary '{binary}' has no reviewed extension policy"
+            module, f"binary '{binary}' has no reviewed invocation policy"
         )
     return policy
 

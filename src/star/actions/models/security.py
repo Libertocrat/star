@@ -42,10 +42,11 @@ class CommandTokenSource(str, Enum):
 
 
 class InvocationTokenRole(str, Enum):
-    """Semantic role authorized for an extension argv token.
+    """Semantic role authorized for a reviewed argv token.
 
     Attributes:
         BINARY: Fixed reviewed executable.
+        LITERAL: Fixed reviewed subcommand or literal.
         OPTION: Exact reviewed command option.
         POSITIVE_INT: Canonical bounded positive integer.
         PATTERN: Bounded runtime or static search pattern.
@@ -55,6 +56,7 @@ class InvocationTokenRole(str, Enum):
     """
 
     BINARY = "binary"
+    LITERAL = "literal"
     OPTION = "option"
     POSITIVE_INT = "positive_int"
     PATTERN = "pattern"
@@ -74,11 +76,13 @@ class CompiledTemplateTokenPolicy:
         reference: Referenced arg, flag, or output name when applicable.
         template_references: Ordered placeholder names for a const template.
         exact_value: Required exact rendered value when fixed by the DSL.
+        allowed_values: Finite accepted rendered values for a template token.
         min_count: Minimum rendered tokens contributed by this position.
         max_count: Maximum rendered tokens contributed by this position.
         min_value: Inclusive numeric lower bound when applicable.
         max_value: Inclusive numeric upper bound when applicable.
         max_length: Maximum pattern length when applicable.
+        value_prefix: Exact wrapper prefix for a typed rendered value.
     """
 
     template_index: int
@@ -87,16 +91,18 @@ class CompiledTemplateTokenPolicy:
     reference: str | None = None
     template_references: tuple[str, ...] = ()
     exact_value: str | None = None
+    allowed_values: tuple[str, ...] = ()
     min_count: int = 1
     max_count: int = 1
     min_value: int | None = None
     max_value: int | None = None
     max_length: int | None = None
+    value_prefix: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
-class CompiledExtensionInvocationPolicy:
-    """Reviewed invocation form compiled for one extension action.
+class CompiledInvocationPolicy:
+    """Reviewed invocation form compiled for one action.
 
     Attributes:
         binary: Exact reviewed executable.
@@ -115,13 +121,12 @@ class EffectiveCatalogPolicy:
 
     Attributes:
         action_policies: Effective binary policy for each action FQDN.
-        extension_invocation_policies: Compiled invocation policies for
-            extension actions only.
+        invocation_policies: Compiled invocation policies indexed by action.
     """
 
     action_policies: Mapping[str, BinaryPolicy]
-    extension_invocation_policies: Mapping[str, CompiledExtensionInvocationPolicy] = (
-        field(default_factory=dict)
+    invocation_policies: Mapping[str, CompiledInvocationPolicy] = field(
+        default_factory=dict
     )
 
     def __post_init__(self) -> None:
@@ -134,8 +139,8 @@ class EffectiveCatalogPolicy:
         )
         object.__setattr__(
             self,
-            "extension_invocation_policies",
-            MappingProxyType(dict(self.extension_invocation_policies)),
+            "invocation_policies",
+            MappingProxyType(dict(self.invocation_policies)),
         )
 
     def for_action(self, action_name: str) -> BinaryPolicy:
@@ -153,14 +158,15 @@ class EffectiveCatalogPolicy:
     def invocation_for_action(
         self,
         action_name: str,
-    ) -> CompiledExtensionInvocationPolicy | None:
-        """Return the compiled extension invocation policy when present.
+    ) -> CompiledInvocationPolicy | None:
+        """Return the compiled invocation policy when present.
 
         Args:
             action_name: Fully qualified action name.
 
         Returns:
-            Compiled extension policy, or ``None`` for a core action.
+            Compiled policy, or ``None`` when invocation enforcement is not
+            enabled for the action provenance.
         """
 
-        return self.extension_invocation_policies.get(action_name)
+        return self.invocation_policies.get(action_name)

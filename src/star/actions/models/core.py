@@ -27,9 +27,10 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
+from star.actions.models.provenance import SpecProvenance
 from star.actions.models.security import (
     BinaryPolicy,
-    CompiledExtensionInvocationPolicy,
+    CompiledInvocationPolicy,
 )
 
 
@@ -58,22 +59,6 @@ class ParamType(str, Enum):
     FILE_ID = "file_id"
     LIST = "list"
     SECRET = "secret"  # noqa: S105
-
-
-class SpecProvenance(str, Enum):
-    """Origin classification assigned to a loaded DSL module.
-
-    The loader derives this value from the configured specification root. It is
-    not serializable DSL input and therefore cannot be chosen by a module
-    author.
-
-    Attributes:
-        CORE: Module shipped as part of the STAR core.
-        EXTENSION: Module mounted after the STAR core is built.
-    """
-
-    CORE = "core"
-    EXTENSION = "extension"
 
 
 class OutputType(str, Enum):
@@ -244,8 +229,9 @@ class ActionSpec:
         command_template: Normalized immutable command token sequence.
         execution_policy: Effective per-action binary execution policy.
         provenance: Loader-derived module provenance.
-        extension_invocation_policy: Compiled reviewed invocation policy for
-            extension actions; absent for core actions.
+        invocation_policy: Compiled reviewed invocation policy for extension
+            actions; absent for core actions until provenance-scoped
+            enforcement is enabled.
         arg_defs: Runtime argument definitions keyed by arg name.
         flag_defs: Runtime flag definitions keyed by flag name.
         defaults: Flattened runtime defaults for args and flags.
@@ -276,7 +262,7 @@ class ActionSpec:
     flag_defs: dict[str, FlagDef]
     defaults: dict[str, Any]
     provenance: SpecProvenance = SpecProvenance.CORE
-    extension_invocation_policy: CompiledExtensionInvocationPolicy | None = None
+    invocation_policy: CompiledInvocationPolicy | None = None
     outputs: dict[str, OutputDef] = field(default_factory=dict)
     allow_stdout_as_file: bool = True
 
@@ -331,7 +317,7 @@ class ActionSpec:
             "command_template": self.command_template,
             "execution_policy": self.execution_policy,
             "provenance": self.provenance,
-            "extension_invocation_policy": self.extension_invocation_policy,
+            "invocation_policy": self.invocation_policy,
             "arg_defs": self.arg_defs,
             "flag_defs": self.flag_defs,
             "outputs": self.outputs,

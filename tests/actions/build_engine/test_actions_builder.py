@@ -179,12 +179,12 @@ def test_build_actions_includes_user_namespace_prefix(
 
     spec = result["user.custom.my_module.some_action"]
     assert spec.provenance is SpecProvenance.EXTENSION
-    assert spec.extension_invocation_policy is not None
-    assert spec.extension_invocation_policy.binary == "file"
+    assert spec.invocation_policy is not None
+    assert spec.invocation_policy.binary == "file"
     dumped = spec.model_dump()
     assert dumped["provenance"] == "extension"
-    assert dumped["extension_invocation_policy"]["binary"] == "file"
-    assert '"extension_invocation_policy"' in spec.model_dump_json()
+    assert dumped["invocation_policy"]["binary"] == "file"
+    assert '"invocation_policy"' in spec.model_dump_json()
 
 
 def test_build_actions_sets_action_spec_namespace(

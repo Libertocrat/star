@@ -26,7 +26,7 @@ from star.actions.engine_config import (
     USER_NAMESPACE_PREFIX,
 )
 from star.actions.exceptions import ActionSpecsParseError
-from star.actions.models.core import SpecProvenance
+from star.actions.models.provenance import SpecProvenance
 from star.actions.schemas.module import ModuleSpec
 from star.core.config import Settings
 

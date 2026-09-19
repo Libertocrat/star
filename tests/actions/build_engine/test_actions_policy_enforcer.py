@@ -247,7 +247,30 @@ def test_enforcer_rejects_binary_without_declared_capability(
         ],
     )
 
-    with pytest.raises(ActionSpecsPolicyError, match="not authorize a used binary"):
+    with pytest.raises(ActionSpecsPolicyError, match="not authorized by declared"):
+        enforce_build_policies([module], _settings())
+
+
+def test_enforcer_rejects_core_only_openssl_form_for_extension(
+    make_module_payload,
+    make_module_spec,
+    make_action_spec_input,
+):
+    """
+    GIVEN an extension that declares a known capability and invokes OpenSSL
+    WHEN build-time policy enforcement evaluates the provenance-scoped forms
+    THEN it rejects the CORE-only OpenSSL operation
+    """
+    module = _extension_module(
+        make_module_payload,
+        make_module_spec,
+        make_action_spec_input,
+        capabilities=["checksum"],
+        binary="openssl",
+        command=[{"binary": "openssl"}, "rand", "-hex", "16"],
+    )
+
+    with pytest.raises(ActionSpecsPolicyError, match="not authorized by declared"):
         enforce_build_policies([module], _settings())
 
 
@@ -321,6 +344,43 @@ def test_enforcer_accepts_regex_pattern_with_slash_and_managed_input(
     )
 
     enforce_build_policies([module], _settings())
+
+
+def test_enforcer_rejects_grep_pattern_domain_above_policy_limit(
+    make_module_payload,
+    make_module_spec,
+    make_action_spec_input,
+):
+    """
+    GIVEN a grep extension whose pattern domain exceeds 4096 characters
+    WHEN build-time policy enforcement runs
+    THEN it rejects the broader declared string domain
+    """
+    module = _extension_module(
+        make_module_payload,
+        make_module_spec,
+        make_action_spec_input,
+        capabilities=["text-search"],
+        binary="grep",
+        args={
+            "pattern": {
+                "type": "string",
+                "required": True,
+                "constraints": {"min_length": 1, "max_length": 4097},
+                "description": "Search pattern",
+            },
+            "input_file": _file_arg(),
+        },
+        command=[
+            {"binary": "grep"},
+            "-e",
+            {"arg": "pattern"},
+            {"arg": "input_file"},
+        ],
+    )
+
+    with pytest.raises(ActionSpecsPolicyError, match="maximum allowed length"):
+        enforce_build_policies([module], _settings())
 
 
 def test_enforcer_rejects_raw_string_file_operand(
@@ -448,3 +508,34 @@ def test_enforcer_accepts_bounded_sha256_list_inputs(
     )
 
     enforce_build_policies([module], _settings())
+
+
+def test_enforcer_rejects_sha256_list_domain_above_policy_limit(
+    make_module_payload,
+    make_module_spec,
+    make_action_spec_input,
+):
+    """
+    GIVEN a checksum extension whose managed file list can exceed 32 items
+    WHEN build-time policy enforcement runs
+    THEN it rejects the broader declared list cardinality
+    """
+    module = _extension_module(
+        make_module_payload,
+        make_module_spec,
+        make_action_spec_input,
+        capabilities=["checksum"],
+        binary="sha256sum",
+        args={
+            "input_files": {
+                "type": "list",
+                "items": "file_id",
+                "constraints": {"min_items": 2, "max_items": 33},
+                "description": "Managed input files",
+            }
+        },
+        command=[{"binary": "sha256sum"}, {"arg": "input_files"}],
+    )
+
+    with pytest.raises(ActionSpecsPolicyError, match="expected 1 to 32"):
+        enforce_build_policies([module], _settings())

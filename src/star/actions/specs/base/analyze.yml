@@ -85,6 +85,7 @@ actions:
         required: true
         constraints:
           min_length: 1
+          max_length: 4096
         description: "Search pattern passed directly to grep"
 
     flags:
@@ -114,6 +115,7 @@ actions:
       - flag: ignore_case
       - flag: add_line_numbers
       - flag: invert_match
+      - "-e"
       - arg: pattern
       - arg: input_file
 

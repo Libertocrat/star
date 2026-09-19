@@ -12,7 +12,8 @@ import re
 import tempfile
 from pathlib import Path
 
-from star.actions.models.core import ParamType, SpecProvenance
+from star.actions.models.core import ParamType
+from star.actions.models.provenance import SpecProvenance
 from star.core.security.mime_map import EXTENSION_MIME_MAP
 
 # ------------------------------------------------------------------

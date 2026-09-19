@@ -10,7 +10,8 @@ from star.actions.exceptions import (
     ActionInvocationInputStateError,
     ActionInvocationIntegrityError,
 )
-from star.actions.models.core import ActionSpec, SpecProvenance
+from star.actions.models.core import ActionSpec
+from star.actions.models.provenance import SpecProvenance
 from star.actions.models.runtime import RenderedAction, RenderedArgvToken
 from star.actions.models.security import (
     CompiledTemplateTokenPolicy,
@@ -54,7 +55,7 @@ def verify_rendered_invocation(
     if spec.provenance is SpecProvenance.CORE:
         return
 
-    policy = spec.extension_invocation_policy
+    policy = spec.invocation_policy
     if policy is None or policy.binary != spec.binary:
         _reject()
     if not policy.template_tokens or len(policy.template_tokens) != len(
@@ -91,7 +92,7 @@ def _verify_compiled_expansions(
             not match the compiled policy.
     """
 
-    policy = spec.extension_invocation_policy
+    policy = spec.invocation_policy
     if policy is None:
         _reject()
 
@@ -158,6 +159,8 @@ def _verify_token(
         _reject()
     if expected.exact_value is not None and token.value != expected.exact_value:
         _reject()
+    if expected.allowed_values and token.value not in expected.allowed_values:
+        _reject()
 
     role = expected.role
     if (
@@ -178,7 +181,7 @@ def _verify_token(
     elif role is InvocationTokenRole.MANAGED_OUTPUT:
         _verify_managed_output(token, rendered, settings=settings)
     elif role is InvocationTokenRole.SECRET_FILE:
-        _verify_secret_file(token, rendered, settings=settings)
+        _verify_secret_file(token, expected, rendered, settings=settings)
 
 
 def _verify_positive_int(
@@ -292,6 +295,7 @@ def _verify_managed_output(
 
 def _verify_secret_file(
     token: RenderedArgvToken,
+    expected: CompiledTemplateTokenPolicy,
     rendered: RenderedAction,
     *,
     settings: Settings | None,
@@ -300,6 +304,7 @@ def _verify_secret_file(
 
     Args:
         token: Secret-file token under verification.
+        expected: Compiled wrapper policy for the secret reference.
         rendered: Complete invocation ownership state.
         settings: Runtime settings snapshot for temporary secret storage.
 
@@ -309,7 +314,14 @@ def _verify_secret_file(
 
     if token.managed_file_id is not None:
         _reject()
-    path = Path(token.value)
+    path_value = token.value
+    if expected.value_prefix is not None:
+        if not path_value.startswith(expected.value_prefix):
+            _reject()
+        path_value = path_value[len(expected.value_prefix) :]
+        if not path_value:
+            _reject()
+    path = Path(path_value)
     if path not in rendered.secret_files:
         _reject()
     if (
@@ -331,7 +343,7 @@ def _verify_option_invariants(rendered: RenderedAction, spec: ActionSpec) -> Non
         ActionInvocationIntegrityError: If option invariants no longer hold.
     """
 
-    policy = spec.extension_invocation_policy
+    policy = spec.invocation_policy
     if policy is None:
         _reject()
     options_by_name = {

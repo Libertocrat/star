@@ -8,7 +8,8 @@ from star.actions.exceptions import (
     ActionInvocationIntegrityError,
     ActionInvocationParamsError,
 )
-from star.actions.models.core import ActionSpec, SpecProvenance
+from star.actions.models.core import ActionSpec
+from star.actions.models.provenance import SpecProvenance
 from star.actions.models.security import (
     CommandTokenSource,
     CompiledTemplateTokenPolicy,
@@ -37,7 +38,7 @@ def validate_extension_invocation_params(
     if spec.provenance is SpecProvenance.CORE:
         return
 
-    policy = spec.extension_invocation_policy
+    policy = spec.invocation_policy
     if policy is None or policy.binary != spec.binary:
         _integrity_failure()
 
@@ -89,13 +90,17 @@ def _enabled_option_value(
             flag state is inconsistent.
     """
 
-    value = template_token.exact_value
-    if value is None:
+    if template_token.source is CommandTokenSource.CONST:
+        if template_token.exact_value is not None:
+            return template_token.exact_value
+        if template_token.allowed_values:
+            return template_token.allowed_values[0]
+        _integrity_failure()
+    if template_token.source is not CommandTokenSource.FLAG:
         _integrity_failure()
 
-    if template_token.source is CommandTokenSource.CONST:
-        return value
-    if template_token.source is not CommandTokenSource.FLAG:
+    value = template_token.exact_value
+    if value is None or template_token.allowed_values:
         _integrity_failure()
 
     reference = template_token.reference

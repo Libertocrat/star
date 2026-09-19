@@ -23,7 +23,8 @@ from star.actions.exceptions import (
     ActionInvocationIntegrityError,
     ActionRuntimeExecError,
 )
-from star.actions.models.core import ActionSpec, SpecProvenance
+from star.actions.models.core import ActionSpec
+from star.actions.models.provenance import SpecProvenance
 from star.actions.models.runtime import RenderedAction, RenderedArgvToken
 from star.actions.models.security import BinaryPolicy, CommandTokenSource
 from star.actions.runtime import executor as executor_module

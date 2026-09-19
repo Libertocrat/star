@@ -6,7 +6,7 @@ from typing import Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, PrivateAttr
 
-from star.actions.models.core import SpecProvenance
+from star.actions.models.provenance import SpecProvenance
 
 from .action import ActionSpecInput
 

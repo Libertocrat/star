@@ -8,9 +8,9 @@ from .core import (
     OutputSource,
     OutputType,
     ParamType,
-    SpecProvenance,
 )
 from .presentation import ActionPublicSpec, ActionSummary, ModuleSummary
+from .provenance import SpecProvenance
 from .runtime import (
     ActionExecutionOutput,
     ActionExecutionResult,
@@ -20,7 +20,7 @@ from .runtime import (
 from .security import (
     BinaryPolicy,
     CommandTokenSource,
-    CompiledExtensionInvocationPolicy,
+    CompiledInvocationPolicy,
     CompiledTemplateTokenPolicy,
     EffectiveCatalogPolicy,
     InvocationTokenRole,
@@ -46,6 +46,6 @@ __all__ = [
     "CommandTokenSource",
     "InvocationTokenRole",
     "CompiledTemplateTokenPolicy",
-    "CompiledExtensionInvocationPolicy",
+    "CompiledInvocationPolicy",
     "EffectiveCatalogPolicy",
 ]

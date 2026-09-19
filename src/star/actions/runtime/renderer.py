@@ -30,8 +30,8 @@ from star.actions.models.core import (
     FlagCmd,
     OutputCmd,
     ParamType,
-    SpecProvenance,
 )
+from star.actions.models.provenance import SpecProvenance
 from star.actions.models.runtime import RenderedAction, RenderedArgvToken
 from star.actions.models.security import CommandTokenSource, InvocationTokenRole
 from star.actions.runtime.file_manager import (
@@ -285,7 +285,7 @@ def _compiled_token_role(
     if spec.provenance is SpecProvenance.CORE:
         return None
 
-    policy = spec.extension_invocation_policy
+    policy = spec.invocation_policy
     if policy is None:
         raise ActionRuntimeRenderError(
             "Extension action has no compiled invocation policy"
