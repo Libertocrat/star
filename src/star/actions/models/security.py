@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from types import MappingProxyType
 from typing import Mapping
 
-from star.actions.security.binary_policies import InvocationForm
+from star.actions.security.binary_policies import (
+    InvocationAuthorization,
+    InvocationForm,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -107,11 +110,13 @@ class CompiledInvocationPolicy:
     Attributes:
         binary: Exact reviewed executable.
         form: Selected immutable reviewed invocation grammar.
+        authorization: Selected provenance-specific authorization.
         template_tokens: Ordered template-position policies.
     """
 
     binary: str
     form: InvocationForm
+    authorization: InvocationAuthorization
     template_tokens: tuple[CompiledTemplateTokenPolicy, ...]
 
 
@@ -125,9 +130,7 @@ class EffectiveCatalogPolicy:
     """
 
     action_policies: Mapping[str, BinaryPolicy]
-    invocation_policies: Mapping[str, CompiledInvocationPolicy] = field(
-        default_factory=dict
-    )
+    invocation_policies: Mapping[str, CompiledInvocationPolicy]
 
     def __post_init__(self) -> None:
         """Freeze a defensive copy of the action policy mapping."""
@@ -158,15 +161,14 @@ class EffectiveCatalogPolicy:
     def invocation_for_action(
         self,
         action_name: str,
-    ) -> CompiledInvocationPolicy | None:
-        """Return the compiled invocation policy when present.
+    ) -> CompiledInvocationPolicy:
+        """Return the compiled invocation policy for one action.
 
         Args:
             action_name: Fully qualified action name.
 
-        Returns:
-            Compiled policy, or ``None`` when invocation enforcement is not
-            enabled for the action provenance.
+        Raises:
+            KeyError: If no compiled invocation policy exists for the action.
         """
 
-        return self.invocation_policies.get(action_name)
+        return self.invocation_policies[action_name]

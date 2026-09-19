@@ -29,6 +29,7 @@ from star.actions.presentation.serializers import (
     to_action_public_spec,
     to_action_summary,
 )
+from tests.actions.policy_helpers import make_test_invocation_policy
 
 # ============================================================================
 # Fixtures
@@ -58,6 +59,7 @@ def sample_action_spec() -> ActionSpec:
         binary="echo",
         command_template=(),
         execution_policy=BinaryPolicy(allowed=("echo",), blocked=()),
+        invocation_policy=make_test_invocation_policy("echo", ()),
         arg_defs={
             "value": ArgDef(
                 type=ParamType.INT,

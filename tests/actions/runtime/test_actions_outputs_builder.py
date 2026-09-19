@@ -24,7 +24,11 @@ from star.actions.models.runtime import (
     RenderedAction,
     RenderedArgvToken,
 )
-from star.actions.models.security import BinaryPolicy, CommandTokenSource
+from star.actions.models.security import (
+    BinaryPolicy,
+    CommandTokenSource,
+    InvocationTokenRole,
+)
 from star.actions.runtime import file_manager
 from star.actions.runtime.outputs_builder import _cleanup_known_outputs, build_outputs
 from star.core.config import Settings
@@ -37,6 +41,7 @@ from star.core.files import (
     load_file_metadata,
 )
 from star.core.schemas.files import FileMetadata
+from tests.actions.policy_helpers import make_test_invocation_policy
 
 
 def _make_settings(tmp_path: Path) -> Settings:
@@ -72,6 +77,7 @@ def _make_spec(
         Minimal ActionSpec suitable for build_outputs.
     """
 
+    command_template = (cast(CommandElement, {"kind": "binary", "value": "echo"}),)
     return ActionSpec(
         name=f"test.{action}",
         namespace=(),
@@ -80,8 +86,9 @@ def _make_spec(
         version=1,
         params_model=BaseModel,
         binary="echo",
-        command_template=(cast(CommandElement, {"kind": "binary", "value": "echo"}),),
+        command_template=command_template,
         execution_policy=BinaryPolicy(allowed=("echo", "cp"), blocked=()),
+        invocation_policy=make_test_invocation_policy("echo", command_template),
         arg_defs={},
         flag_defs={},
         defaults={},
@@ -130,6 +137,7 @@ def _make_rendered(output_files: dict[str, UUID]) -> RenderedAction:
                 value="echo",
                 template_index=0,
                 source=CommandTokenSource.BINARY,
+                role=InvocationTokenRole.BINARY,
             ),
         ),
         output_files=output_files,

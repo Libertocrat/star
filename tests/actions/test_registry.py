@@ -43,15 +43,17 @@ version: 1
 module: sample
 description: "Sample runtime module"
 binaries:
-  - echo
+  - openssl
 
 actions:
   ping:
     description: "Ping action"
     summary: "Ping"
     command:
-      - binary: echo
-      - "hello"
+      - binary: openssl
+      - rand
+      - -hex
+      - "16"
 """.strip(),
         encoding="utf-8",
     )
@@ -89,15 +91,17 @@ version: 1
 module: sample
 description: "Sample runtime module"
 binaries:
-    - echo
+  - openssl
 
 actions:
     ping:
         description: "Ping action"
         summary: "Ping"
         command:
-            - binary: echo
-            - "hello"
+            - binary: openssl
+            - rand
+            - -hex
+            - "16"
 """.strip(),
         encoding="utf-8",
     )

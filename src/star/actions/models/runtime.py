@@ -62,7 +62,7 @@ class RenderedArgvToken:
         value: Final string passed to the subprocess.
         template_index: Command-template position that produced the token.
         source: Structural source of the rendered value.
-        role: Extension policy role, or ``None`` for an unconstrained core token.
+        role: Compiled invocation-policy role.
         reference: Referenced arg, flag, or output name when applicable.
         template_references: Ordered const-template placeholder names.
         managed_file_id: Managed input or output UUID when applicable.
@@ -71,7 +71,7 @@ class RenderedArgvToken:
     value: str = field(repr=False)
     template_index: int
     source: CommandTokenSource
-    role: InvocationTokenRole | None = None
+    role: InvocationTokenRole
     reference: str | None = None
     template_references: tuple[str, ...] = ()
     managed_file_id: UUID | None = None

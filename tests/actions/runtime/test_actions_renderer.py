@@ -37,6 +37,7 @@ from star.core.files import (
     load_file_metadata,
 )
 from star.core.schemas.files import FileMetadata
+from tests.actions.policy_helpers import make_test_invocation_policy
 
 
 def _make_metadata(file_id, *, size_bytes: int = 10) -> FileMetadata:
@@ -156,6 +157,13 @@ def _make_spec(
         binary="echo",
         command_template=template,
         execution_policy=BinaryPolicy(allowed=("echo",), blocked=()),
+        invocation_policy=make_test_invocation_policy(
+            "echo",
+            template,
+            flag_values={
+                name: definition.value for name, definition in (flag_defs or {}).items()
+            },
+        ),
         arg_defs={} if arg_defs is None else arg_defs,
         flag_defs={} if flag_defs is None else flag_defs,
         defaults={} if defaults is None else defaults,

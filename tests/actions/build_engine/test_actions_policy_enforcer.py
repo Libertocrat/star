@@ -4,13 +4,23 @@ from __future__ import annotations
 
 import pytest
 
-from star.actions.build_engine.policy_enforcer import enforce_build_policies
+from star.actions.build_engine.policy_enforcer import (
+    enforce_build_policies,
+    validate_invocation_policy_catalog,
+)
 from star.actions.exceptions import ActionSpecsPolicyError
 from star.actions.models import (
     CommandTokenSource,
     InvocationTokenRole,
     SpecProvenance,
 )
+from star.actions.security.binary_policies import (
+    BINARY_INVOCATION_POLICIES,
+    BinaryInvocationPolicy,
+    InvocationAuthorization,
+    InvocationForm,
+)
+from star.actions.security.capabilities import InvocationCapability
 from star.core.config import Settings
 
 
@@ -105,6 +115,77 @@ def test_enforcer_accepts_reviewed_extension_file_inspection_module(
     )
 
 
+def test_enforcer_rejects_unreviewed_core_binary(
+    make_module_payload,
+    make_module_spec,
+    make_action_spec_input,
+):
+    """
+    GIVEN a CORE action that names an allowlisted but unreviewed binary
+    WHEN build-time invocation policy enforcement runs
+    THEN the action is rejected instead of receiving a provenance exemption
+    """
+    action = make_action_spec_input(command=[{"binary": "echo"}, "hello"])
+    module = make_module_spec(
+        make_module_payload(
+            module_name="core_module",
+            binaries=["echo"],
+            actions={"run": action},
+        )
+    )
+
+    with pytest.raises(ActionSpecsPolicyError, match="no reviewed invocation policy"):
+        enforce_build_policies([module], _settings())
+
+
+def test_catalog_validator_rejects_duplicate_provenance_authorization(monkeypatch):
+    """
+    GIVEN a reviewed form with duplicate CORE authorization entries
+    WHEN the catalog integrity validator runs
+    THEN registry construction fails closed before any action is compiled
+    """
+    authorization = InvocationAuthorization(SpecProvenance.CORE)
+    malformed = BinaryInvocationPolicy(
+        binary="malformed",
+        forms=(
+            InvocationForm(
+                authorizations=(authorization, authorization),
+                options=(),
+            ),
+        ),
+    )
+    monkeypatch.setitem(BINARY_INVOCATION_POLICIES, "malformed", malformed)
+
+    with pytest.raises(ActionSpecsPolicyError, match="duplicate provenance"):
+        validate_invocation_policy_catalog()
+
+
+def test_catalog_validator_rejects_capability_scoped_core_authorization(monkeypatch):
+    """
+    GIVEN a malformed CORE authorization that requires an extension capability
+    WHEN the catalog integrity validator runs
+    THEN the invalid provenance and capability coupling is rejected
+    """
+    malformed = BinaryInvocationPolicy(
+        binary="malformed",
+        forms=(
+            InvocationForm(
+                authorizations=(
+                    InvocationAuthorization(
+                        SpecProvenance.CORE,
+                        frozenset({InvocationCapability.FILE_INSPECTION}),
+                    ),
+                ),
+                options=(),
+            ),
+        ),
+    )
+    monkeypatch.setitem(BINARY_INVOCATION_POLICIES, "malformed", malformed)
+
+    with pytest.raises(ActionSpecsPolicyError, match="capabilities for CORE"):
+        validate_invocation_policy_catalog()
+
+
 def test_enforcer_rejects_extension_without_capabilities(
     make_module_payload,
     make_module_spec,
@@ -149,7 +230,7 @@ def test_enforcer_rejects_unknown_operator_capability(
         command=[{"binary": "file"}, {"arg": "input_file"}],
     )
 
-    with pytest.raises(ActionSpecsPolicyError, match="unknown extension capability"):
+    with pytest.raises(ActionSpecsPolicyError, match="unknown invocation capability"):
         enforce_build_policies([module], _settings(capabilities="unknown-capability"))
 
 
@@ -173,7 +254,7 @@ def test_enforcer_rejects_unknown_module_capability(
         command=[{"binary": "file"}, {"arg": "input_file"}],
     )
 
-    with pytest.raises(ActionSpecsPolicyError, match="unknown extension capability"):
+    with pytest.raises(ActionSpecsPolicyError, match="unknown invocation capability"):
         enforce_build_policies([module], _settings())
 
 
@@ -270,7 +351,7 @@ def test_enforcer_rejects_core_only_openssl_form_for_extension(
         command=[{"binary": "openssl"}, "rand", "-hex", "16"],
     )
 
-    with pytest.raises(ActionSpecsPolicyError, match="not authorized by declared"):
+    with pytest.raises(ActionSpecsPolicyError, match="no reviewed extension"):
         enforce_build_policies([module], _settings())
 
 
@@ -280,21 +361,28 @@ def test_enforcer_ignores_known_core_capabilities_for_authorization(
     make_action_spec_input,
 ):
     """
-    GIVEN a CORE module with advisory text-search capability and echo action
+    GIVEN a CORE module with advisory text-search capability and reviewed cat action
     WHEN build-time policy enforcement runs
     THEN the advisory declaration does not restrict CORE execution policy
     """
     payload = make_module_payload(
-        binaries=["echo"],
-        actions={"run": make_action_spec_input(command=[{"binary": "echo"}])},
+        binaries=["cat"],
+        actions={
+            "run": make_action_spec_input(
+                command=[{"binary": "cat"}, "/proc/sys/kernel/random/uuid"]
+            )
+        },
     )
     payload["capabilities"] = ["text-search"]
     module = make_module_spec(payload)
 
     result = enforce_build_policies([module], _settings(capabilities="none"))
 
-    assert result.for_action("test_module.run").allowed == ("echo",)
-    assert result.invocation_for_action("test_module.run") is None
+    assert result.for_action("test_module.run").allowed == ("cat",)
+    assert (
+        result.invocation_for_action("test_module.run").authorization.provenance
+        is SpecProvenance.CORE
+    )
 
 
 # ============================================================================

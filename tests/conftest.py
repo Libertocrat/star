@@ -130,7 +130,149 @@ def clean_action_registry():
 
 
 @pytest.fixture
-def valid_registry(tmp_path, monkeypatch):
+def synthetic_invocation_policy_compiler(monkeypatch):
+    """Install a test-only compiler for non-policy-focused action fixtures.
+
+    The synthetic compiler preserves token origins, cardinality, resource
+    ownership, and provenance binding without adding fixture-only commands to
+    STAR's reviewed production catalog.
+
+    Args:
+        monkeypatch: Pytest helper used to replace the policy compiler.
+
+    Returns:
+        The installed compiler callable for direct fixture use when needed.
+    """
+    from star.actions.build_engine import policy_enforcer
+    from star.actions.engine_config import CONST_TEMPLATE_PLACEHOLDER_PATTERN
+    from star.actions.models import (
+        CommandTokenSource,
+        CompiledInvocationPolicy,
+        CompiledTemplateTokenPolicy,
+        InvocationTokenRole,
+        ParamType,
+    )
+    from star.actions.schemas.dsl import ArgCmd, BinaryCmd, FlagCmd, OutputCmd
+    from star.actions.security.binary_policies import (
+        InvocationAuthorization,
+        InvocationForm,
+        OptionPolicy,
+    )
+
+    def _compile(
+        module,
+        action_name: str,
+        action,
+        declared_capabilities=(),
+    ) -> CompiledInvocationPolicy:
+        """Compile exact test-only token descriptors for one action.
+
+        Args:
+            module: Validated module that owns the action.
+            action_name: Action identifier, unused by the synthetic compiler.
+            action: Validated action input with its command template.
+            declared_capabilities: Parsed declarations, unused by this fixture.
+
+        Returns:
+            Synthetic compiled policy bound to the module provenance.
+        """
+        del action_name
+        del declared_capabilities
+        authorization = InvocationAuthorization(module.provenance)
+        option_policies = tuple(
+            OptionPolicy(((action.flags or {})[token.flag].value,))
+            for token in action.command
+            if isinstance(token, FlagCmd)
+        )
+        form = InvocationForm(
+            authorizations=(authorization,),
+            options=option_policies,
+        )
+        compiled_tokens: list[CompiledTemplateTokenPolicy] = []
+        binary = ""
+
+        for template_index, token in enumerate(action.command):
+            source: CommandTokenSource
+            role: InvocationTokenRole
+            reference: str | None = None
+            template_references: tuple[str, ...] = ()
+            exact_value: str | None = None
+            min_count = 1
+            max_count = 1
+
+            if isinstance(token, BinaryCmd):
+                binary = token.binary
+                source = CommandTokenSource.BINARY
+                role = InvocationTokenRole.BINARY
+                exact_value = token.binary
+            elif isinstance(token, str):
+                source = CommandTokenSource.CONST
+                role = InvocationTokenRole.LITERAL
+                template_references = tuple(
+                    CONST_TEMPLATE_PLACEHOLDER_PATTERN.findall(token)
+                )
+                if not template_references:
+                    exact_value = token
+            elif isinstance(token, FlagCmd):
+                source = CommandTokenSource.FLAG
+                role = InvocationTokenRole.OPTION
+                reference = token.flag
+                exact_value = (action.flags or {})[token.flag].value
+                min_count = 0
+            elif isinstance(token, OutputCmd):
+                source = CommandTokenSource.OUTPUT
+                role = InvocationTokenRole.MANAGED_OUTPUT
+                reference = token.output
+            elif isinstance(token, ArgCmd):
+                source = CommandTokenSource.ARG
+                reference = token.arg
+                arg_spec = (action.args or {})[token.arg]
+                if arg_spec.type is ParamType.FILE_ID or (
+                    arg_spec.type is ParamType.LIST
+                    and arg_spec.items is ParamType.FILE_ID
+                ):
+                    role = InvocationTokenRole.MANAGED_INPUT
+                elif (
+                    arg_spec.type is ParamType.SECRET
+                    and arg_spec.delivery is not None
+                    and arg_spec.delivery.type == "file"
+                ):
+                    role = InvocationTokenRole.SECRET_FILE
+                else:
+                    role = InvocationTokenRole.LITERAL
+                if arg_spec.type is ParamType.LIST:
+                    constraints = arg_spec.constraints or {}
+                    min_count = constraints.get("min_items", 1)
+                    max_count = constraints.get("max_items", 100)
+            else:
+                raise AssertionError("unsupported validated test command token")
+
+            compiled_tokens.append(
+                CompiledTemplateTokenPolicy(
+                    template_index=template_index,
+                    source=source,
+                    role=role,
+                    reference=reference,
+                    template_references=template_references,
+                    exact_value=exact_value,
+                    min_count=min_count,
+                    max_count=max_count,
+                )
+            )
+
+        return CompiledInvocationPolicy(
+            binary=binary,
+            form=form,
+            authorization=authorization,
+            template_tokens=tuple(compiled_tokens),
+        )
+
+    monkeypatch.setattr(policy_enforcer, "compile_invocation_policy", _compile)
+    return _compile
+
+
+@pytest.fixture
+def valid_registry(tmp_path, monkeypatch, synthetic_invocation_policy_compiler):
     """Build a deterministic DSL runtime registry for tests.
 
     The fixture writes a minimal but valid STAR DSL module to a temporary
@@ -138,12 +280,16 @@ def valid_registry(tmp_path, monkeypatch):
 
     Args:
             tmp_path: Per-test temporary root provided by pytest.
+            monkeypatch: Pytest helper used to replace the specs directory.
+            synthetic_invocation_policy_compiler: Test-only policy compiler for
+                    arbitrary fixture commands.
 
     Returns:
             ActionRegistry: Immutable registry with representative
                     `test_runtime.*` actions for params, defaults, and command
                     outputs.
     """
+    del synthetic_invocation_policy_compiler
     import star.actions.registry as registry_module
 
     specs_dir = tmp_path / "specs"
@@ -159,6 +305,7 @@ tags: [test, runtime]
 
 binaries:
     - echo
+    - "false"
     - openssl
 
 actions:
@@ -227,6 +374,42 @@ actions:
             - "-out"
             - output: cmd_out
             - "16"
+
+    fail_output:
+        description: "Fail after creating one command output placeholder"
+        summary: "Fail output"
+        tags: [outputs, runtime, failure]
+        outputs:
+            cmd_out:
+                type: file
+                source: command
+                description: "Command output placeholder cleaned on failure"
+        command:
+            - binary: "false"
+            - output: cmd_out
+
+    combined_output:
+        description: "Emit stdout with one command output placeholder"
+        summary: "Combined output"
+        tags: [outputs, runtime, stdout]
+        outputs:
+            cmd_out:
+                type: file
+                source: command
+                description: "Command output placeholder returned with stdout"
+        command:
+            - binary: echo
+            - "MULTI_OUTPUT"
+            - output: cmd_out
+
+    no_stdout_file:
+        description: "Disallow stdout file materialization"
+        summary: "No stdout file"
+        tags: [outputs, runtime, restricted]
+        allow_stdout_as_file: false
+        command:
+            - binary: echo
+            - "NO_STDOUT_FILE"
 
     hash_secret:
         description: "Hash a sensitive string with SHA-256"

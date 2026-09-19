@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 from star.actions.models.provenance import SpecProvenance
-from star.actions.security.capabilities import ExtensionCapability
+from star.actions.security.capabilities import InvocationCapability
 
 
 class OperandKind(str, Enum):
@@ -82,21 +82,32 @@ class OperandPolicy:
 
 
 @dataclass(frozen=True, slots=True)
+class InvocationAuthorization:
+    """Authorization for one loader-derived module provenance.
+
+    Attributes:
+        provenance: Module source authorized to use the invocation form.
+        required_capabilities: Capabilities required for this authorization.
+    """
+
+    provenance: SpecProvenance
+    required_capabilities: frozenset[InvocationCapability] = frozenset()
+
+
+@dataclass(frozen=True, slots=True)
 class InvocationForm:
     """One canonical, shell-free invocation grammar for a binary.
 
     Attributes:
-        allowed_provenances: Loader-derived sources authorized for this form.
+        authorizations: Provenance-specific authorizations for this form.
         options: Exact options accepted before positional operands.
-        extension_capabilities: Capabilities required when used by EXTENSION.
         prefix_literals: Exact literals required after the binary.
         required_any_of: Canonical-option groups requiring one selected option.
         positional_operands: Ordered positional operand segments.
     """
 
-    allowed_provenances: frozenset[SpecProvenance]
+    authorizations: tuple[InvocationAuthorization, ...]
     options: tuple[OptionPolicy, ...]
-    extension_capabilities: frozenset[ExtensionCapability] = frozenset()
     prefix_literals: tuple[str, ...] = ()
     required_any_of: tuple[frozenset[str], ...] = ()
     positional_operands: tuple[OperandPolicy, ...] = ()
@@ -115,13 +126,22 @@ class BinaryInvocationPolicy:
     forms: tuple[InvocationForm, ...]
 
 
-_CORE = frozenset({SpecProvenance.CORE})
-_EXTENSION = frozenset({SpecProvenance.EXTENSION})
-_CORE_AND_EXTENSION = frozenset(SpecProvenance)
-
-_FILE_INSPECTION = frozenset({ExtensionCapability.FILE_INSPECTION})
-_TEXT_SEARCH = frozenset({ExtensionCapability.TEXT_SEARCH})
-_CHECKSUM = frozenset({ExtensionCapability.CHECKSUM})
+_CORE = InvocationAuthorization(SpecProvenance.CORE)
+_FILE_INSPECTION = frozenset({InvocationCapability.FILE_INSPECTION})
+_TEXT_SEARCH = frozenset({InvocationCapability.TEXT_SEARCH})
+_CHECKSUM = frozenset({InvocationCapability.CHECKSUM})
+_EXTENSION_FILE_INSPECTION = InvocationAuthorization(
+    SpecProvenance.EXTENSION,
+    _FILE_INSPECTION,
+)
+_EXTENSION_TEXT_SEARCH = InvocationAuthorization(
+    SpecProvenance.EXTENSION,
+    _TEXT_SEARCH,
+)
+_EXTENSION_CHECKSUM = InvocationAuthorization(
+    SpecProvenance.EXTENSION,
+    _CHECKSUM,
+)
 
 _ONE_MANAGED_INPUT = (OperandPolicy(OperandKind.MANAGED_INPUT),)
 
@@ -130,7 +150,7 @@ BINARY_INVOCATION_POLICIES: dict[str, BinaryInvocationPolicy] = {
         binary="cat",
         forms=(
             InvocationForm(
-                allowed_provenances=_CORE,
+                authorizations=(_CORE,),
                 options=(),
                 prefix_literals=("/proc/sys/kernel/random/uuid",),
             ),
@@ -140,19 +160,18 @@ BINARY_INVOCATION_POLICIES: dict[str, BinaryInvocationPolicy] = {
         binary="file",
         forms=(
             InvocationForm(
-                allowed_provenances=_CORE,
+                authorizations=(_CORE,),
                 options=(),
                 positional_operands=_ONE_MANAGED_INPUT,
             ),
             InvocationForm(
-                allowed_provenances=_EXTENSION,
+                authorizations=(_EXTENSION_FILE_INSPECTION,),
                 options=(
                     OptionPolicy(("-b", "--brief")),
                     OptionPolicy(("-i", "--mime")),
                     OptionPolicy(("--mime-type",)),
                     OptionPolicy(("--mime-encoding",)),
                 ),
-                extension_capabilities=_FILE_INSPECTION,
                 positional_operands=_ONE_MANAGED_INPUT,
             ),
         ),
@@ -161,7 +180,7 @@ BINARY_INVOCATION_POLICIES: dict[str, BinaryInvocationPolicy] = {
         binary="grep",
         forms=(
             InvocationForm(
-                allowed_provenances=_CORE,
+                authorizations=(_CORE,),
                 options=(
                     OptionPolicy(("-E",)),
                     OptionPolicy(("-i",)),
@@ -177,7 +196,7 @@ BINARY_INVOCATION_POLICIES: dict[str, BinaryInvocationPolicy] = {
                 positional_operands=_ONE_MANAGED_INPUT,
             ),
             InvocationForm(
-                allowed_provenances=_EXTENSION,
+                authorizations=(_EXTENSION_TEXT_SEARCH,),
                 options=(
                     OptionPolicy(
                         ("-E", "--extended-regexp"),
@@ -199,7 +218,6 @@ BINARY_INVOCATION_POLICIES: dict[str, BinaryInvocationPolicy] = {
                         max_length=4096,
                     ),
                 ),
-                extension_capabilities=_TEXT_SEARCH,
                 positional_operands=_ONE_MANAGED_INPUT,
             ),
         ),
@@ -208,7 +226,7 @@ BINARY_INVOCATION_POLICIES: dict[str, BinaryInvocationPolicy] = {
         binary="head",
         forms=(
             InvocationForm(
-                allowed_provenances=_CORE_AND_EXTENSION,
+                authorizations=(_CORE, _EXTENSION_FILE_INSPECTION),
                 options=(
                     OptionPolicy(
                         ("-n", "--lines"),
@@ -218,7 +236,6 @@ BINARY_INVOCATION_POLICIES: dict[str, BinaryInvocationPolicy] = {
                         max_value=10000,
                     ),
                 ),
-                extension_capabilities=_FILE_INSPECTION,
                 positional_operands=_ONE_MANAGED_INPUT,
             ),
         ),
@@ -227,7 +244,7 @@ BINARY_INVOCATION_POLICIES: dict[str, BinaryInvocationPolicy] = {
         binary="openssl",
         forms=(
             InvocationForm(
-                allowed_provenances=_CORE,
+                authorizations=(_CORE,),
                 options=(
                     OptionPolicy(
                         (
@@ -248,7 +265,7 @@ BINARY_INVOCATION_POLICIES: dict[str, BinaryInvocationPolicy] = {
                 positional_operands=_ONE_MANAGED_INPUT,
             ),
             InvocationForm(
-                allowed_provenances=_CORE,
+                authorizations=(_CORE,),
                 options=(
                     OptionPolicy(("-aes-256-cbc",), required=True),
                     OptionPolicy(("-salt",), required=True),
@@ -273,7 +290,7 @@ BINARY_INVOCATION_POLICIES: dict[str, BinaryInvocationPolicy] = {
                 prefix_literals=("enc",),
             ),
             InvocationForm(
-                allowed_provenances=_CORE,
+                authorizations=(_CORE,),
                 options=(
                     OptionPolicy(("-d",), required=True),
                     OptionPolicy(("-aes-256-cbc",), required=True),
@@ -298,7 +315,7 @@ BINARY_INVOCATION_POLICIES: dict[str, BinaryInvocationPolicy] = {
                 prefix_literals=("enc",),
             ),
             InvocationForm(
-                allowed_provenances=_CORE,
+                authorizations=(_CORE,),
                 options=(OptionPolicy(("-hex",), required=True),),
                 prefix_literals=("rand",),
                 positional_operands=(
@@ -310,7 +327,7 @@ BINARY_INVOCATION_POLICIES: dict[str, BinaryInvocationPolicy] = {
                 ),
             ),
             InvocationForm(
-                allowed_provenances=_CORE,
+                authorizations=(_CORE,),
                 options=(OptionPolicy(("-base64",), required=True),),
                 prefix_literals=("rand",),
                 positional_operands=(
@@ -322,7 +339,7 @@ BINARY_INVOCATION_POLICIES: dict[str, BinaryInvocationPolicy] = {
                 ),
             ),
             InvocationForm(
-                allowed_provenances=_CORE,
+                authorizations=(_CORE,),
                 options=(
                     OptionPolicy(
                         ("-out",),
@@ -345,9 +362,8 @@ BINARY_INVOCATION_POLICIES: dict[str, BinaryInvocationPolicy] = {
         binary="sha256sum",
         forms=(
             InvocationForm(
-                allowed_provenances=_CORE_AND_EXTENSION,
+                authorizations=(_CORE, _EXTENSION_CHECKSUM),
                 options=(),
-                extension_capabilities=_CHECKSUM,
                 positional_operands=(
                     OperandPolicy(
                         OperandKind.MANAGED_INPUT,
@@ -362,7 +378,7 @@ BINARY_INVOCATION_POLICIES: dict[str, BinaryInvocationPolicy] = {
         binary="tail",
         forms=(
             InvocationForm(
-                allowed_provenances=_CORE_AND_EXTENSION,
+                authorizations=(_CORE, _EXTENSION_FILE_INSPECTION),
                 options=(
                     OptionPolicy(
                         ("-n", "--lines"),
@@ -372,7 +388,6 @@ BINARY_INVOCATION_POLICIES: dict[str, BinaryInvocationPolicy] = {
                         max_value=10000,
                     ),
                 ),
-                extension_capabilities=_FILE_INSPECTION,
                 positional_operands=_ONE_MANAGED_INPUT,
             ),
         ),
@@ -382,20 +397,19 @@ BINARY_INVOCATION_POLICIES: dict[str, BinaryInvocationPolicy] = {
         forms=(
             *(
                 InvocationForm(
-                    allowed_provenances=_CORE,
+                    authorizations=(_CORE,),
                     options=(OptionPolicy((option,), required=True),),
                     positional_operands=_ONE_MANAGED_INPUT,
                 )
                 for option in ("-l", "-w", "-m")
             ),
             InvocationForm(
-                allowed_provenances=_EXTENSION,
+                authorizations=(_EXTENSION_FILE_INSPECTION,),
                 options=(
                     OptionPolicy(("-l", "--lines")),
                     OptionPolicy(("-w", "--words")),
                     OptionPolicy(("-m", "--chars")),
                 ),
-                extension_capabilities=_FILE_INSPECTION,
                 required_any_of=(frozenset({"-l", "-w", "-m"}),),
                 positional_operands=_ONE_MANAGED_INPUT,
             ),

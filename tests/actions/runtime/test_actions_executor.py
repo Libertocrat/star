@@ -26,9 +26,19 @@ from star.actions.exceptions import (
 from star.actions.models.core import ActionSpec
 from star.actions.models.provenance import SpecProvenance
 from star.actions.models.runtime import RenderedAction, RenderedArgvToken
-from star.actions.models.security import BinaryPolicy, CommandTokenSource
+from star.actions.models.security import (
+    BinaryPolicy,
+    CommandTokenSource,
+    CompiledInvocationPolicy,
+    CompiledTemplateTokenPolicy,
+    InvocationTokenRole,
+)
 from star.actions.runtime import executor as executor_module
 from star.actions.runtime.executor import execute_command
+from star.actions.security.binary_policies import (
+    InvocationAuthorization,
+    InvocationForm,
+)
 
 
 class _FakeAsyncProcess:
@@ -116,6 +126,27 @@ def _make_spec(
         ActionSpec ready for execute_command tests.
     """
 
+    authorization = InvocationAuthorization(SpecProvenance.CORE)
+    invocation_policy = CompiledInvocationPolicy(
+        binary=binary,
+        form=InvocationForm(authorizations=(authorization,), options=()),
+        authorization=authorization,
+        template_tokens=(
+            CompiledTemplateTokenPolicy(
+                template_index=0,
+                source=CommandTokenSource.BINARY,
+                role=InvocationTokenRole.BINARY,
+                exact_value=binary,
+            ),
+            CompiledTemplateTokenPolicy(
+                template_index=1,
+                source=CommandTokenSource.CONST,
+                role=InvocationTokenRole.LITERAL,
+                min_count=0,
+                max_count=64,
+            ),
+        ),
+    )
     return ActionSpec(
         name="test.exec",
         namespace=(),
@@ -124,8 +155,12 @@ def _make_spec(
         version=1,
         params_model=BaseModel,
         binary=binary,
-        command_template=({"kind": "binary", "value": binary},),
+        command_template=(
+            {"kind": "binary", "value": binary},
+            {"kind": "const", "value": "synthetic-arguments"},
+        ),
         execution_policy=BinaryPolicy(allowed=allowed, blocked=blocked),
+        invocation_policy=invocation_policy,
         arg_defs={},
         flag_defs={},
         defaults={},
@@ -157,11 +192,16 @@ def _rendered(
         tokens=tuple(
             RenderedArgvToken(
                 value=cast(str, value),
-                template_index=index,
+                template_index=0 if index == 0 else 1,
                 source=(
                     CommandTokenSource.BINARY
                     if index == 0
                     else CommandTokenSource.CONST
+                ),
+                role=(
+                    InvocationTokenRole.BINARY
+                    if index == 0
+                    else InvocationTokenRole.LITERAL
                 ),
             )
             for index, value in enumerate(argv)
@@ -302,14 +342,24 @@ async def test_execute_command__rejects_binary_mismatch_before_spawn():
 
 
 @pytest.mark.asyncio
-async def test_execute_command__rejects_extension_without_compiled_policy():
+@pytest.mark.parametrize(
+    "provenance",
+    (SpecProvenance.CORE, SpecProvenance.EXTENSION),
+)
+async def test_execute_command__rejects_action_without_compiled_policy(
+    provenance: SpecProvenance,
+):
     """
-    GIVEN a runtime action marked EXTENSION without compiled invocation policy
+    GIVEN a runtime action without its required compiled invocation policy
     WHEN execute_command reaches its final pre-spawn gate
-    THEN the invocation fails closed instead of falling back to core behavior
+    THEN the invocation fails closed for every provenance
     """
 
-    spec = replace(_make_spec(), provenance=SpecProvenance.EXTENSION)
+    spec = replace(
+        _make_spec(),
+        provenance=provenance,
+        invocation_policy=None,  # type: ignore[arg-type]
+    )
 
     with pytest.raises(ActionInvocationIntegrityError):
         await execute_command(_rendered(["echo"]), spec)

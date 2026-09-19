@@ -208,15 +208,15 @@ At startup, `build_registry_from_specs()` performs the following steps:
 1. `load_module_specs()` discovers YAML-based Action DSL specifications from the configured spec directories and assigns private source-derived provenance: `CORE` for modules shipped as part of STAR core and `EXTENSION` for modules mounted under `/etc/star/actions.d`. Mounted modules retain the stable public `user.*` namespace.
 2. Loader safety checks reject invalid file sizes, invalid extensions, NUL bytes, disallowed control characters, and dangerous YAML patterns.
 3. `validate_modules()` enforces semantic DSL rules such as module uniqueness, supported DSL version, binary declarations, identifier format, action structure, and source-derived static-value path policy.
-4. `enforce_build_policies()` applies STAR-owned policy that is deliberately separate from DSL syntax. For `EXTENSION` modules it requires reviewed capabilities, verifies that each requested capability is operator-enabled, proves each command matches an authorized exact invocation grammar, and compiles the selected form plus every permitted template-token role.
-5. `build_actions()` compiles validated and policy-approved modules into immutable runtime `ActionSpec` objects with loader-derived provenance, generated `params_model` classes, command templates, defaults, output declarations, stdout file policy, effective binary execution policy, and the compiled extension invocation policy when applicable.
+4. `enforce_build_policies()` applies STAR-owned policy that is deliberately separate from DSL syntax. Every command must match an exact invocation grammar authorized for its loader-derived provenance, and the selected form plus every permitted template-token role is compiled into immutable policy. `EXTENSION` modules additionally require reviewed capabilities that are enabled by operator configuration.
+5. `build_actions()` compiles validated and policy-approved modules into immutable runtime `ActionSpec` objects with loader-derived provenance, generated `params_model` classes, command templates, defaults, output declarations, stdout file policy, effective binary execution policy, and a required compiled invocation policy.
 6. `ActionRegistry` stores the final action mapping and precomputes presentation summaries.
 
 This is the allowlist boundary. If a spec is invalid, the registry is not built and the application fails to start.
 
-### Extension capability policy
+### Invocation policy and extension capabilities
 
-The policy enforcer owns the reviewed invocation catalog; its provenance scopes, capabilities, and command forms are not DSL-defined and are not part of the public API or OpenAPI contract. Authorization belongs to each form rather than to a binary as a whole. A mounted module asks for one or more capabilities in its module YAML, but that declaration grants nothing by itself. Startup admits it only when every requested capability is operator-enabled and every command matches a form that both authorizes `EXTENSION` and names one of the declared capabilities.
+The policy enforcer owns the reviewed invocation catalog; its provenance scopes, capabilities, and command forms are not DSL-defined and are not part of the public API or OpenAPI contract. Authorization belongs to each form rather than to a binary as a whole. Every `CORE` and `EXTENSION` action must match a form authorized for its provenance. A mounted module also asks for one or more capabilities in its module YAML, but that declaration grants nothing by itself. Startup admits it only when every requested capability is operator-enabled and every command matches a form that both authorizes `EXTENSION` and names one of the declared capabilities.
 
 | Capability | Reviewed binaries | Enforced command shape |
 | --- | --- | --- |
@@ -224,7 +224,7 @@ The policy enforcer owns the reviewed invocation catalog; its provenance scopes,
 | `text-search` | `grep` | Exact non-mutating search options, required `-e` or `--regexp`, a bounded string pattern, and one managed `file_id` operand. |
 | `checksum` | `sha256sum` | No options and one to 32 managed `file_id` operands. |
 
-Invocation forms may require one or more capabilities. The catalog rejects `--`, inline option values, short-option clusters, unrecognized options, raw path operands, unbounded numeric or string argument domains, and command shapes not explicitly represented by a reviewed form.
+Extension authorizations may require one or more capabilities. The catalog rejects `--`, inline option values, short-option clusters, unrecognized options, raw path operands, unbounded numeric or string argument domains, and command shapes not explicitly represented by a reviewed form.
 
 ### Runtime execution path
 
@@ -232,10 +232,10 @@ Invocation forms may require one or more capabilities. The catalog rejects `--`,
 
 1. Resolve the action from `ActionRegistry`.
 2. Validate request params and execution options, including `stdout_as_file` policy checks.
-3. For `EXTENSION`, validate request-dependent option requirements against the compiled form before rendering. Missing required options or required-any-of selections are normal `INVALID_PARAMS` failures and acquire no invocation-owned resources.
-4. Render immutable `RenderedArgvToken` values and any internal sensitive delivery payloads with `render_command()`. Each token retains its command-template position, structural origin, extension policy role, DSL reference, and managed UUID where applicable; the plain argv list is only a derived compatibility view.
+3. Validate request-dependent option requirements against the compiled form before rendering. Missing required options or required-any-of selections are normal `INVALID_PARAMS` failures and acquire no invocation-owned resources.
+4. Render immutable `RenderedArgvToken` values and any internal sensitive delivery payloads with `render_command()`. Each token retains its command-template position, structural origin, invocation-policy role, DSL reference, and managed UUID where applicable; the plain argv list is only a derived compatibility view.
 5. Resolve `file_id` args and output placeholders through the managed file layer.
-6. Re-check simple-name, blocklist, allowlist, and compiled binary identity policy in `execute_command()`. For `EXTENSION`, the final runtime policy verifier treats inconsistent token origins, option invariants, bounded values, cardinalities, and managed resource ownership as internal integrity failures immediately before process creation. A managed input that becomes unavailable in that final interval is a safe `INVALID_PARAMS` failure.
+6. Re-check simple-name, blocklist, allowlist, and compiled binary identity policy in `execute_command()`. The final runtime policy verifier treats inconsistent provenance authorization, token origins, option invariants, bounded values, cardinalities, and managed resource ownership as internal integrity failures immediately before process creation. A managed input that becomes unavailable in that final interval is a safe `INVALID_PARAMS` failure.
 7. Derive a local argv only after policy verification and execute it with `asyncio.create_subprocess_exec()`, using the configured runtime timeout and POSIX process-group cleanup where supported.
 8. Process stdout and stderr through the output pipeline, including sanitization, declared command-output handling, and optional `stdout_file` materialization from sanitized stdout.
 

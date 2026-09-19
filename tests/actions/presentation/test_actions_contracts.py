@@ -146,9 +146,15 @@ actions:
 
 
 @pytest.fixture
-def contracts_special_registry(tmp_path, monkeypatch, settings):
+def contracts_special_registry(
+    tmp_path,
+    monkeypatch,
+    settings,
+    synthetic_invocation_policy_compiler,
+):
     """Build a registry with actions required for contracts edge cases."""
 
+    del synthetic_invocation_policy_compiler
     return _build_contracts_registry(
         tmp_path=tmp_path,
         monkeypatch=monkeypatch,

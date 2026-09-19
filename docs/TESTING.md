@@ -108,13 +108,14 @@ Current unit coverage includes:
 - `tests/actions/test_registry.py` for registry construction from specs, namespace handling, lookup, membership, sorted listing, and built-in action contract regressions
 - `tests/actions/build_engine/test_actions_loader.py` for YAML discovery, safety checks, parsing, and module loading
 - `tests/actions/build_engine/test_actions_validator.py` for semantic DSL rules, uniqueness checks, binary constraints, output rules, template validation, and rejection of unsafe secret usage
-- `tests/actions/build_engine/test_actions_policy_enforcer.py` for extension capabilities, operator enablement, reviewed binaries, exact option grammar, bounded patterns, and managed-file operands
+- `tests/actions/build_engine/test_actions_policy_enforcer.py` for provenance-scoped authorization, catalog integrity, extension capabilities, operator enablement, reviewed binaries, exact option grammar, bounded patterns, and managed-file operands
+- `tests/actions/build_engine/test_core_binary_policy_catalog.py` for complete reviewed-policy coverage of the built-in action catalog and typed CORE command forms
 - `tests/actions/build_engine/test_actions_builder.py` for runtime `ActionSpec` compilation, generated params models, defaults, command templates, sensitive delivery metadata, and output definitions
 - `tests/actions/presentation/test_actions_catalog.py` for grouped module discovery and filtering by `q`, `tags`, and `match`
 - `tests/actions/presentation/test_actions_contracts.py` for params contracts, params examples, response contracts, response examples, and public `secret` contract shape
 - `tests/actions/presentation/test_actions_serializers.py` for stable public action and module serialization without leaking internal delivery policy
 - `tests/actions/runtime/test_actions_renderer.py` for runtime argument resolution, const template interpolation, file input resolution, secret stdin/file delivery, and output placeholder creation
-- `tests/actions/runtime/test_actions_policy_verifier.py` for typed token provenance, pre-render dynamic extension parameter policy, final compiled-form integrity checks, bounded runtime values, managed ownership, non-spawn rejection, and invocation cleanup expectations
+- `tests/actions/runtime/test_actions_policy_verifier.py` for typed token provenance, pre-render dynamic parameter policy, final compiled-form integrity checks, bounded runtime values, managed ownership, non-spawn rejection, and invocation cleanup expectations
 - `tests/actions/runtime/test_actions_executor.py` for binary policy checks, subprocess execution, stdin handoff, and timeout behavior
 - `tests/actions/runtime/test_actions_outputs_builder.py` for output payload shaping and file finalization
 - `tests/actions/runtime/test_actions_sanitizer.py` for stdout and stderr truncation, sensitive-prefix path redaction, invocation-secret redaction, and normalization
@@ -204,8 +205,8 @@ In `tests/actions/build_engine` and `tests/actions/runtime`, the current tests v
 - validation of command token structure and template placeholders
 - build-time and runtime rejection of secret values that would render into argv
 - materialization and cleanup of invocation-owned secret temp files
-- compiled extension invocation forms and typed rendered token origins
-- pre-render `INVALID_PARAMS` rejection for missing request-dependent extension options, final pre-spawn rejection of corrupted option, value, cardinality, and managed ownership state without subprocess creation, and safe handling of a managed input that disappears before spawn
+- compiled provenance-authorized invocation forms and typed rendered token origins
+- pre-render `INVALID_PARAMS` rejection for missing request-dependent options, final pre-spawn rejection of corrupted provenance authorization, option, value, cardinality, and managed ownership state without subprocess creation, and safe handling of a managed input that disappears before spawn
 - runtime rejection of invalid params, forbidden binaries, and bad output declarations
 - redaction of invocation-provided secrets from sanitized subprocess output and allowlisted omission of unsafe public error details, including rejected validation inputs
 

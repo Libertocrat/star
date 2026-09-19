@@ -1,4 +1,4 @@
-"""Tests for dynamic and final typed extension invocation policy enforcement."""
+"""Tests for dynamic and final typed invocation policy enforcement."""
 
 from __future__ import annotations
 
@@ -43,11 +43,12 @@ from star.actions.runtime.file_manager import (
     create_ready_file_from_bytes,
     resolve_output_blob_path,
 )
-from star.actions.runtime.policy_validator import validate_extension_invocation_params
+from star.actions.runtime.policy_validator import validate_invocation_params
 from star.actions.runtime.policy_verifier import verify_rendered_invocation
 from star.actions.runtime.renderer import render_command
 from star.actions.runtime.secret_manager import cleanup_secret_files, create_secret_file
 from star.actions.security.binary_policies import (
+    InvocationAuthorization,
     InvocationForm,
     OperandKind,
     OperandPolicy,
@@ -569,7 +570,7 @@ def test_verifier_accepts_all_current_extension_invocation_shapes(
     file_params = file_spec.params_model.model_validate(
         {"input_file": first.id}
     ).model_dump(mode="python")
-    validate_extension_invocation_params(file_spec, file_params)
+    validate_invocation_params(file_spec, file_params)
     verify_rendered_invocation(file_rendered, file_spec, settings=settings)
 
     for binary in ("head", "tail"):
@@ -604,7 +605,7 @@ def test_verifier_accepts_all_current_extension_invocation_shapes(
         line_params = line_spec.params_model.model_validate(
             {"lines": 10, "input_file": first.id}
         ).model_dump(mode="python")
-        validate_extension_invocation_params(line_spec, line_params)
+        validate_invocation_params(line_spec, line_params)
         verify_rendered_invocation(line_rendered, line_spec, settings=settings)
         assert line_rendered.tokens[2].role is InvocationTokenRole.POSITIVE_INT
 
@@ -637,7 +638,7 @@ def test_verifier_accepts_all_current_extension_invocation_shapes(
     wc_params = wc_spec.params_model.model_validate(
         {"lines": True, "input_file": first.id}
     ).model_dump(mode="python")
-    validate_extension_invocation_params(wc_spec, wc_params)
+    validate_invocation_params(wc_spec, wc_params)
     verify_rendered_invocation(wc_rendered, wc_spec, settings=settings)
 
     checksum_spec = _build_extension_action(
@@ -665,7 +666,7 @@ def test_verifier_accepts_all_current_extension_invocation_shapes(
     checksum_params = checksum_spec.params_model.model_validate(
         {"input_files": [first.id, second.id]}
     ).model_dump(mode="python")
-    validate_extension_invocation_params(checksum_spec, checksum_params)
+    validate_invocation_params(checksum_spec, checksum_params)
     verify_rendered_invocation(
         checksum_rendered,
         checksum_spec,
@@ -779,8 +780,9 @@ def test_verifier_checks_output_and_secret_file_invocation_ownership(
     """
 
     settings = _settings(tmp_path)
+    authorization = InvocationAuthorization(SpecProvenance.EXTENSION)
     form = InvocationForm(
-        allowed_provenances=frozenset({SpecProvenance.EXTENSION}),
+        authorizations=(authorization,),
         options=(),
         positional_operands=(
             OperandPolicy(OperandKind.MANAGED_OUTPUT),
@@ -790,6 +792,7 @@ def test_verifier_checks_output_and_secret_file_invocation_ownership(
     invocation_policy = CompiledInvocationPolicy(
         binary="echo",
         form=form,
+        authorization=authorization,
         template_tokens=(
             CompiledTemplateTokenPolicy(
                 0,
@@ -891,13 +894,15 @@ def test_verifier_enforces_finite_rendered_option_domain():
     THEN it accepts only the option value captured by the immutable policy
     """
     option_values = ("-sha256", "-sha512")
+    authorization = InvocationAuthorization(SpecProvenance.EXTENSION)
     form = InvocationForm(
-        allowed_provenances=frozenset({SpecProvenance.EXTENSION}),
+        authorizations=(authorization,),
         options=(OptionPolicy(option_values, required=True),),
     )
     invocation_policy = CompiledInvocationPolicy(
         binary="testbin",
         form=form,
+        authorization=authorization,
         template_tokens=(
             CompiledTemplateTokenPolicy(
                 0,
@@ -958,7 +963,7 @@ def test_verifier_enforces_finite_rendered_option_domain():
         output_files={},
     )
 
-    validate_extension_invocation_params(spec, {"algorithm": "sha256"})
+    validate_invocation_params(spec, {"algorithm": "sha256"})
     verify_rendered_invocation(rendered, spec)
 
     corrupted = replace(

@@ -1,4 +1,4 @@
-"""Request-dependent extension invocation policy validation."""
+"""Request-dependent invocation policy validation."""
 
 from __future__ import annotations
 
@@ -9,21 +9,20 @@ from star.actions.exceptions import (
     ActionInvocationParamsError,
 )
 from star.actions.models.core import ActionSpec
-from star.actions.models.provenance import SpecProvenance
 from star.actions.models.security import (
     CommandTokenSource,
     CompiledTemplateTokenPolicy,
     InvocationTokenRole,
 )
 
-_PARAM_FAILURE = "Extension invocation parameters do not satisfy the action policy."
+_PARAM_FAILURE = "Invocation parameters do not satisfy the action policy."
 
 
-def validate_extension_invocation_params(
+def validate_invocation_params(
     spec: ActionSpec,
     params: Mapping[str, Any],
 ) -> None:
-    """Validate request-dependent extension option requirements before render.
+    """Validate request-dependent invocation requirements before render.
 
     Args:
         spec: Compiled action specification selected by the registry.
@@ -35,11 +34,16 @@ def validate_extension_invocation_params(
         ActionInvocationIntegrityError: If compiled policy state is inconsistent.
     """
 
-    if spec.provenance is SpecProvenance.CORE:
-        return
-
     policy = spec.invocation_policy
-    if policy is None or policy.binary != spec.binary:
+    if (
+        policy is None
+        or policy.binary != spec.binary
+        or policy.authorization.provenance is not spec.provenance
+        or not any(
+            policy.authorization is authorization
+            for authorization in policy.form.authorizations
+        )
+    ):
         _integrity_failure()
 
     options_by_name = {
@@ -129,6 +133,4 @@ def _integrity_failure() -> NoReturn:
         ActionInvocationIntegrityError: Always.
     """
 
-    raise ActionInvocationIntegrityError(
-        "Compiled extension invocation policy is inconsistent."
-    )
+    raise ActionInvocationIntegrityError("Compiled invocation policy is inconsistent.")

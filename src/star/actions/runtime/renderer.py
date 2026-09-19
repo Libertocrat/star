@@ -31,7 +31,6 @@ from star.actions.models.core import (
     OutputCmd,
     ParamType,
 )
-from star.actions.models.provenance import SpecProvenance
 from star.actions.models.runtime import RenderedAction, RenderedArgvToken
 from star.actions.models.security import CommandTokenSource, InvocationTokenRole
 from star.actions.runtime.file_manager import (
@@ -267,35 +266,36 @@ def render_command(
 def _compiled_token_role(
     spec: ActionSpec,
     template_index: int,
-) -> InvocationTokenRole | None:
-    """Return the compiled extension role for one template position.
+) -> InvocationTokenRole:
+    """Return the compiled invocation role for one template position.
 
     Args:
         spec: Compiled runtime action specification.
         template_index: Zero-based command-template position.
 
     Returns:
-        Compiled role for an extension token, or ``None`` for core actions.
+        Compiled role for the rendered token.
 
     Raises:
-        ActionRuntimeRenderError: If extension policy data is missing or
+        ActionRuntimeRenderError: If invocation policy data is missing or
             inconsistent with the command template.
     """
 
-    if spec.provenance is SpecProvenance.CORE:
-        return None
-
     policy = spec.invocation_policy
-    if policy is None:
-        raise ActionRuntimeRenderError(
-            "Extension action has no compiled invocation policy"
+    if (
+        policy is None
+        or policy.binary != spec.binary
+        or policy.authorization.provenance is not spec.provenance
+        or not any(
+            policy.authorization is authorization
+            for authorization in policy.form.authorizations
         )
+    ):
+        raise ActionRuntimeRenderError("Action has no valid invocation policy")
     for token_policy in policy.template_tokens:
         if token_policy.template_index == template_index:
             return token_policy.role
-    raise ActionRuntimeRenderError(
-        "Extension command template has no compiled token policy"
-    )
+    raise ActionRuntimeRenderError("Command template has no compiled token policy")
 
 
 def _managed_file_ids_for_arg(

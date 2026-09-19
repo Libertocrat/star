@@ -14,9 +14,23 @@ import pytest
 from pydantic import UUID4, SecretStr, ValidationError
 
 from star.actions.build_engine.builder import build_actions as compile_actions
-from star.actions.build_engine.policy_enforcer import enforce_build_policies
 from star.actions.exceptions import ActionSpecsBuildError
-from star.actions.models import ActionSpec, ParamType, SpecProvenance
+from star.actions.models import (
+    ActionSpec,
+    CommandTokenSource,
+    CompiledInvocationPolicy,
+    CompiledTemplateTokenPolicy,
+    EffectiveCatalogPolicy,
+    InvocationTokenRole,
+    ParamType,
+    SpecProvenance,
+)
+from star.actions.security.binary_policies import (
+    InvocationAuthorization,
+    InvocationForm,
+)
+from star.actions.security.capabilities import InvocationCapability
+from star.actions.security.policy import build_binary_policy
 from star.core.config import Settings
 
 # ============================================================================
@@ -52,9 +66,46 @@ def _build_actions(
     """Build actions through the explicit build-time policy boundary."""
 
     resolved_settings = settings if settings is not None else _test_settings()
+    action_policies = {}
+    invocation_policies = {}
+    for module in modules:
+        execution_policy = build_binary_policy(
+            tuple(module.binaries),
+            resolved_settings,
+        )
+        required_capabilities = (
+            frozenset({InvocationCapability.FILE_INSPECTION})
+            if module.provenance is SpecProvenance.EXTENSION
+            else frozenset()
+        )
+        authorization = InvocationAuthorization(
+            module.provenance,
+            required_capabilities,
+        )
+        form = InvocationForm(authorizations=(authorization,), options=())
+        for action_name in module.actions:
+            action_fqdn = ".".join((*module.namespace, module.module, action_name))
+            binary = module.binaries[0]
+            action_policies[action_fqdn] = execution_policy
+            invocation_policies[action_fqdn] = CompiledInvocationPolicy(
+                binary=binary,
+                form=form,
+                authorization=authorization,
+                template_tokens=(
+                    CompiledTemplateTokenPolicy(
+                        template_index=0,
+                        source=CommandTokenSource.BINARY,
+                        role=InvocationTokenRole.BINARY,
+                        exact_value=binary,
+                    ),
+                ),
+            )
     return compile_actions(
         modules,
-        enforce_build_policies(modules, resolved_settings),
+        EffectiveCatalogPolicy(
+            action_policies=action_policies,
+            invocation_policies=invocation_policies,
+        ),
     )
 
 
@@ -1085,6 +1136,27 @@ def test_invalid_command_element_raises_error(make_valid_module):
 
     with pytest.raises(ActionSpecsBuildError, match="unsupported type"):
         _build_actions([module], _test_settings())
+
+
+def test_build_actions_rejects_missing_core_invocation_policy(make_valid_module):
+    """
+    GIVEN a CORE action with binary admission but no compiled invocation policy
+    WHEN the runtime builder compiles the action
+    THEN it fails closed instead of applying a CORE policy exemption
+    """
+    module = make_valid_module()
+    action_name = "test_module.ping"
+    execution_policy = build_binary_policy(
+        tuple(module.binaries),
+        _test_settings(),
+    )
+    catalog_policy = EffectiveCatalogPolicy(
+        action_policies={action_name: execution_policy},
+        invocation_policies={},
+    )
+
+    with pytest.raises(ActionSpecsBuildError, match="missing invocation policy"):
+        compile_actions([module], catalog_policy)
 
 
 # ============================================================================

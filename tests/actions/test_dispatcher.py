@@ -29,13 +29,14 @@ from star.actions.models import (
     ArgDef,
     ParamType,
 )
-from star.actions.models.core import SecretDelivery
+from star.actions.models.core import CommandElement, SecretDelivery
 from star.actions.models.security import BinaryPolicy
 from star.actions.registry import ActionRegistry
 from star.actions.runtime.file_manager import (
     cleanup_output_placeholders as cleanup_real_output_placeholders,
 )
 from star.core.files import get_secret_tmp_dir, load_file_metadata
+from tests.actions.policy_helpers import make_test_invocation_policy
 
 # ============================================================================
 # Runtime Dispatch
@@ -58,6 +59,10 @@ def _make_file_secret_spec() -> ActionSpec:
 
         password: SecretStr
 
+    command_template: tuple[CommandElement, ...] = (
+        {"kind": "binary", "value": "cat"},
+        {"kind": "const", "value": "file:{password}"},
+    )
     return ActionSpec(
         name="secret_runtime.file_secret",
         namespace=(),
@@ -66,11 +71,9 @@ def _make_file_secret_spec() -> ActionSpec:
         version=1,
         params_model=Params,
         binary="cat",
-        command_template=(
-            {"kind": "binary", "value": "cat"},
-            {"kind": "const", "value": "file:{password}"},
-        ),
+        command_template=command_template,
         execution_policy=BinaryPolicy(allowed=("cat",), blocked=()),
+        invocation_policy=make_test_invocation_policy("cat", command_template),
         arg_defs={
             "password": ArgDef(
                 type=ParamType.SECRET,
@@ -190,6 +193,7 @@ async def test_dispatch_action_passes_secret_stdin_data_to_executor(monkeypatch)
 
         password: SecretStr
 
+    command_template: tuple[CommandElement, ...] = ({"kind": "binary", "value": "cat"},)
     spec = ActionSpec(
         name="secret_runtime.echo_secret",
         namespace=(),
@@ -198,8 +202,9 @@ async def test_dispatch_action_passes_secret_stdin_data_to_executor(monkeypatch)
         version=1,
         params_model=Params,
         binary="cat",
-        command_template=({"kind": "binary", "value": "cat"},),
+        command_template=command_template,
         execution_policy=BinaryPolicy(allowed=("cat",), blocked=()),
+        invocation_policy=make_test_invocation_policy("cat", command_template),
         arg_defs={
             "password": ArgDef(
                 type=ParamType.SECRET,
