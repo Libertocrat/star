@@ -26,12 +26,14 @@ RUN apt-get update \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Keep the reviewed extension binary catalog explicit and build-verified.
+# Keep the reviewed invocation binary catalog explicit and build-verified.
 RUN command -v file \
     && command -v head \
     && command -v tail \
     && command -v wc \
     && command -v grep \
+    && command -v cut \
+    && command -v seq \
     && command -v sha256sum
 
 # Create non-root group/user (deterministic, minimal, hadolint-clean)

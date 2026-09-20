@@ -3,9 +3,19 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 
 import pytest
 
+from star.actions.models import (
+    ArgDef,
+    FlagDef,
+    OutputDef,
+    OutputSource,
+    OutputType,
+    ParamType,
+)
+from star.actions.models.core import SecretDelivery
 from star.actions.presentation.contracts import (
     build_action_contracts,
     build_params_contract,
@@ -13,147 +23,135 @@ from star.actions.presentation.contracts import (
     build_response_contract,
     build_response_example,
 )
-
-
-def _build_contracts_registry(
-    *,
-    tmp_path,
-    monkeypatch,
-    settings,
-):
-    """Build a deterministic DSL registry for contracts edge-case coverage."""
-
-    import star.actions.registry as registry_module
-
-    specs_dir = tmp_path / "specs_contracts"
-    specs_dir.mkdir(parents=True, exist_ok=True)
-
-    spec_file = specs_dir / "contracts_runtime.yml"
-    spec_file.write_text(
-        """
-version: 1
-module: contracts_runtime
-description: "Contracts runtime test module"
-
-binaries:
-    - echo
-
-actions:
-    flagged_action:
-        description: "Action with required/optional args and one flag"
-        args:
-            required_value:
-                type: int
-                required: true
-                description: "Required integer"
-            optional_value:
-                type: string
-                required: false
-                default: "fallback"
-                description: "Optional string"
-        flags:
-            verbose:
-                value: --verbose
-                default: true
-                description: "Verbose mode"
-        command:
-            - binary: echo
-            - arg: required_value
-            - arg: optional_value
-            - flag: verbose
-
-    file_input_action:
-        description: "Action requiring file_id"
-        args:
-            file:
-                type: file_id
-                required: true
-                description: "Input file id"
-        command:
-            - binary: echo
-            - arg: file
-
-    list_string_action:
-        description: "Action requiring list of strings"
-        args:
-            inputs:
-                type: list
-                items: string
-                required: true
-                description: "String list"
-        command:
-            - binary: echo
-            - arg: inputs
-
-    list_file_id_action:
-        description: "Action requiring list of file ids"
-        args:
-            files:
-                type: list
-                items: file_id
-                required: true
-                description: "File id list"
-        command:
-            - binary: echo
-            - arg: files
-
-    secret_action:
-        description: "Action requiring a secret value"
-        args:
-            password:
-                type: secret
-                required: true
-                delivery:
-                    type: stdin
-                constraints:
-                    min_length: 1
-                    max_length: 64
-                description: "Secret password"
-        command:
-            - binary: echo
-
-    outputs_dynamic_action:
-        description: "Action with dynamic output contracts"
-        allow_stdout_as_file: true
-        outputs:
-            cmd_file:
-                type: file
-                source: command
-                description: "Output materialized from command placeholder"
-        command:
-            - binary: echo
-            - "outputs"
-            - output: cmd_file
-
-    outputs_without_stdout_option:
-        description: "Action with command output but stdout file disabled"
-        allow_stdout_as_file: false
-        outputs:
-            cmd_file:
-                type: file
-                source: command
-                description: "Output materialized from command placeholder"
-        command:
-            - binary: echo
-            - "outputs"
-            - output: cmd_file
-""".strip(),
-        encoding="utf-8",
-    )
-
-    monkeypatch.setattr(registry_module, "SPEC_DIRS", (specs_dir,))
-    return registry_module.build_registry_from_specs(settings)
+from star.actions.registry import ActionRegistry
 
 
 @pytest.fixture
-def contracts_special_registry(tmp_path, monkeypatch, settings):
-    """Build a registry with actions required for contracts edge cases."""
+def contracts_special_registry(valid_registry) -> ActionRegistry:
+    """Build presentation-only variants from a reviewed compiled action.
 
-    return _build_contracts_registry(
-        tmp_path=tmp_path,
-        monkeypatch=monkeypatch,
-        settings=settings,
+    The contract builders consume action metadata without rendering or spawning
+    commands. These copies keep that coverage local while their base policy is
+    compiled by the production registry path.
+
+    Args:
+        valid_registry: Registry compiled from reviewed CORE invocation forms.
+
+    Returns:
+        Registry containing deterministic metadata variants for contract tests.
+    """
+
+    base = valid_registry.get("test_runtime.ping")
+    flagged = replace(
+        base,
+        name="contracts_runtime.flagged_action",
+        action="flagged_action",
+        arg_defs={
+            "required_value": ArgDef(
+                type=ParamType.INT,
+                required=True,
+                description="Required integer",
+            ),
+            "optional_value": ArgDef(
+                type=ParamType.STRING,
+                required=False,
+                default="fallback",
+                description="Optional string",
+            ),
+        },
+        flag_defs={
+            "verbose": FlagDef(
+                value="--verbose",
+                default=True,
+                description="Verbose mode",
+            )
+        },
+        defaults={"optional_value": "fallback", "verbose": True},
     )
+    file_input = replace(
+        base,
+        name="contracts_runtime.file_input_action",
+        action="file_input_action",
+        arg_defs={
+            "file": ArgDef(
+                type=ParamType.FILE_ID,
+                required=True,
+                description="Input file id",
+            )
+        },
+        defaults={},
+    )
+    list_string = replace(
+        base,
+        name="contracts_runtime.list_string_action",
+        action="list_string_action",
+        arg_defs={
+            "inputs": ArgDef(
+                type=ParamType.LIST,
+                items=ParamType.STRING,
+                required=True,
+                description="String list",
+            )
+        },
+        defaults={},
+    )
+    list_file_id = replace(
+        base,
+        name="contracts_runtime.list_file_id_action",
+        action="list_file_id_action",
+        arg_defs={
+            "files": ArgDef(
+                type=ParamType.LIST,
+                items=ParamType.FILE_ID,
+                required=True,
+                description="File id list",
+            )
+        },
+        defaults={},
+    )
+    secret = replace(
+        base,
+        name="contracts_runtime.secret_action",
+        action="secret_action",
+        arg_defs={
+            "password": ArgDef(
+                type=ParamType.SECRET,
+                required=True,
+                delivery=SecretDelivery(type="stdin"),
+                constraints={"min_length": 1, "max_length": 64},
+                description="Secret password",
+            )
+        },
+        defaults={},
+    )
+    outputs = {"cmd_file": OutputDef(OutputType.FILE, OutputSource.COMMAND)}
+    output_dynamic = replace(
+        base,
+        name="contracts_runtime.outputs_dynamic_action",
+        action="outputs_dynamic_action",
+        outputs=outputs,
+        allow_stdout_as_file=True,
+    )
+    output_without_stdout = replace(
+        base,
+        name="contracts_runtime.outputs_without_stdout_option",
+        action="outputs_without_stdout_option",
+        outputs=outputs,
+        allow_stdout_as_file=False,
+    )
+    actions = {
+        action.name: action
+        for action in (
+            flagged,
+            file_input,
+            list_string,
+            list_file_id,
+            secret,
+            output_dynamic,
+            output_without_stdout,
+        )
+    }
+    return ActionRegistry(actions, [])
 
 
 @pytest.fixture
@@ -199,7 +197,9 @@ def test_build_params_contract_maps_args(valid_registry) -> None:
     assert result["params"]["count"]["type"] == "int"
     assert result["params"]["count"]["required"] is True
     assert result["params"]["count"]["default"] is None
-    assert result["params"]["count"]["description"] == "Number to echo"
+    assert result["params"]["count"]["description"] == (
+        "Inclusive upper endpoint for the generated sequence"
+    )
 
 
 def test_action_params_contract_includes_stdout_as_file_request_option(
@@ -336,15 +336,17 @@ def test_build_params_contract_constraints_always_present(
     """
 
     constrained = build_params_contract(valid_registry.get("test_runtime.range_test"))
-    unconstrained = build_params_contract(valid_registry.get("test_runtime.repeat"))
+    unconstrained = build_params_contract(
+        contracts_special_registry.get("contracts_runtime.flagged_action")
+    )
     flag_action = build_params_contract(
         contracts_special_registry.get("contracts_runtime.flagged_action")
     )
 
     assert "constraints" in constrained["params"]["value"]
     assert constrained["params"]["value"]["constraints"] == {"min": 1, "max": 10}
-    assert "constraints" in unconstrained["params"]["count"]
-    assert unconstrained["params"]["count"]["constraints"] is None
+    assert "constraints" in unconstrained["params"]["optional_value"]
+    assert unconstrained["params"]["optional_value"]["constraints"] is None
     assert "constraints" in flag_action["params"]["verbose"]
     assert flag_action["params"]["verbose"]["constraints"] is None
 

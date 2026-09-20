@@ -22,7 +22,6 @@ from star.actions.models.presentation import (
     ActionSummary,
     ModuleSummary,
 )
-from star.actions.models.security import BinaryPolicy
 from star.actions.presentation.serializers import (
     module_summary_to_dict,
     modules_to_response,
@@ -36,8 +35,15 @@ from star.actions.presentation.serializers import (
 
 
 @pytest.fixture
-def sample_action_spec() -> ActionSpec:
-    """Build a minimal ActionSpec for serializer tests."""
+def sample_action_spec(valid_registry) -> ActionSpec:
+    """Build a presentation-focused copy of a reviewed action spec.
+
+    Args:
+        valid_registry: Registry compiled through the production policy path.
+
+    Returns:
+        ActionSpec with deterministic public metadata for serializer tests.
+    """
 
     class Params(BaseModel):
         """Test params model used by serializer fixtures.
@@ -48,40 +54,39 @@ def sample_action_spec() -> ActionSpec:
 
         value: int
 
-    return ActionSpec(
-        name="crypto.hash.encrypt",
-        namespace=("crypto", "hash"),
-        module="hash",
-        action="encrypt",
-        version=1,
-        params_model=Params,
-        binary="echo",
-        command_template=(),
-        execution_policy=BinaryPolicy(allowed=("echo",), blocked=()),
-        arg_defs={
-            "value": ArgDef(
-                type=ParamType.INT,
-                required=False,
-                default=10,
-                constraints={"min": 1, "max": 10},
-                description="value",
-            )
+    return replace(
+        valid_registry.get("test_runtime.repeat"),
+        **{
+            "name": "crypto.hash.encrypt",
+            "namespace": ("crypto", "hash"),
+            "module": "hash",
+            "action": "encrypt",
+            "params_model": Params,
+            "arg_defs": {
+                "value": ArgDef(
+                    type=ParamType.INT,
+                    required=False,
+                    default=10,
+                    constraints={"min": 1, "max": 10},
+                    description="value",
+                )
+            },
+            "flag_defs": {
+                "verbose": FlagDef(value="--verbose", default=False, description="flag")
+            },
+            "outputs": {
+                "result": OutputDef(
+                    type=OutputType.FILE,
+                    source=OutputSource.COMMAND,
+                    description="result",
+                )
+            },
+            "defaults": {"value": 10, "verbose": False},
+            "allow_stdout_as_file": True,
+            "tags": ("crypto", "aes-256"),
+            "summary": "summary",
+            "description": "description",
         },
-        flag_defs={
-            "verbose": FlagDef(value="--verbose", default=False, description="flag")
-        },
-        outputs={
-            "result": OutputDef(
-                type=OutputType.FILE,
-                source=OutputSource.COMMAND,
-                description="result",
-            )
-        },
-        defaults={"value": 10, "verbose": False},
-        allow_stdout_as_file=True,
-        tags=("crypto", "aes-256"),
-        summary="summary",
-        description="description",
     )
 
 

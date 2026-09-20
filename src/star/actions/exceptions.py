@@ -33,7 +33,7 @@ class ActionInvalidArgError(ActionRuntimeError):
 
 
 class ActionInvocationParamsError(ActionInvalidArgError):
-    """Raised when action parameters violate an extension invocation policy."""
+    """Raised when action parameters violate a compiled invocation policy."""
 
 
 class ActionRuntimeRenderError(ActionRuntimeError):

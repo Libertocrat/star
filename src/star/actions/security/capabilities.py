@@ -1,12 +1,12 @@
-"""Reviewed extension capabilities for the STAR action DSL."""
+"""Reviewed invocation capabilities for the STAR action DSL."""
 
 from __future__ import annotations
 
 from enum import Enum
 
 
-class ExtensionCapability(str, Enum):
-    """Reviewed execution capabilities available to mounted DSL modules.
+class InvocationCapability(str, Enum):
+    """Reviewed execution capabilities used by invocation authorization.
 
     Attributes:
         FILE_INSPECTION: Safe managed-file inspection utilities.
@@ -19,9 +19,9 @@ class ExtensionCapability(str, Enum):
     CHECKSUM = "checksum"
 
 
-def resolve_enabled_extension_capabilities(
+def resolve_enabled_capabilities(
     value: str,
-) -> frozenset[ExtensionCapability]:
+) -> frozenset[InvocationCapability]:
     """Resolve one normalized settings value into enabled capabilities.
 
     Args:
@@ -35,18 +35,18 @@ def resolve_enabled_extension_capabilities(
     """
 
     if value == "all":
-        return frozenset(ExtensionCapability)
+        return frozenset(InvocationCapability)
 
     if value == "none":
         return frozenset()
 
-    resolved: set[ExtensionCapability] = set()
+    resolved: set[InvocationCapability] = set()
     for name in value.split(","):
         try:
-            resolved.add(ExtensionCapability(name))
+            resolved.add(InvocationCapability(name))
         except ValueError as exc:
             raise ValueError(
-                f"unknown extension capability '{name}' in operator configuration"
+                f"unknown invocation capability '{name}' in operator configuration"
             ) from exc
 
     return frozenset(resolved)
@@ -54,7 +54,7 @@ def resolve_enabled_extension_capabilities(
 
 def parse_declared_capabilities(
     values: list[str] | None,
-) -> tuple[ExtensionCapability, ...]:
+) -> tuple[InvocationCapability, ...]:
     """Parse one module capability declaration without assigning authorization.
 
     Args:
@@ -73,8 +73,8 @@ def parse_declared_capabilities(
     if not values:
         raise ValueError("capabilities must be a non-empty list when declared")
 
-    declared: list[ExtensionCapability] = []
-    seen: set[ExtensionCapability] = set()
+    declared: list[InvocationCapability] = []
+    seen: set[InvocationCapability] = set()
     for raw_value in values:
         if not isinstance(raw_value, str):
             raise ValueError("capabilities must contain only strings")
@@ -83,11 +83,11 @@ def parse_declared_capabilities(
                 "capabilities must use canonical lowercase kebab-case names"
             )
         try:
-            capability = ExtensionCapability(raw_value)
+            capability = InvocationCapability(raw_value)
         except ValueError as exc:
-            raise ValueError(f"unknown extension capability '{raw_value}'") from exc
+            raise ValueError(f"unknown invocation capability '{raw_value}'") from exc
         if capability in seen:
-            raise ValueError(f"duplicate extension capability '{raw_value}'")
+            raise ValueError(f"duplicate invocation capability '{raw_value}'")
         seen.add(capability)
         declared.append(capability)
 

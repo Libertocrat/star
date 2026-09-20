@@ -1,4 +1,4 @@
-"""Final pre-spawn verification for compiled extension invocation policy."""
+"""Final pre-spawn verification for compiled invocation policy."""
 
 from __future__ import annotations
 
@@ -11,7 +11,6 @@ from star.actions.exceptions import (
     ActionInvocationIntegrityError,
 )
 from star.actions.models.core import ActionSpec
-from star.actions.models.provenance import SpecProvenance
 from star.actions.models.runtime import RenderedAction, RenderedArgvToken
 from star.actions.models.security import (
     CompiledTemplateTokenPolicy,
@@ -21,7 +20,7 @@ from star.actions.runtime.file_manager import resolve_output_blob_path
 from star.core.config import Settings
 from star.core.files import get_blob_path, get_secret_tmp_dir, load_file_metadata
 
-_INTEGRITY_FAILURE = "Rendered extension invocation failed runtime policy verification"
+_INTEGRITY_FAILURE = "Rendered invocation failed runtime policy verification"
 _INPUT_STATE_FAILURE = "Managed file input is no longer available."
 
 
@@ -52,11 +51,16 @@ def verify_rendered_invocation(
     if first.value != spec.binary:
         _reject()
 
-    if spec.provenance is SpecProvenance.CORE:
-        return
-
     policy = spec.invocation_policy
-    if policy is None or policy.binary != spec.binary:
+    if (
+        policy is None
+        or policy.binary != spec.binary
+        or policy.authorization.provenance is not spec.provenance
+        or not any(
+            policy.authorization is authorization
+            for authorization in policy.form.authorizations
+        )
+    ):
         _reject()
     if not policy.template_tokens or len(policy.template_tokens) != len(
         spec.command_template
@@ -84,7 +88,7 @@ def _verify_compiled_expansions(
 
     Args:
         rendered: Typed invocation state produced by the renderer.
-        spec: Compiled extension action specification.
+        spec: Compiled action specification.
         settings: Runtime settings snapshot for managed resources.
 
     Raises:
@@ -333,11 +337,11 @@ def _verify_secret_file(
 
 
 def _verify_option_invariants(rendered: RenderedAction, spec: ActionSpec) -> None:
-    """Recheck required, duplicate, and exclusive extension options.
+    """Recheck required, duplicate, and exclusive invocation options.
 
     Args:
         rendered: Typed invocation state produced by the renderer.
-        spec: Compiled extension action specification.
+        spec: Compiled action specification.
 
     Raises:
         ActionInvocationIntegrityError: If option invariants no longer hold.

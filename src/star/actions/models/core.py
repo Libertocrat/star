@@ -229,9 +229,8 @@ class ActionSpec:
         command_template: Normalized immutable command token sequence.
         execution_policy: Effective per-action binary execution policy.
         provenance: Loader-derived module provenance.
-        invocation_policy: Compiled reviewed invocation policy for extension
-            actions; absent for core actions until provenance-scoped
-            enforcement is enabled.
+        invocation_policy: Compiled reviewed invocation policy authorized for
+            the action provenance.
         arg_defs: Runtime argument definitions keyed by arg name.
         flag_defs: Runtime flag definitions keyed by flag name.
         defaults: Flattened runtime defaults for args and flags.
@@ -257,12 +256,12 @@ class ActionSpec:
     binary: str
     command_template: Tuple[CommandElement, ...]
     execution_policy: BinaryPolicy
+    invocation_policy: CompiledInvocationPolicy
 
     arg_defs: dict[str, ArgDef]
     flag_defs: dict[str, FlagDef]
     defaults: dict[str, Any]
     provenance: SpecProvenance = SpecProvenance.CORE
-    invocation_policy: CompiledInvocationPolicy | None = None
     outputs: dict[str, OutputDef] = field(default_factory=dict)
     allow_stdout_as_file: bool = True
 

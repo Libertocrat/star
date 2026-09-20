@@ -13,6 +13,8 @@ from star.actions.build_engine.policy_enforcer import (
 from star.actions.build_engine.validator import validate_modules
 from star.actions.engine_config import CORE_SPECS_DIR
 from star.actions.models import InvocationTokenRole, SpecProvenance
+from star.actions.runtime.policy_verifier import verify_rendered_invocation
+from star.actions.runtime.renderer import render_command
 from star.actions.schemas.module import ModuleSpec
 from star.actions.security.binary_policies import BINARY_INVOCATION_POLICIES
 from star.core.config import Settings
@@ -86,7 +88,7 @@ def test_every_official_core_action_matches_a_reviewed_invocation_form(tmp_path)
         _EXPECTED_CORE_ACTION_BINARIES
     )
     assert all(
-        SpecProvenance.CORE in policy.form.allowed_provenances
+        policy.authorization.provenance is SpecProvenance.CORE
         for policy in compiled.values()
     )
 
@@ -149,19 +151,44 @@ def test_core_catalog_compiles_typed_openssl_and_cat_tokens(tmp_path):
     assert sha256_files.template_tokens[-1].max_count == 32
 
 
-def test_catalog_coverage_does_not_activate_core_invocation_enforcement(tmp_path):
+def test_catalog_coverage_activates_core_invocation_enforcement(tmp_path):
     """
     GIVEN official CORE actions covered by the reviewed policy catalog
-    WHEN the current build pipeline compiles the runtime registry
-    THEN CORE ActionSpec objects omit invocation enforcement policy
+    WHEN the build pipeline compiles the runtime registry
+    THEN every CORE ActionSpec receives its provenance-authorized policy
     """
     modules, settings = _load_core_modules(tmp_path)
 
     catalog_policy = enforce_build_policies(modules, settings)
     actions = build_actions(modules, catalog_policy)
 
-    assert dict(catalog_policy.invocation_policies) == {}
-    assert all(spec.invocation_policy is None for spec in actions.values())
+    assert set(catalog_policy.invocation_policies) == set(
+        _EXPECTED_CORE_ACTION_BINARIES
+    )
+    assert all(
+        spec.invocation_policy.authorization.provenance is SpecProvenance.CORE
+        for spec in actions.values()
+    )
+
+
+def test_core_action_renders_and_verifies_typed_policy_tokens(tmp_path):
+    """
+    GIVEN an official CORE action with an exact reviewed literal operand
+    WHEN its empty parameter set is rendered and verified before execution
+    THEN the runtime enforces typed policy tokens without a CORE bypass
+    """
+    modules, settings = _load_core_modules(tmp_path)
+    catalog_policy = enforce_build_policies(modules, settings)
+    actions = build_actions(modules, catalog_policy)
+    spec = actions["base.random.gen_uuid"]
+
+    rendered = render_command(spec, {}, settings=settings)
+
+    assert tuple(token.role for token in rendered.tokens) == (
+        InvocationTokenRole.BINARY,
+        InvocationTokenRole.LITERAL,
+    )
+    verify_rendered_invocation(rendered, spec, settings=settings)
 
 
 # ============================================================================
@@ -179,12 +206,21 @@ def test_extension_visible_forms_require_explicit_capabilities():
         form for policy in BINARY_INVOCATION_POLICIES.values() for form in policy.forms
     )
 
-    assert all(
-        form.extension_capabilities
+    extension_authorizations = tuple(
+        authorization
         for form in forms
-        if SpecProvenance.EXTENSION in form.allowed_provenances
+        for authorization in form.authorizations
+        if authorization.provenance is SpecProvenance.EXTENSION
+    )
+
+    assert all(
+        authorization.required_capabilities
+        for authorization in extension_authorizations
     )
     assert all(
-        SpecProvenance.EXTENSION not in form.allowed_provenances
+        all(
+            authorization.provenance is not SpecProvenance.EXTENSION
+            for authorization in form.authorizations
+        )
         for form in BINARY_INVOCATION_POLICIES["openssl"].forms
     )

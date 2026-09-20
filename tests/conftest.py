@@ -124,25 +124,20 @@ def clean_action_registry():
         registry.restore_registry(snapshot)
 
 
-# ============================================================================
-# DSL runtime fixtures
-# ============================================================================
-
-
 @pytest.fixture
-def valid_registry(tmp_path, monkeypatch):
+def valid_registry(tmp_path, monkeypatch, settings):
     """Build a deterministic DSL runtime registry for tests.
 
     The fixture writes a minimal but valid STAR DSL module to a temporary
     specs directory and compiles it through the public registry builder.
 
     Args:
-            tmp_path: Per-test temporary root provided by pytest.
+        tmp_path: Per-test temporary root provided by pytest.
+        monkeypatch: Pytest helper used to replace the specs directory.
+        settings: Explicit settings used for registry compilation and runtime.
 
     Returns:
-            ActionRegistry: Immutable registry with representative
-                    `test_runtime.*` actions for params, defaults, and command
-                    outputs.
+        ActionRegistry: Immutable registry with reviewed CORE action forms.
     """
     import star.actions.registry as registry_module
 
@@ -154,38 +149,49 @@ def valid_registry(tmp_path, monkeypatch):
         """
 version: 1
 module: test_runtime
-description: "Test runtime module"
+description: "Policy-compliant runtime fixture module"
 tags: [test, runtime]
 
 binaries:
-    - echo
+    - cut
     - openssl
+    - seq
 
 actions:
 
     ping:
-        description: "Return deterministic hello output"
-        summary: "Ping"
+        description: "Emit the deterministic first value of an integer sequence"
+        summary: "Emit sequence value"
         tags: [health, smoke_test]
         command:
-            - binary: echo
-            - "hello"
+            - binary: seq
+            - "1"
 
     repeat:
-        description: "Echo one integer argument"
-        summary: "Repeat"
-        tags: [echo, repeatable]
+        description: "Emit integers from one through the requested endpoint"
+        summary: "Emit integer sequence"
+        tags: [sequence, repeatable]
         args:
             count:
                 type: int
                 required: true
-                description: "Number to echo"
+                constraints:
+                    min: 1
+                    max: 10000
+                description: "Inclusive upper endpoint for the generated sequence"
+        flags:
+            equal_width:
+                value: "-w"
+                default: false
+                description: "Pad values to the same width"
         command:
-            - binary: echo
+            - binary: seq
+            - flag: equal_width
             - arg: count
 
     range_test:
-        description: "Test numeric constraints"
+        description: "Emit a bounded sequence to exercise numeric range validation"
+        summary: "Validate bounded sequence"
         tags: [validation, numeric-range]
         args:
             value:
@@ -194,27 +200,60 @@ actions:
                 constraints:
                     min: 1
                     max: 10
-                description: "Value in range"
+                description: "Inclusive endpoint constrained from one through ten"
         command:
-            - binary: echo
+            - binary: seq
             - arg: value
 
     default_test:
-        description: "Test default value"
+        description: "Emit a sequence using the default or supplied endpoint"
+        summary: "Emit defaulted sequence"
         tags: [defaults, optional-input]
         args:
             value:
                 type: int
                 required: false
                 default: 5
-                description: "Optional value"
+                constraints:
+                    min: 1
+                    max: 10000
+                description: "Inclusive endpoint that defaults to five"
         command:
-            - binary: echo
+            - binary: seq
             - arg: value
 
+    inspect_column:
+        description: "Extract one character position from a managed file"
+        summary: "Extract file character"
+        tags: [inspection, column, cut]
+        args:
+            position:
+                type: int
+                required: false
+                default: 1
+                constraints:
+                    min: 1
+                    max: 10000
+                description: "One-based character position"
+            input_file:
+                type: file_id
+                required: true
+                description: "Managed input file"
+        flags:
+            complement:
+                value: "--complement"
+                default: false
+                description: "Return every character except the selected position"
+        command:
+            - binary: cut
+            - flag: complement
+            - "-c"
+            - arg: position
+            - arg: input_file
+
     write_output:
-        description: "Generate bytes into one command output placeholder"
-        summary: "Write output"
+        description: "Generate sixteen random bytes into a managed command output"
+        summary: "Generate random output"
         tags: [outputs, runtime, openssl]
         outputs:
             cmd_out:
@@ -228,30 +267,74 @@ actions:
             - output: cmd_out
             - "16"
 
-    hash_secret:
-        description: "Hash a sensitive string with SHA-256"
-        summary: "Hash secret"
-        tags: [secret, runtime, openssl, hash]
+    no_stdout_file:
+        description: "Generate a random token without stdout materialization"
+        summary: "Generate token without stdout file"
+        tags: [outputs, runtime, restricted]
+        allow_stdout_as_file: false
+        command:
+            - binary: openssl
+            - "rand"
+            - "-hex"
+            - "16"
+
+    encrypt_secret:
+        description: "Encrypt a managed input file with a file-delivered secret"
+        summary: "Encrypt managed file"
+        tags: [secret, runtime, openssl, encryption]
         args:
+            input_file:
+                type: file_id
+                required: true
+                description: "Managed input file"
             password:
                 type: secret
                 required: true
                 delivery:
                     type: file
-                description: "Secret string handled through temporary file delivery"
+                constraints:
+                    min_length: 1
+                    max_length: 4096
+                description: "Secret handled through temporary file delivery"
+        outputs:
+            encrypted_file:
+                type: file
+                source: command
+                description: "Encrypted command output"
         command:
             - binary: openssl
-            - "dgst"
-            - "-sha256"
-            - arg: password
+            - "enc"
+            - "-aes-256-cbc"
+            - "-salt"
+            - "-pbkdf2"
+            - "-in"
+            - arg: input_file
+            - "-out"
+            - output: encrypted_file
+            - "-pass"
+            - "file:{password}"
 """.strip(),
         encoding="utf-8",
     )
 
-    settings = Settings.model_validate(
-        {
-            "star_root_dir": str(tmp_path),
-        }
+    (specs_dir / "random.yml").write_text(
+        """
+version: 1
+module: random
+description: "Reviewed CORE UUID fixture module"
+
+binaries:
+    - cat
+
+actions:
+    gen_uuid:
+        description: "Read one kernel-generated UUID"
+        summary: "Read kernel UUID"
+        command:
+            - binary: cat
+            - "/proc/sys/kernel/random/uuid"
+""".strip(),
+        encoding="utf-8",
     )
 
     monkeypatch.setattr(registry_module, "SPEC_DIRS", (specs_dir,))

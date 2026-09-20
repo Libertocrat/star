@@ -20,7 +20,9 @@ from star.actions.schemas.action import ActionSpecInput
 from star.actions.schemas.dsl import ArgCmd, BinaryCmd, FlagCmd, OutputCmd
 from star.actions.schemas.module import ModuleSpec
 from star.actions.security.binary_policies import (
+    BINARY_INVOCATION_POLICIES,
     BinaryInvocationPolicy,
+    InvocationAuthorization,
     InvocationForm,
     OperandKind,
     OperandPolicy,
@@ -28,9 +30,9 @@ from star.actions.security.binary_policies import (
     get_binary_invocation_policy,
 )
 from star.actions.security.capabilities import (
-    ExtensionCapability,
+    InvocationCapability,
     parse_declared_capabilities,
-    resolve_enabled_extension_capabilities,
+    resolve_enabled_capabilities,
 )
 from star.actions.security.policy import build_binary_policy
 from star.core.config import Settings
@@ -40,7 +42,7 @@ def enforce_build_policies(
     modules: list[ModuleSpec],
     settings: Settings,
 ) -> EffectiveCatalogPolicy:
-    """Enforce extension policy and compile effective per-action binary policy.
+    """Enforce invocation policy and compile effective per-action policy.
 
     Args:
         modules: Structurally and semantically validated DSL modules.
@@ -50,12 +52,13 @@ def enforce_build_policies(
         Immutable binary policy indexed by final action FQDN.
 
     Raises:
-        ActionSpecsPolicyError: If module capabilities, binary admission, or an
-            extension command grammar violates STAR policy.
+        ActionSpecsPolicyError: If catalog integrity, module capabilities,
+            binary admission, or command grammar violates STAR policy.
     """
 
+    validate_invocation_policy_catalog()
     try:
-        enabled_capabilities = resolve_enabled_extension_capabilities(
+        enabled_capabilities = resolve_enabled_capabilities(
             settings.star_enabled_extension_capabilities
         )
     except ValueError as exc:
@@ -68,24 +71,25 @@ def enforce_build_policies(
         module_policy = _build_module_binary_policy(module, settings)
 
         if module.provenance is SpecProvenance.EXTENSION:
-            _enforce_enabled_extension_capabilities(
+            _enforce_enabled_capabilities(
                 module,
                 declared_capabilities,
                 enabled_capabilities,
             )
 
-            compiled_module_policies: list[CompiledInvocationPolicy] = []
-            for action_name, action in module.actions.items():
-                compiled_policy = compile_invocation_policy(
-                    module,
-                    action_name,
-                    action,
-                    declared_capabilities,
-                )
-                compiled_module_policies.append(compiled_policy)
-                invocation_policies[_action_fqdn(module, action_name)] = compiled_policy
+        compiled_module_policies: list[CompiledInvocationPolicy] = []
+        for action_name, action in module.actions.items():
+            compiled_policy = compile_invocation_policy(
+                module,
+                action_name,
+                action,
+                declared_capabilities,
+            )
+            compiled_module_policies.append(compiled_policy)
+            invocation_policies[_action_fqdn(module, action_name)] = compiled_policy
 
-            _enforce_declared_extension_capabilities(
+        if module.provenance is SpecProvenance.EXTENSION:
+            _enforce_declared_capabilities_used(
                 module,
                 declared_capabilities,
                 compiled_module_policies,
@@ -100,9 +104,64 @@ def enforce_build_policies(
     )
 
 
+def validate_invocation_policy_catalog() -> None:
+    """Validate the immutable reviewed invocation-policy catalog.
+
+    Raises:
+        ActionSpecsPolicyError: If catalog keys, forms, provenance entries, or
+            capability requirements are inconsistent.
+    """
+
+    for catalog_key, policy in BINARY_INVOCATION_POLICIES.items():
+        if catalog_key != policy.binary:
+            raise ActionSpecsPolicyError(
+                "reviewed invocation policy catalog has a binary key mismatch"
+            )
+        if not policy.forms:
+            raise ActionSpecsPolicyError(
+                f"binary '{policy.binary}' has no reviewed invocation forms"
+            )
+        for form in policy.forms:
+            if not form.authorizations:
+                raise ActionSpecsPolicyError(
+                    f"binary '{policy.binary}' has a form without authorization"
+                )
+            seen_provenances: set[SpecProvenance] = set()
+            for authorization in form.authorizations:
+                if authorization.provenance in seen_provenances:
+                    raise ActionSpecsPolicyError(
+                        f"binary '{policy.binary}' has duplicate provenance "
+                        "authorization"
+                    )
+                seen_provenances.add(authorization.provenance)
+                if not all(
+                    isinstance(capability, InvocationCapability)
+                    for capability in authorization.required_capabilities
+                ):
+                    raise ActionSpecsPolicyError(
+                        f"binary '{policy.binary}' has an invalid capability "
+                        "requirement"
+                    )
+                if (
+                    authorization.provenance is SpecProvenance.CORE
+                    and authorization.required_capabilities
+                ):
+                    raise ActionSpecsPolicyError(
+                        f"binary '{policy.binary}' requires capabilities for CORE"
+                    )
+                if (
+                    authorization.provenance is SpecProvenance.EXTENSION
+                    and not authorization.required_capabilities
+                ):
+                    raise ActionSpecsPolicyError(
+                        f"binary '{policy.binary}' has an unscoped EXTENSION "
+                        "authorization"
+                    )
+
+
 def _parse_module_capabilities(
     module: ModuleSpec,
-) -> tuple[ExtensionCapability, ...]:
+) -> tuple[InvocationCapability, ...]:
     """Parse and validate a module's capability declaration.
 
     Args:
@@ -138,10 +197,10 @@ def _build_module_binary_policy(
         _raise_module_error(module, str(exc))
 
 
-def _enforce_enabled_extension_capabilities(
+def _enforce_enabled_capabilities(
     module: ModuleSpec,
-    declared_capabilities: tuple[ExtensionCapability, ...],
-    enabled_capabilities: frozenset[ExtensionCapability],
+    declared_capabilities: tuple[InvocationCapability, ...],
+    enabled_capabilities: frozenset[InvocationCapability],
 ) -> None:
     """Require every declared extension capability to be operator-enabled.
 
@@ -166,9 +225,9 @@ def _enforce_enabled_extension_capabilities(
         )
 
 
-def _enforce_declared_extension_capabilities(
+def _enforce_declared_capabilities_used(
     module: ModuleSpec,
-    declared_capabilities: tuple[ExtensionCapability, ...],
+    declared_capabilities: tuple[InvocationCapability, ...],
     compiled_policies: list[CompiledInvocationPolicy],
 ) -> None:
     """Require every declared capability to authorize a selected action form.
@@ -185,7 +244,7 @@ def _enforce_declared_extension_capabilities(
     used_capabilities = frozenset(
         capability
         for policy in compiled_policies
-        for capability in policy.form.extension_capabilities
+        for capability in policy.authorization.required_capabilities
     )
     for capability in declared_capabilities:
         if capability in used_capabilities:
@@ -203,7 +262,7 @@ def compile_invocation_policy(
     module: ModuleSpec,
     action_name: str,
     action: ActionSpecInput,
-    declared_capabilities: tuple[ExtensionCapability, ...] = (),
+    declared_capabilities: tuple[InvocationCapability, ...] = (),
 ) -> CompiledInvocationPolicy:
     """Match and compile one provenance-authorized invocation form.
 
@@ -211,7 +270,7 @@ def compile_invocation_policy(
         module: Parent module with loader-derived provenance.
         action_name: Action identifier within the module.
         action: Validated action AST.
-        declared_capabilities: Extension capabilities already parsed.
+        declared_capabilities: Module capabilities already parsed.
 
     Returns:
         Immutable compiled invocation policy selected for the action.
@@ -224,24 +283,16 @@ def compile_invocation_policy(
     policy = _policy_for_binary(binary, module)
     declared_set = frozenset(declared_capabilities)
     provenance_forms = tuple(
-        form for form in policy.forms if module.provenance in form.allowed_provenances
+        (form, authorization)
+        for form in policy.forms
+        for authorization in form.authorizations
+        if authorization.provenance is module.provenance
     )
     authorized_forms = tuple(
-        form
-        for form in provenance_forms
-        if module.provenance is SpecProvenance.CORE
-        or (
-            form.extension_capabilities
-            and form.extension_capabilities.issubset(declared_set)
-        )
+        (form, authorization)
+        for form, authorization in provenance_forms
+        if authorization.required_capabilities.issubset(declared_set)
     )
-
-    if module.provenance is SpecProvenance.EXTENSION and not authorized_forms:
-        _raise_action_error(
-            module,
-            action_name,
-            f"binary '{binary}' is not authorized by declared capabilities",
-        )
 
     if not provenance_forms:
         _raise_action_error(
@@ -253,11 +304,18 @@ def compile_invocation_policy(
             ),
         )
 
+    if not authorized_forms:
+        _raise_action_error(
+            module,
+            action_name,
+            f"binary '{binary}' is not authorized by declared capabilities",
+        )
+
     errors: list[str] = []
-    for form in authorized_forms:
+    for form, authorization in authorized_forms:
         try:
             _enforce_invocation_form(module, action_name, action, form)
-            return _compile_invocation_policy(action, binary, form)
+            return _compile_invocation_policy(action, binary, form, authorization)
         except _FormMismatch as exc:
             errors.append(str(exc))
 
@@ -269,6 +327,7 @@ def _compile_invocation_policy(
     action: ActionSpecInput,
     binary: str,
     form: InvocationForm,
+    authorization: InvocationAuthorization,
 ) -> CompiledInvocationPolicy:
     """Compile one already-matched invocation form.
 
@@ -276,6 +335,7 @@ def _compile_invocation_policy(
         action: Validated action whose command matched the reviewed form.
         binary: Exact reviewed executable.
         form: Deterministically selected invocation form.
+        authorization: Provenance-specific authorization selected for the form.
 
     Returns:
         Immutable template-position policy consumed by rendering and runtime.
@@ -366,6 +426,7 @@ def _compile_invocation_policy(
     return CompiledInvocationPolicy(
         binary=binary,
         form=form,
+        authorization=authorization,
         template_tokens=tuple(compiled),
     )
 
@@ -479,7 +540,7 @@ def _option_token_value(token: object, action: ActionSpecInput) -> str:
         return token
     if isinstance(token, FlagCmd):
         return (action.flags or {})[token.flag].value
-    raise ActionSpecsPolicyError("validated extension option has unsupported token")
+    raise ActionSpecsPolicyError("validated invocation option has unsupported token")
 
 
 def _compiled_token_cardinality(

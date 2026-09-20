@@ -19,7 +19,7 @@ from star.actions.exceptions import (
     ActionSpecsParseError,
     ActionSpecsPolicyError,
 )
-from star.actions.models import ActionSpec, ParamType
+from star.actions.models import ActionSpec, InvocationTokenRole, ParamType
 from star.actions.registry import ActionRegistry, build_registry_from_specs
 from star.core.config import Settings
 
@@ -43,15 +43,17 @@ version: 1
 module: sample
 description: "Sample runtime module"
 binaries:
-  - echo
+  - openssl
 
 actions:
   ping:
     description: "Ping action"
     summary: "Ping"
     command:
-      - binary: echo
-      - "hello"
+      - binary: openssl
+      - rand
+      - -hex
+      - "16"
 """.strip(),
         encoding="utf-8",
     )
@@ -89,15 +91,17 @@ version: 1
 module: sample
 description: "Sample runtime module"
 binaries:
-    - echo
+  - openssl
 
 actions:
     ping:
         description: "Ping action"
         summary: "Ping"
         command:
-            - binary: echo
-            - "hello"
+            - binary: openssl
+            - rand
+            - -hex
+            - "16"
 """.strip(),
         encoding="utf-8",
     )
@@ -267,6 +271,33 @@ def test_registry_get_unknown_action_raises(valid_registry):
     """
     with pytest.raises(ActionNotFoundError):
         valid_registry.get("test_runtime.missing")
+
+
+def test_valid_registry_compiles_diverse_reviewed_core_forms(valid_registry):
+    """
+    GIVEN the shared runtime registry fixture
+    WHEN it is compiled through STAR's production policy pipeline
+    THEN it retains representative reviewed binaries and typed DSL primitives
+    """
+
+    specs = [valid_registry.get(name) for name in valid_registry.list_names()]
+    inspect_column = valid_registry.get("test_runtime.inspect_column")
+    encrypt_secret = valid_registry.get("test_runtime.encrypt_secret")
+
+    assert {spec.binary for spec in specs} == {"cat", "cut", "openssl", "seq"}
+    assert tuple(
+        token.role for token in inspect_column.invocation_policy.template_tokens
+    ) == (
+        InvocationTokenRole.BINARY,
+        InvocationTokenRole.OPTION,
+        InvocationTokenRole.OPTION,
+        InvocationTokenRole.POSITIVE_INT,
+        InvocationTokenRole.MANAGED_INPUT,
+    )
+    assert inspect_column.defaults == {"position": 1, "complement": False}
+    assert encrypt_secret.invocation_policy.template_tokens[-1].role is (
+        InvocationTokenRole.SECRET_FILE
+    )
 
 
 # ============================================================================

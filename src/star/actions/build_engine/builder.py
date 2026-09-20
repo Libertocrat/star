@@ -35,7 +35,6 @@ from star.actions.models.core import (
     ParamType,
     SecretDelivery,
 )
-from star.actions.models.provenance import SpecProvenance
 from star.actions.models.security import EffectiveCatalogPolicy
 from star.actions.schemas.action import ActionSpecInput
 from star.actions.schemas.dsl import ArgCmd as SchemaArgCmd
@@ -144,21 +143,29 @@ def _build_action(
                 f"Failed to build action '{action_fqdn}': binary '{binary}' "
                 "is not allowed by effective policy"
             )
-        invocation_policy = catalog_policy.invocation_for_action(action_fqdn)
-        if module.provenance is SpecProvenance.EXTENSION and invocation_policy is None:
+        try:
+            invocation_policy = catalog_policy.invocation_for_action(action_fqdn)
+        except KeyError as exc:
             raise ActionSpecsBuildError(
-                f"Failed to build action '{action_fqdn}': missing extension "
-                "invocation policy"
+                f"Failed to build action '{action_fqdn}': missing invocation policy"
+            ) from exc
+        if invocation_policy.binary != binary:
+            raise ActionSpecsBuildError(
+                f"Failed to build action '{action_fqdn}': invocation policy "
+                "binary mismatch"
             )
-        if module.provenance is SpecProvenance.CORE and invocation_policy is not None:
+        if invocation_policy.authorization.provenance is not module.provenance:
             raise ActionSpecsBuildError(
-                f"Failed to build action '{action_fqdn}': unexpected extension "
-                "invocation policy for core action"
+                f"Failed to build action '{action_fqdn}': invocation policy "
+                "provenance mismatch"
             )
-        if invocation_policy is not None and invocation_policy.binary != binary:
+        if not any(
+            invocation_policy.authorization is authorization
+            for authorization in invocation_policy.form.authorizations
+        ):
             raise ActionSpecsBuildError(
-                f"Failed to build action '{action_fqdn}': extension invocation "
-                "policy binary mismatch"
+                f"Failed to build action '{action_fqdn}': invocation policy "
+                "authorization mismatch"
             )
         params_model = _build_params_model(action_fqdn, arg_defs, flag_defs)
         module_tags = _normalize_tags(module.tags)
