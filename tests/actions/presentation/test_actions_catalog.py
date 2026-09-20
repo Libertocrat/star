@@ -195,7 +195,7 @@ def test_filter_modules_tag_keeps_only_matching_actions(
     result = filter_modules(summaries, tags=("validation",), match="any")
 
     assert len(result) == 1
-    assert [action.action for action in result[0].actions] == ["range_test"]
+    assert [action.action for action in result[0].actions] == ["bounded_sequence"]
 
 
 def test_filter_modules_tags_match_any_matches_any_requested_tag(
@@ -217,8 +217,8 @@ def test_filter_modules_tags_match_any_matches_any_requested_tag(
 
     assert len(result) == 1
     assert [action.action for action in result[0].actions] == [
-        "default_test",
-        "range_test",
+        "bounded_sequence",
+        "default_sequence",
     ]
 
 
@@ -240,7 +240,7 @@ def test_filter_modules_tags_match_all_requires_all_requested_tags(
     )
 
     assert len(result) == 1
-    assert [action.action for action in result[0].actions] == ["range_test"]
+    assert [action.action for action in result[0].actions] == ["bounded_sequence"]
 
 
 def test_filter_modules_tags_match_all_returns_no_actions_when_intersection_is_empty(
@@ -277,7 +277,7 @@ def test_filter_modules_query_matches_action_tags(
     result = filter_modules(summaries, q="numeric")
 
     assert len(result) == 1
-    assert [action.action for action in result[0].actions] == ["range_test"]
+    assert [action.action for action in result[0].actions] == ["bounded_sequence"]
 
 
 def test_filter_modules_combines_query_tags_and_match(
@@ -299,7 +299,7 @@ def test_filter_modules_combines_query_tags_and_match(
     )
 
     assert len(result) == 1
-    assert [action.action for action in result[0].actions] == ["range_test"]
+    assert [action.action for action in result[0].actions] == ["bounded_sequence"]
 
 
 def test_filter_modules_query_and_tags_always_combine_with_and(

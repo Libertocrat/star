@@ -123,7 +123,7 @@ async def test_dispatch_action_success(valid_registry):
     """
     result = await dispatch_action(
         valid_registry,
-        "test_runtime.ping",
+        "test_runtime.sequence_one",
         {},
     )
 
@@ -155,7 +155,7 @@ async def test_dispatch_action_invalid_params(valid_registry):
     with pytest.raises(ValidationError):
         await dispatch_action(
             valid_registry,
-            "test_runtime.repeat",
+            "test_runtime.sequence_to",
             {"count": "not-an-int"},
         )
 
@@ -195,10 +195,10 @@ async def test_dispatch_action_passes_spec_to_executor(valid_registry, monkeypat
         _fake_execute,
     )
 
-    await dispatch_action(valid_registry, "test_runtime.ping", {})
+    await dispatch_action(valid_registry, "test_runtime.sequence_one", {})
 
     assert captured["argv"] == ["seq", "1"]
-    assert captured["spec_name"] == "test_runtime.ping"
+    assert captured["spec_name"] == "test_runtime.sequence_one"
     assert captured["timeout"] is None
     assert captured["stdin_data"] is None
 
@@ -511,7 +511,9 @@ async def test_dispatch_action_passes_runtime_settings_timeout(
         _fake_execute,
     )
 
-    await dispatch_action(valid_registry, "test_runtime.ping", {}, settings=settings)
+    await dispatch_action(
+        valid_registry, "test_runtime.sequence_one", {}, settings=settings
+    )
 
     assert captured["timeout"] == settings.star_timeout_ms / 1000.0
     assert captured["stdin_data"] is None
@@ -545,7 +547,7 @@ async def test_dispatch_action_propagates_policy_runtime_errors(
     )
 
     with pytest.raises(ActionBinaryBlockedError, match="blocked"):
-        await dispatch_action(valid_registry, "test_runtime.ping", {})
+        await dispatch_action(valid_registry, "test_runtime.sequence_one", {})
 
 
 @pytest.mark.asyncio
@@ -591,7 +593,7 @@ async def test_dispatch_action_cleans_placeholders_when_cancelled(
 
     with pytest.raises(asyncio.CancelledError):
         await dispatch_action(
-            valid_registry, "test_runtime.write_output", {}, settings=settings
+            valid_registry, "test_runtime.generate_random_output", {}, settings=settings
         )
 
     output_files = captured["output_files"]
@@ -643,7 +645,7 @@ async def test_dispatch_action_cleans_placeholders_after_policy_rejection(
     ):
         await dispatch_action(
             valid_registry,
-            "test_runtime.write_output",
+            "test_runtime.generate_random_output",
             {},
             settings=settings,
         )

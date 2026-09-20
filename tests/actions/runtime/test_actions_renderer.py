@@ -60,7 +60,7 @@ def reviewed_renderer_policy(valid_registry):
 
     global _REVIEWED_INVOCATION_POLICY
     _REVIEWED_INVOCATION_POLICY = valid_registry.get(
-        "test_runtime.encrypt_secret"
+        "test_runtime.encrypt_managed_file"
     ).invocation_policy
     try:
         yield

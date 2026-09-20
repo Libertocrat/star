@@ -42,7 +42,7 @@ def test_execute_rejects_invalid_payload(client, auth_headers):
     THEN it returns HTTP 422 due to request validation failure
     """
     response = client.post(
-        "/v1/actions/test_runtime.ping",
+        "/v1/actions/test_runtime.sequence_one",
         headers=auth_headers,
         json={"params": ["invalid"]},
     )
@@ -66,7 +66,7 @@ def test_execute_returns_success_envelope_for_valid_action(
 
     client.app.state.action_registry = valid_registry
 
-    action_id = "test_runtime.repeat"
+    action_id = "test_runtime.sequence_to"
     payload = {
         "params": {"count": 5},
     }
@@ -97,7 +97,7 @@ def test_execute_uses_default_param_value(client, auth_headers, valid_registry):
     """
     client.app.state.action_registry = valid_registry
 
-    action_id = "test_runtime.default_test"
+    action_id = "test_runtime.default_sequence"
     payload = {
         "params": {},
     }
@@ -149,7 +149,7 @@ async def test_execute_handler_secret_file_delivery_omits_secret_and_path(
 
     data = await execute_action_handler(
         request,
-        "test_runtime.encrypt_secret",
+        "test_runtime.encrypt_managed_file",
         payload,
     )
 
@@ -217,7 +217,7 @@ def test_execute_returns_internal_error_when_registry_is_invalid(
     client.app.state.action_registry = registry_value
 
     response = client.post(
-        "/v1/actions/test_runtime.ping",
+        "/v1/actions/test_runtime.sequence_one",
         headers=auth_headers,
         json={"params": {}},
     )
@@ -252,7 +252,7 @@ def test_execute_returns_internal_error_when_runtime_settings_are_invalid(
     client.app.state.settings = settings_value
 
     response = client.post(
-        "/v1/actions/test_runtime.ping",
+        "/v1/actions/test_runtime.sequence_one",
         headers=auth_headers,
         json={"params": {}},
     )
@@ -290,7 +290,7 @@ def test_execute_omits_internal_error_reason_from_runtime_failure(
     )
 
     response = client.post(
-        "/v1/actions/test_runtime.ping",
+        "/v1/actions/test_runtime.sequence_one",
         headers=auth_headers,
         json={"params": {}},
     )
@@ -332,7 +332,7 @@ def test_execute_maps_late_managed_input_state_to_invalid_params(
     )
 
     response = client.post(
-        "/v1/actions/test_runtime.ping",
+        "/v1/actions/test_runtime.sequence_one",
         headers=auth_headers,
         json={"params": {}},
     )
@@ -374,7 +374,7 @@ def test_execute_maps_extension_policy_params_to_invalid_params(
     )
 
     response = client.post(
-        "/v1/actions/test_runtime.ping",
+        "/v1/actions/test_runtime.sequence_one",
         headers=auth_headers,
         json={"params": {}},
     )
@@ -414,7 +414,7 @@ def test_execute_maps_invocation_integrity_to_internal_error(
     )
 
     response = client.post(
-        "/v1/actions/test_runtime.ping",
+        "/v1/actions/test_runtime.sequence_one",
         headers=auth_headers,
         json={"params": {}},
     )
@@ -439,7 +439,7 @@ def test_execute_invalid_param_type_maps_to_invalid_params(
     """
     client.app.state.action_registry = valid_registry
 
-    action_id = "test_runtime.repeat"
+    action_id = "test_runtime.sequence_to"
     payload = {
         "params": {"count": "not-an-int"},
     }
@@ -477,7 +477,7 @@ def test_execute_missing_required_param_maps_to_invalid_params(
     """
     client.app.state.action_registry = valid_registry
 
-    action_id = "test_runtime.repeat"
+    action_id = "test_runtime.sequence_to"
     payload = {
         "params": {},
     }
@@ -504,7 +504,7 @@ def test_execute_renderer_error_maps_to_invalid_params(
     """
     client.app.state.action_registry = valid_registry
 
-    action_id = "test_runtime.repeat"
+    action_id = "test_runtime.sequence_to"
     payload = {
         "params": {"count": None},
     }
@@ -531,7 +531,7 @@ def test_execute_out_of_range_param_maps_to_invalid_params(
     """
     client.app.state.action_registry = valid_registry
 
-    action_id = "test_runtime.range_test"
+    action_id = "test_runtime.bounded_sequence"
     payload = {
         "params": {"value": 999},
     }
@@ -591,7 +591,7 @@ async def test_execute_handler_validation_error_omits_secret_input(
     with pytest.raises(StarError) as exc_info:
         await execute_action_handler(
             request,
-            "test_runtime.ping",
+            "test_runtime.sequence_one",
             ExecuteActionRequest(params={}),
         )
 
@@ -634,7 +634,7 @@ def test_execute_binary_policy_errors_map_to_permission_denied(
     )
 
     response = client.post(
-        "/v1/actions/test_runtime.ping",
+        "/v1/actions/test_runtime.sequence_one",
         headers=auth_headers,
         json={"params": {}},
     )
@@ -659,7 +659,7 @@ def test_execute_output_encoding_fields_present(client, auth_headers, valid_regi
     """
     client.app.state.action_registry = valid_registry
 
-    action_id = "test_runtime.ping"
+    action_id = "test_runtime.sequence_one"
     payload = {
         "params": {},
     }
@@ -684,7 +684,7 @@ def test_execute_stderr_fields_always_present(client, auth_headers, valid_regist
     """
     client.app.state.action_registry = valid_registry
 
-    action_id = "test_runtime.ping"
+    action_id = "test_runtime.sequence_one"
     payload = {
         "params": {},
     }
@@ -709,7 +709,7 @@ def test_execute_response_envelope_contract(client, auth_headers, valid_registry
     """
     client.app.state.action_registry = valid_registry
 
-    action_id = "test_runtime.ping"
+    action_id = "test_runtime.sequence_one"
     payload = {
         "params": {},
     }
@@ -744,7 +744,7 @@ def test_execute__returns_file_command_output(
     client.app.state.action_registry = valid_registry
 
     response = client.post(
-        "/v1/actions/test_runtime.write_output",
+        "/v1/actions/test_runtime.generate_random_output",
         headers=auth_headers,
         json={"params": {}},
     )
@@ -772,7 +772,7 @@ def test_execute__file_command_output_is_ready(
     client.app.state.action_registry = valid_registry
 
     response = client.post(
-        "/v1/actions/test_runtime.write_output",
+        "/v1/actions/test_runtime.generate_random_output",
         headers=auth_headers,
         json={"params": {}},
     )
@@ -797,7 +797,7 @@ def test_execute__returns_file_stdout_output(
     client.app.state.action_registry = valid_registry
 
     response = client.post(
-        "/v1/actions/test_runtime.ping",
+        "/v1/actions/test_runtime.sequence_one",
         headers=auth_headers,
         json={"params": {}, "stdout_as_file": True},
     )
@@ -823,7 +823,7 @@ def test_execute__omits_stdout_file_when_not_requested(
     client.app.state.action_registry = valid_registry
 
     response = client.post(
-        "/v1/actions/test_runtime.ping",
+        "/v1/actions/test_runtime.sequence_one",
         headers=auth_headers,
         json={"params": {}},
     )
@@ -848,7 +848,7 @@ def test_execute__stdout_file_contains_stdout(
     client.app.state.action_registry = valid_registry
 
     response = client.post(
-        "/v1/actions/test_runtime.ping",
+        "/v1/actions/test_runtime.sequence_one",
         headers=auth_headers,
         json={"params": {}, "stdout_as_file": True},
     )
@@ -895,7 +895,7 @@ def test_execute__command_failure_returns_null_output(
     )
 
     response = client.post(
-        "/v1/actions/test_runtime.write_output",
+        "/v1/actions/test_runtime.generate_random_output",
         headers=auth_headers,
         json={"params": {}},
     )
@@ -942,7 +942,7 @@ def test_execute__command_failure_cleans_up_files(
     before_count = len(list(meta_dir.glob("file_*.json"))) if meta_dir.exists() else 0
 
     response = client.post(
-        "/v1/actions/test_runtime.write_output",
+        "/v1/actions/test_runtime.generate_random_output",
         headers=auth_headers,
         json={"params": {}},
     )
@@ -967,7 +967,7 @@ def test_execute__multiple_outputs_are_returned(
     client.app.state.action_registry = valid_registry
 
     response = client.post(
-        "/v1/actions/test_runtime.write_output",
+        "/v1/actions/test_runtime.generate_random_output",
         headers=auth_headers,
         json={"params": {}, "stdout_as_file": True},
     )
@@ -995,7 +995,7 @@ def test_execute__output_order_is_preserved(
     client.app.state.action_registry = valid_registry
 
     response = client.post(
-        "/v1/actions/test_runtime.write_output",
+        "/v1/actions/test_runtime.generate_random_output",
         headers=auth_headers,
         json={"params": {}, "stdout_as_file": True},
     )
@@ -1031,7 +1031,7 @@ def test_execute_action_rejects_stdout_as_file_when_action_disallows_it(
     )
 
     response = client.post(
-        "/v1/actions/test_runtime.no_stdout_file",
+        "/v1/actions/test_runtime.random_token_no_stdout_file",
         headers=auth_headers,
         json={"params": {}, "stdout_as_file": True},
     )

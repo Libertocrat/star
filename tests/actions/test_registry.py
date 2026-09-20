@@ -257,10 +257,10 @@ def test_registry_get_returns_action_spec(valid_registry):
     WHEN one known action is retrieved via get()
     THEN the returned object is an ActionSpec
     """
-    result = valid_registry.get("test_runtime.ping")
+    result = valid_registry.get("test_runtime.sequence_one")
 
     assert isinstance(result, ActionSpec)
-    assert result.name == "test_runtime.ping"
+    assert result.name == "test_runtime.sequence_one"
 
 
 def test_registry_get_unknown_action_raises(valid_registry):
@@ -281,12 +281,12 @@ def test_valid_registry_compiles_diverse_reviewed_core_forms(valid_registry):
     """
 
     specs = [valid_registry.get(name) for name in valid_registry.list_names()]
-    inspect_column = valid_registry.get("test_runtime.inspect_column")
-    encrypt_secret = valid_registry.get("test_runtime.encrypt_secret")
+    extract_character = valid_registry.get("test_runtime.extract_character")
+    encrypt_managed_file = valid_registry.get("test_runtime.encrypt_managed_file")
 
     assert {spec.binary for spec in specs} == {"cat", "cut", "openssl", "seq"}
     assert tuple(
-        token.role for token in inspect_column.invocation_policy.template_tokens
+        token.role for token in extract_character.invocation_policy.template_tokens
     ) == (
         InvocationTokenRole.BINARY,
         InvocationTokenRole.OPTION,
@@ -294,8 +294,8 @@ def test_valid_registry_compiles_diverse_reviewed_core_forms(valid_registry):
         InvocationTokenRole.POSITIVE_INT,
         InvocationTokenRole.MANAGED_INPUT,
     )
-    assert inspect_column.defaults == {"position": 1, "complement": False}
-    assert encrypt_secret.invocation_policy.template_tokens[-1].role is (
+    assert extract_character.defaults == {"position": 1, "complement": False}
+    assert encrypt_managed_file.invocation_policy.template_tokens[-1].role is (
         InvocationTokenRole.SECRET_FILE
     )
 
@@ -311,7 +311,7 @@ def test_registry_has(valid_registry):
     WHEN has() is called with known and unknown actions
     THEN it returns True for existing names and False otherwise
     """
-    assert valid_registry.has("test_runtime.ping") is True
+    assert valid_registry.has("test_runtime.sequence_one") is True
     assert valid_registry.has("test_runtime.unknown") is False
 
 
@@ -325,5 +325,5 @@ def test_registry_list_names_sorted(valid_registry):
 
     assert isinstance(names, tuple)
     assert names == tuple(sorted(names))
-    assert "test_runtime.ping" in names
-    assert "test_runtime.repeat" in names
+    assert "test_runtime.sequence_one" in names
+    assert "test_runtime.sequence_to" in names

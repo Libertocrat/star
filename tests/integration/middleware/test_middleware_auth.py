@@ -20,7 +20,7 @@ from star.app import create_app
 from star.core.config import Settings
 from star.core.errors import UNAUTHORIZED
 
-TEST_ACTION_ID = "test_runtime.ping"
+TEST_ACTION_ID = "test_runtime.sequence_one"
 
 # ============================================================================
 # Exempt Endpoints

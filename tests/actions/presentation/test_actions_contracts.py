@@ -41,7 +41,7 @@ def contracts_special_registry(valid_registry) -> ActionRegistry:
         Registry containing deterministic metadata variants for contract tests.
     """
 
-    base = valid_registry.get("test_runtime.ping")
+    base = valid_registry.get("test_runtime.sequence_one")
     flagged = replace(
         base,
         name="contracts_runtime.flagged_action",
@@ -173,7 +173,7 @@ def test_build_params_contract_shape(valid_registry) -> None:
     THEN the result must contain params and required fields
     """
 
-    spec = valid_registry.get("test_runtime.ping")
+    spec = valid_registry.get("test_runtime.sequence_one")
 
     result = build_params_contract(spec)
 
@@ -189,7 +189,7 @@ def test_build_params_contract_maps_args(valid_registry) -> None:
     THEN args must be correctly mapped into contract fields
     """
 
-    spec = valid_registry.get("test_runtime.repeat")
+    spec = valid_registry.get("test_runtime.sequence_to")
 
     result = build_params_contract(spec)
 
@@ -211,7 +211,7 @@ def test_action_params_contract_includes_stdout_as_file_request_option(
     THEN stdout_as_file appears as a request-level option outside params
     """
 
-    spec = valid_registry.get("test_runtime.ping")
+    spec = valid_registry.get("test_runtime.sequence_one")
 
     result = build_params_contract(spec)
 
@@ -335,7 +335,9 @@ def test_build_params_contract_constraints_always_present(
     THEN constraints field must always be present
     """
 
-    constrained = build_params_contract(valid_registry.get("test_runtime.range_test"))
+    constrained = build_params_contract(
+        valid_registry.get("test_runtime.bounded_sequence")
+    )
     unconstrained = build_params_contract(
         contracts_special_registry.get("contracts_runtime.flagged_action")
     )
@@ -363,7 +365,7 @@ def test_build_params_example_required_args(valid_registry) -> None:
     THEN required args must have deterministic example values
     """
 
-    spec = valid_registry.get("test_runtime.repeat")
+    spec = valid_registry.get("test_runtime.sequence_to")
 
     result = build_params_example(spec)
 
@@ -377,7 +379,7 @@ def test_build_params_example_defaults(valid_registry) -> None:
     THEN defaults must be used
     """
 
-    spec = valid_registry.get("test_runtime.default_test")
+    spec = valid_registry.get("test_runtime.default_sequence")
 
     result = build_params_example(spec)
 
@@ -457,7 +459,7 @@ def test_build_response_contract_structure(valid_registry) -> None:
     THEN envelope fields must exist
     """
 
-    spec = valid_registry.get("test_runtime.ping")
+    spec = valid_registry.get("test_runtime.sequence_one")
 
     result = build_response_contract(spec)
 
@@ -471,7 +473,7 @@ def test_build_response_contract_data_fields(valid_registry) -> None:
     THEN data fields must match execution schema
     """
 
-    spec = valid_registry.get("test_runtime.ping")
+    spec = valid_registry.get("test_runtime.sequence_one")
 
     result = build_response_contract(spec)
     data = result["data"]
@@ -495,7 +497,7 @@ def test_build_response_contract_outputs_null(valid_registry) -> None:
     THEN outputs must be null
     """
 
-    spec = valid_registry.get("test_runtime.ping")
+    spec = valid_registry.get("test_runtime.sequence_one")
 
     result = build_response_contract(spec)
 
@@ -598,7 +600,7 @@ def test_build_response_example_structure(valid_registry) -> None:
     THEN response must match public envelope structure
     """
 
-    spec = valid_registry.get("test_runtime.ping")
+    spec = valid_registry.get("test_runtime.sequence_one")
 
     result = build_response_example(spec)
 
@@ -616,7 +618,7 @@ def test_build_response_example_outputs_null(valid_registry) -> None:
     THEN outputs must be an empty mapping
     """
 
-    spec = valid_registry.get("test_runtime.ping")
+    spec = valid_registry.get("test_runtime.sequence_one")
 
     result = build_response_example(spec)
 
@@ -664,7 +666,7 @@ def test_build_action_contracts_integration(valid_registry) -> None:
     THEN all contract sections must be present
     """
 
-    spec = valid_registry.get("test_runtime.repeat")
+    spec = valid_registry.get("test_runtime.sequence_to")
 
     result = build_action_contracts(spec)
 
@@ -688,7 +690,7 @@ def test_contracts_are_deterministic(valid_registry) -> None:
     THEN results must be identical
     """
 
-    spec = valid_registry.get("test_runtime.repeat")
+    spec = valid_registry.get("test_runtime.sequence_to")
 
     first = build_action_contracts(spec)
     second = build_action_contracts(spec)
@@ -703,7 +705,7 @@ def test_contracts_do_not_include_json_schema_keywords(valid_registry) -> None:
     THEN JSON schema keywords must not be present
     """
 
-    spec = valid_registry.get("test_runtime.repeat")
+    spec = valid_registry.get("test_runtime.sequence_to")
 
     dumped = json.dumps(build_action_contracts(spec), sort_keys=True)
 

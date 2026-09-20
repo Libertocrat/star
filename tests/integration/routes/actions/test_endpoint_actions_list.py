@@ -97,7 +97,7 @@ def test_list_actions_filters_by_any_tags_by_default(actions_client, auth_header
 
     modules = response.json()["data"]["modules"]
     assert modules
-    assert _action_names(modules) == ["default_test", "range_test"]
+    assert _action_names(modules) == ["bounded_sequence", "default_sequence"]
 
 
 def test_list_actions_filters_by_tags_match_any(actions_client, auth_headers):
@@ -118,7 +118,7 @@ def test_list_actions_filters_by_tags_match_any(actions_client, auth_headers):
 
     modules = response.json()["data"]["modules"]
     assert modules
-    assert _action_names(modules) == ["default_test", "range_test"]
+    assert _action_names(modules) == ["bounded_sequence", "default_sequence"]
 
 
 def test_list_actions_filters_by_tags_match_all(actions_client, auth_headers):
@@ -139,7 +139,7 @@ def test_list_actions_filters_by_tags_match_all(actions_client, auth_headers):
 
     modules = response.json()["data"]["modules"]
     assert modules
-    assert _action_names(modules) == ["range_test"]
+    assert _action_names(modules) == ["bounded_sequence"]
 
 
 def test_list_actions_tags_match_all_empty_intersection(actions_client, auth_headers):
@@ -179,7 +179,7 @@ def test_list_actions_tags_csv_whitespace_is_normalized(actions_client, auth_hea
 
     modules = response.json()["data"]["modules"]
     assert modules
-    assert _action_names(modules) == ["default_test", "range_test"]
+    assert _action_names(modules) == ["bounded_sequence", "default_sequence"]
 
 
 def test_list_actions_tags_csv_duplicates_are_deduplicated(
@@ -201,7 +201,7 @@ def test_list_actions_tags_csv_duplicates_are_deduplicated(
 
     modules = response.json()["data"]["modules"]
     assert modules
-    assert _action_names(modules) == ["range_test"]
+    assert _action_names(modules) == ["bounded_sequence"]
 
     for module in modules:
         for action in module["actions"]:
@@ -262,7 +262,7 @@ def test_list_actions_query_and_tags_combine_with_and(actions_client, auth_heade
 
     assert positive.status_code == 200
     modules = positive.json()["data"]["modules"]
-    assert _action_names(modules) == ["default_test"]
+    assert _action_names(modules) == ["default_sequence"]
 
 
 def test_list_actions_rejects_invalid_match(actions_client, auth_headers):
