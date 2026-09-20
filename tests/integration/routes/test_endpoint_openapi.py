@@ -295,8 +295,12 @@ def test_openapi_execute_examples_include_enriched_markdown_and_params(
     assert "#### Outputs" not in repeat_description
     assert "`count` (`int`)" in repeat_description
     assert "required" in repeat_description
-    assert "- _No flags_" in repeat_description
+    assert (
+        "- `equal_width`: Pad values to the same width; default: `false`"
+        in repeat_description
+    )
     assert repeat_params["count"] == 1
+    assert repeat_params["equal_width"] is False
 
     default_example = examples["test_runtime.default_test"]
     default_description = default_example["description"]

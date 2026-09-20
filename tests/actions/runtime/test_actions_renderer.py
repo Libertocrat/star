@@ -26,7 +26,7 @@ from star.actions.models.core import (
     ParamType,
     SecretDelivery,
 )
-from star.actions.models.security import BinaryPolicy
+from star.actions.models.security import BinaryPolicy, CompiledInvocationPolicy
 from star.actions.runtime import file_manager
 from star.actions.runtime.renderer import render_command
 from star.actions.runtime.secret_manager import cleanup_secret_files
@@ -37,7 +37,35 @@ from star.core.files import (
     load_file_metadata,
 )
 from star.core.schemas.files import FileMetadata
-from tests.actions.policy_helpers import make_test_invocation_policy
+
+_REVIEWED_INVOCATION_POLICY: CompiledInvocationPolicy | None = None
+
+
+@pytest.fixture(autouse=True)
+def reviewed_renderer_policy(valid_registry):
+    """Provide production-compiled token roles for renderer-only test specs.
+
+    Renderer tests exercise type resolution and cleanup independently from
+    invocation-form admission. The reviewed encryption action has token
+    descriptors for every template index used by this module; form matching and
+    pre-spawn integrity remain covered by the policy enforcer and verifier
+    suites.
+
+    Args:
+        valid_registry: Registry built through STAR's production policy path.
+
+    Yields:
+        None. Restores module-local fixture state after each test.
+    """
+
+    global _REVIEWED_INVOCATION_POLICY
+    _REVIEWED_INVOCATION_POLICY = valid_registry.get(
+        "test_runtime.encrypt_secret"
+    ).invocation_policy
+    try:
+        yield
+    finally:
+        _REVIEWED_INVOCATION_POLICY = None
 
 
 def _make_metadata(file_id, *, size_bytes: int = 10) -> FileMetadata:
@@ -142,28 +170,25 @@ def _make_spec(
     """
 
     template = (
-        (cast(CommandElement, {"kind": "binary", "value": "echo"}),)
+        (cast(CommandElement, {"kind": "binary", "value": "openssl"}),)
         if command_template is None
         else command_template
     )
+    invocation_policy = _REVIEWED_INVOCATION_POLICY
+    if invocation_policy is None:
+        raise AssertionError("The reviewed renderer policy fixture was not applied.")
 
     return ActionSpec(
         name="test.echo",
         namespace=(),
         module="test",
-        action="echo",
+        action="openssl",
         version=1,
         params_model=BaseModel,
-        binary="echo",
+        binary="openssl",
         command_template=template,
-        execution_policy=BinaryPolicy(allowed=("echo",), blocked=()),
-        invocation_policy=make_test_invocation_policy(
-            "echo",
-            template,
-            flag_values={
-                name: definition.value for name, definition in (flag_defs or {}).items()
-            },
-        ),
+        execution_policy=BinaryPolicy(allowed=("openssl",), blocked=()),
+        invocation_policy=invocation_policy,
         arg_defs={} if arg_defs is None else arg_defs,
         flag_defs={} if flag_defs is None else flag_defs,
         defaults={} if defaults is None else defaults,
@@ -195,12 +220,12 @@ def test_render_command__uses_defaults_when_params_missing():
         },
         defaults={"name": "fallback"},
         command_template=(
-            {"kind": "binary", "value": "echo"},
+            {"kind": "binary", "value": "openssl"},
             {"kind": "arg", "name": "name"},
         ),
     )
 
-    assert render_command(spec, {}) == ["echo", "fallback"]
+    assert render_command(spec, {}) == ["openssl", "fallback"]
 
 
 def test_render_command__params_override_defaults():
@@ -216,12 +241,12 @@ def test_render_command__params_override_defaults():
         },
         defaults={"name": "fallback"},
         command_template=(
-            {"kind": "binary", "value": "echo"},
+            {"kind": "binary", "value": "openssl"},
             {"kind": "arg", "name": "name"},
         ),
     )
 
-    assert render_command(spec, {"name": "override"}) == ["echo", "override"]
+    assert render_command(spec, {"name": "override"}) == ["openssl", "override"]
 
 
 # ============================================================================
@@ -242,7 +267,7 @@ def test_render_command__rejects_none_values():
         },
         defaults={"name": None},
         command_template=(
-            {"kind": "binary", "value": "echo"},
+            {"kind": "binary", "value": "openssl"},
             {"kind": "arg", "name": "name"},
         ),
     )
@@ -375,12 +400,12 @@ def test_render_command__accepts_valid_string():
             "value": ArgDef(type=ParamType.STRING, required=True, description="value")
         },
         command_template=(
-            {"kind": "binary", "value": "echo"},
+            {"kind": "binary", "value": "openssl"},
             {"kind": "arg", "name": "value"},
         ),
     )
 
-    assert render_command(spec, {"value": "hello-world"}) == ["echo", "hello-world"]
+    assert render_command(spec, {"value": "hello-world"}) == ["openssl", "hello-world"]
 
 
 def test_render_command__enforces_string_min_length():
@@ -513,12 +538,12 @@ def test_render_command__accepts_valid_float_value():
             )
         },
         command_template=(
-            {"kind": "binary", "value": "echo"},
+            {"kind": "binary", "value": "openssl"},
             {"kind": "arg", "name": "value"},
         ),
     )
 
-    assert render_command(spec, {"value": 3.5}) == ["echo", "3.5"]
+    assert render_command(spec, {"value": 3.5}) == ["openssl", "3.5"]
 
 
 # ============================================================================
@@ -596,7 +621,7 @@ def test_render_command__delivers_secret_to_file_without_argv_leak(tmp_path: Pat
             )
         },
         command_template=(
-            {"kind": "binary", "value": "echo"},
+            {"kind": "binary", "value": "openssl"},
             {"kind": "const", "value": "file:{password}"},
         ),
     )
@@ -604,7 +629,7 @@ def test_render_command__delivers_secret_to_file_without_argv_leak(tmp_path: Pat
     rendered = render_command(spec, {"password": "topsecret"}, settings=settings)
 
     try:
-        assert rendered.argv[0] == "echo"
+        assert rendered.argv[0] == "openssl"
         assert rendered.argv[1].startswith("file:")
         secret_path = Path(rendered.argv[1].removeprefix("file:"))
         assert secret_path.parent == get_secret_tmp_dir(settings)
@@ -639,7 +664,7 @@ def test_render_command__file_secret_appends_newline_when_configured(
             )
         },
         command_template=(
-            {"kind": "binary", "value": "echo"},
+            {"kind": "binary", "value": "openssl"},
             {"kind": "arg", "name": "password"},
         ),
     )
@@ -677,7 +702,7 @@ def test_render_command__supports_multiple_file_secret_deliveries(tmp_path: Path
             ),
         },
         command_template=(
-            {"kind": "binary", "value": "echo"},
+            {"kind": "binary", "value": "openssl"},
             {"kind": "arg", "name": "password"},
             {"kind": "arg", "name": "token"},
         ),
@@ -721,7 +746,7 @@ def test_render_command__cleans_file_secret_when_render_later_fails(
             )
         },
         command_template=(
-            {"kind": "binary", "value": "echo"},
+            {"kind": "binary", "value": "openssl"},
             {"kind": "arg", "name": "password"},
             cast(CommandElement, {"kind": "unsupported"}),
         ),
@@ -750,7 +775,7 @@ def test_render_command__rejects_secret_arg_token_at_runtime():
             )
         },
         command_template=(
-            {"kind": "binary", "value": "echo"},
+            {"kind": "binary", "value": "openssl"},
             {"kind": "arg", "name": "password"},
         ),
     )
@@ -776,7 +801,7 @@ def test_render_command__rejects_secret_const_placeholder_at_runtime():
             )
         },
         command_template=(
-            {"kind": "binary", "value": "echo"},
+            {"kind": "binary", "value": "openssl"},
             {"kind": "const", "value": "secret:{password}"},
         ),
     )
@@ -1086,7 +1111,7 @@ def test_render_command__enforces_list_min_items():
             )
         },
         command_template=(
-            {"kind": "binary", "value": "echo"},
+            {"kind": "binary", "value": "openssl"},
             {"kind": "arg", "name": "items"},
         ),
     )
@@ -1113,7 +1138,7 @@ def test_render_command__enforces_list_max_items():
             )
         },
         command_template=(
-            {"kind": "binary", "value": "echo"},
+            {"kind": "binary", "value": "openssl"},
             {"kind": "arg", "name": "items"},
         ),
     )
@@ -1139,13 +1164,13 @@ def test_render_command_list_string_expands():
             )
         },
         command_template=(
-            {"kind": "binary", "value": "echo"},
+            {"kind": "binary", "value": "openssl"},
             {"kind": "arg", "name": "items"},
         ),
     )
 
     assert render_command(spec, {"items": ["one", "two", "three"]}) == [
-        "echo",
+        "openssl",
         "one",
         "two",
         "three",
@@ -1267,12 +1292,17 @@ def test_render_command_list_preserves_order():
             )
         },
         command_template=(
-            {"kind": "binary", "value": "echo"},
+            {"kind": "binary", "value": "openssl"},
             {"kind": "arg", "name": "items"},
         ),
     )
 
-    assert render_command(spec, {"items": ["b", "a", "c"]}) == ["echo", "b", "a", "c"]
+    assert render_command(spec, {"items": ["b", "a", "c"]}) == [
+        "openssl",
+        "b",
+        "a",
+        "c",
+    ]
 
 
 def test_render_command_list_invalid_uuid():
@@ -1375,12 +1405,12 @@ def test_render_command__flag_requires_strict_true(value: object):
     spec = _make_spec(
         flag_defs={"verbose": FlagDef(value="-v", default=False, description="v")},
         command_template=(
-            {"kind": "binary", "value": "echo"},
+            {"kind": "binary", "value": "openssl"},
             {"kind": "flag", "name": "verbose"},
         ),
     )
 
-    assert render_command(spec, {"verbose": value}) == ["echo"]
+    assert render_command(spec, {"verbose": value}) == ["openssl"]
 
 
 def test_render_command__default_false_flag_is_excluded():
@@ -1394,12 +1424,12 @@ def test_render_command__default_false_flag_is_excluded():
         flag_defs={"verbose": FlagDef(value="-v", default=False, description="v")},
         defaults={"verbose": False},
         command_template=(
-            {"kind": "binary", "value": "echo"},
+            {"kind": "binary", "value": "openssl"},
             {"kind": "flag", "name": "verbose"},
         ),
     )
 
-    assert render_command(spec, {}) == ["echo"]
+    assert render_command(spec, {}) == ["openssl"]
 
 
 def test_render_command__default_true_flag_is_included():
@@ -1413,12 +1443,12 @@ def test_render_command__default_true_flag_is_included():
         flag_defs={"verbose": FlagDef(value="-v", default=True, description="v")},
         defaults={"verbose": True},
         command_template=(
-            {"kind": "binary", "value": "echo"},
+            {"kind": "binary", "value": "openssl"},
             {"kind": "flag", "name": "verbose"},
         ),
     )
 
-    assert render_command(spec, {}) == ["echo", "-v"]
+    assert render_command(spec, {}) == ["openssl", "-v"]
 
 
 # ============================================================================
@@ -1438,14 +1468,14 @@ def test_render_command__preserves_command_token_order():
             "name": ArgDef(type=ParamType.STRING, required=True, description="name")
         },
         command_template=(
-            {"kind": "binary", "value": "echo"},
+            {"kind": "binary", "value": "openssl"},
             {"kind": "const", "value": "-n"},
             {"kind": "arg", "name": "name"},
             {"kind": "const", "value": "!"},
         ),
     )
 
-    assert render_command(spec, {"name": "star"}) == ["echo", "-n", "star", "!"]
+    assert render_command(spec, {"name": "star"}) == ["openssl", "-n", "star", "!"]
 
 
 def test_render_command__interpolates_const_placeholders_for_supported_types():
@@ -1462,7 +1492,7 @@ def test_render_command__interpolates_const_placeholders_for_supported_types():
             "ratio": ArgDef(type=ParamType.FLOAT, required=True, description="ratio"),
         },
         command_template=(
-            {"kind": "binary", "value": "echo"},
+            {"kind": "binary", "value": "openssl"},
             {"kind": "const", "value": "u:{user}"},
             {"kind": "const", "value": "c:{count}"},
             {"kind": "const", "value": "r:{ratio}"},
@@ -1473,7 +1503,7 @@ def test_render_command__interpolates_const_placeholders_for_supported_types():
     assert render_command(
         spec,
         {"user": "alice", "count": 3, "ratio": 2.5},
-    ) == ["echo", "u:alice", "c:3", "r:2.5", "mix:alice_3"]
+    ) == ["openssl", "u:alice", "c:3", "r:2.5", "mix:alice_3"]
 
 
 def test_render_command__interpolates_repeated_const_placeholder():
@@ -1488,12 +1518,12 @@ def test_render_command__interpolates_repeated_const_placeholder():
             "name": ArgDef(type=ParamType.STRING, required=True, description="name")
         },
         command_template=(
-            {"kind": "binary", "value": "echo"},
+            {"kind": "binary", "value": "openssl"},
             {"kind": "const", "value": "{name}:{name}"},
         ),
     )
 
-    assert render_command(spec, {"name": "star"}) == ["echo", "star:star"]
+    assert render_command(spec, {"name": "star"}) == ["openssl", "star:star"]
 
 
 def test_render_command__rejects_const_template_value_with_whitespace():
@@ -1508,7 +1538,7 @@ def test_render_command__rejects_const_template_value_with_whitespace():
             "name": ArgDef(type=ParamType.STRING, required=True, description="name")
         },
         command_template=(
-            {"kind": "binary", "value": "echo"},
+            {"kind": "binary", "value": "openssl"},
             {"kind": "const", "value": "user:{name}"},
         ),
     )
@@ -1529,7 +1559,7 @@ def test_render_command__rejects_const_template_value_with_control_characters():
             "name": ArgDef(type=ParamType.STRING, required=True, description="name")
         },
         command_template=(
-            {"kind": "binary", "value": "echo"},
+            {"kind": "binary", "value": "openssl"},
             {"kind": "const", "value": "user:{name}"},
         ),
     )
@@ -1555,7 +1585,7 @@ def test_render_command__supports_multiple_args_and_flags():
             "debug": FlagDef(value="--debug", default=False, description="d"),
         },
         command_template=(
-            {"kind": "binary", "value": "echo"},
+            {"kind": "binary", "value": "openssl"},
             {"kind": "flag", "name": "verbose"},
             {"kind": "arg", "name": "first"},
             {"kind": "flag", "name": "debug"},
@@ -1566,7 +1596,7 @@ def test_render_command__supports_multiple_args_and_flags():
     assert render_command(
         spec,
         {"first": "abc", "second": 7, "verbose": True, "debug": False},
-    ) == ["echo", "-v", "abc", "7"]
+    ) == ["openssl", "-v", "abc", "7"]
 
 
 # ============================================================================
@@ -1600,7 +1630,7 @@ def test_renderer__file_command_creates_placeholder_metadata(tmp_path, monkeypat
             "cmd_out": OutputDef(type=OutputType.FILE, source=OutputSource.COMMAND)
         },
         command_template=(
-            {"kind": "binary", "value": "echo"},
+            {"kind": "binary", "value": "openssl"},
             {"kind": "output", "name": "cmd_out"},
         ),
     )
@@ -1639,14 +1669,14 @@ def test_renderer__file_command_injects_blob_path(tmp_path, monkeypatch):
             "cmd_out": OutputDef(type=OutputType.FILE, source=OutputSource.COMMAND)
         },
         command_template=(
-            {"kind": "binary", "value": "echo"},
+            {"kind": "binary", "value": "openssl"},
             {"kind": "output", "name": "cmd_out"},
         ),
     )
 
     rendered = render_command(spec, {})
     file_id = rendered.output_files["cmd_out"]
-    assert rendered.argv == ["echo", str(get_blob_path(file_id, cfg).resolve())]
+    assert rendered.argv == ["openssl", str(get_blob_path(file_id, cfg).resolve())]
 
 
 def test_renderer__file_stdout_does_not_create_metadata(tmp_path, monkeypatch):
@@ -1669,7 +1699,7 @@ def test_renderer__file_stdout_does_not_create_metadata(tmp_path, monkeypatch):
             "stdout_file": OutputDef(type=OutputType.FILE, source=OutputSource.STDOUT)
         },
         command_template=(
-            {"kind": "binary", "value": "echo"},
+            {"kind": "binary", "value": "openssl"},
             {"kind": "const", "value": "hello"},
         ),
     )
@@ -1699,14 +1729,14 @@ def test_renderer__file_stdout_does_not_modify_argv(tmp_path, monkeypatch):
             "stdout_file": OutputDef(type=OutputType.FILE, source=OutputSource.STDOUT)
         },
         command_template=(
-            {"kind": "binary", "value": "echo"},
+            {"kind": "binary", "value": "openssl"},
             {"kind": "const", "value": "hello"},
         ),
     )
 
     rendered = render_command(spec, {})
 
-    assert rendered.argv == ["echo", "hello"]
+    assert rendered.argv == ["openssl", "hello"]
 
 
 # ============================================================================
@@ -1726,7 +1756,7 @@ def test_render_command__wraps_unexpected_errors(monkeypatch):
             "name": ArgDef(type=ParamType.STRING, required=True, description="name")
         },
         command_template=(
-            {"kind": "binary", "value": "echo"},
+            {"kind": "binary", "value": "openssl"},
             {"kind": "arg", "name": "name"},
         ),
     )

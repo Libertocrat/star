@@ -156,6 +156,25 @@ BINARY_INVOCATION_POLICIES: dict[str, BinaryInvocationPolicy] = {
             ),
         ),
     ),
+    "cut": BinaryInvocationPolicy(
+        binary="cut",
+        forms=(
+            InvocationForm(
+                authorizations=(_CORE, _EXTENSION_FILE_INSPECTION),
+                options=(
+                    OptionPolicy(("--complement",)),
+                    OptionPolicy(
+                        ("-c", "--characters"),
+                        value_kind=OperandKind.POSITIVE_INT,
+                        required=True,
+                        min_value=1,
+                        max_value=10000,
+                    ),
+                ),
+                positional_operands=_ONE_MANAGED_INPUT,
+            ),
+        ),
+    ),
     "file": BinaryInvocationPolicy(
         binary="file",
         forms=(
@@ -369,6 +388,22 @@ BINARY_INVOCATION_POLICIES: dict[str, BinaryInvocationPolicy] = {
                         OperandKind.MANAGED_INPUT,
                         min_count=1,
                         max_count=32,
+                    ),
+                ),
+            ),
+        ),
+    ),
+    "seq": BinaryInvocationPolicy(
+        binary="seq",
+        forms=(
+            InvocationForm(
+                authorizations=(_CORE,),
+                options=(OptionPolicy(("-w", "--equal-width")),),
+                positional_operands=(
+                    OperandPolicy(
+                        OperandKind.POSITIVE_INT,
+                        min_value=1,
+                        max_value=10000,
                     ),
                 ),
             ),

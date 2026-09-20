@@ -124,172 +124,21 @@ def clean_action_registry():
         registry.restore_registry(snapshot)
 
 
-# ============================================================================
-# DSL runtime fixtures
-# ============================================================================
-
-
 @pytest.fixture
-def synthetic_invocation_policy_compiler(monkeypatch):
-    """Install a test-only compiler for non-policy-focused action fixtures.
-
-    The synthetic compiler preserves token origins, cardinality, resource
-    ownership, and provenance binding without adding fixture-only commands to
-    STAR's reviewed production catalog.
-
-    Args:
-        monkeypatch: Pytest helper used to replace the policy compiler.
-
-    Returns:
-        The installed compiler callable for direct fixture use when needed.
-    """
-    from star.actions.build_engine import policy_enforcer
-    from star.actions.engine_config import CONST_TEMPLATE_PLACEHOLDER_PATTERN
-    from star.actions.models import (
-        CommandTokenSource,
-        CompiledInvocationPolicy,
-        CompiledTemplateTokenPolicy,
-        InvocationTokenRole,
-        ParamType,
-    )
-    from star.actions.schemas.dsl import ArgCmd, BinaryCmd, FlagCmd, OutputCmd
-    from star.actions.security.binary_policies import (
-        InvocationAuthorization,
-        InvocationForm,
-        OptionPolicy,
-    )
-
-    def _compile(
-        module,
-        action_name: str,
-        action,
-        declared_capabilities=(),
-    ) -> CompiledInvocationPolicy:
-        """Compile exact test-only token descriptors for one action.
-
-        Args:
-            module: Validated module that owns the action.
-            action_name: Action identifier, unused by the synthetic compiler.
-            action: Validated action input with its command template.
-            declared_capabilities: Parsed declarations, unused by this fixture.
-
-        Returns:
-            Synthetic compiled policy bound to the module provenance.
-        """
-        del action_name
-        del declared_capabilities
-        authorization = InvocationAuthorization(module.provenance)
-        option_policies = tuple(
-            OptionPolicy(((action.flags or {})[token.flag].value,))
-            for token in action.command
-            if isinstance(token, FlagCmd)
-        )
-        form = InvocationForm(
-            authorizations=(authorization,),
-            options=option_policies,
-        )
-        compiled_tokens: list[CompiledTemplateTokenPolicy] = []
-        binary = ""
-
-        for template_index, token in enumerate(action.command):
-            source: CommandTokenSource
-            role: InvocationTokenRole
-            reference: str | None = None
-            template_references: tuple[str, ...] = ()
-            exact_value: str | None = None
-            min_count = 1
-            max_count = 1
-
-            if isinstance(token, BinaryCmd):
-                binary = token.binary
-                source = CommandTokenSource.BINARY
-                role = InvocationTokenRole.BINARY
-                exact_value = token.binary
-            elif isinstance(token, str):
-                source = CommandTokenSource.CONST
-                role = InvocationTokenRole.LITERAL
-                template_references = tuple(
-                    CONST_TEMPLATE_PLACEHOLDER_PATTERN.findall(token)
-                )
-                if not template_references:
-                    exact_value = token
-            elif isinstance(token, FlagCmd):
-                source = CommandTokenSource.FLAG
-                role = InvocationTokenRole.OPTION
-                reference = token.flag
-                exact_value = (action.flags or {})[token.flag].value
-                min_count = 0
-            elif isinstance(token, OutputCmd):
-                source = CommandTokenSource.OUTPUT
-                role = InvocationTokenRole.MANAGED_OUTPUT
-                reference = token.output
-            elif isinstance(token, ArgCmd):
-                source = CommandTokenSource.ARG
-                reference = token.arg
-                arg_spec = (action.args or {})[token.arg]
-                if arg_spec.type is ParamType.FILE_ID or (
-                    arg_spec.type is ParamType.LIST
-                    and arg_spec.items is ParamType.FILE_ID
-                ):
-                    role = InvocationTokenRole.MANAGED_INPUT
-                elif (
-                    arg_spec.type is ParamType.SECRET
-                    and arg_spec.delivery is not None
-                    and arg_spec.delivery.type == "file"
-                ):
-                    role = InvocationTokenRole.SECRET_FILE
-                else:
-                    role = InvocationTokenRole.LITERAL
-                if arg_spec.type is ParamType.LIST:
-                    constraints = arg_spec.constraints or {}
-                    min_count = constraints.get("min_items", 1)
-                    max_count = constraints.get("max_items", 100)
-            else:
-                raise AssertionError("unsupported validated test command token")
-
-            compiled_tokens.append(
-                CompiledTemplateTokenPolicy(
-                    template_index=template_index,
-                    source=source,
-                    role=role,
-                    reference=reference,
-                    template_references=template_references,
-                    exact_value=exact_value,
-                    min_count=min_count,
-                    max_count=max_count,
-                )
-            )
-
-        return CompiledInvocationPolicy(
-            binary=binary,
-            form=form,
-            authorization=authorization,
-            template_tokens=tuple(compiled_tokens),
-        )
-
-    monkeypatch.setattr(policy_enforcer, "compile_invocation_policy", _compile)
-    return _compile
-
-
-@pytest.fixture
-def valid_registry(tmp_path, monkeypatch, synthetic_invocation_policy_compiler):
+def valid_registry(tmp_path, monkeypatch, settings):
     """Build a deterministic DSL runtime registry for tests.
 
     The fixture writes a minimal but valid STAR DSL module to a temporary
     specs directory and compiles it through the public registry builder.
 
     Args:
-            tmp_path: Per-test temporary root provided by pytest.
-            monkeypatch: Pytest helper used to replace the specs directory.
-            synthetic_invocation_policy_compiler: Test-only policy compiler for
-                    arbitrary fixture commands.
+        tmp_path: Per-test temporary root provided by pytest.
+        monkeypatch: Pytest helper used to replace the specs directory.
+        settings: Explicit settings used for registry compilation and runtime.
 
     Returns:
-            ActionRegistry: Immutable registry with representative
-                    `test_runtime.*` actions for params, defaults, and command
-                    outputs.
+        ActionRegistry: Immutable registry with reviewed CORE action forms.
     """
-    del synthetic_invocation_policy_compiler
     import star.actions.registry as registry_module
 
     specs_dir = tmp_path / "specs"
@@ -300,39 +149,49 @@ def valid_registry(tmp_path, monkeypatch, synthetic_invocation_policy_compiler):
         """
 version: 1
 module: test_runtime
-description: "Test runtime module"
+description: "Policy-compliant runtime fixture module"
 tags: [test, runtime]
 
 binaries:
-    - echo
-    - "false"
+    - cut
     - openssl
+    - seq
 
 actions:
 
     ping:
-        description: "Return deterministic hello output"
-        summary: "Ping"
+        description: "Emit the deterministic first value of an integer sequence"
+        summary: "Emit sequence value"
         tags: [health, smoke_test]
         command:
-            - binary: echo
-            - "hello"
+            - binary: seq
+            - "1"
 
     repeat:
-        description: "Echo one integer argument"
-        summary: "Repeat"
-        tags: [echo, repeatable]
+        description: "Emit integers from one through the requested endpoint"
+        summary: "Emit integer sequence"
+        tags: [sequence, repeatable]
         args:
             count:
                 type: int
                 required: true
-                description: "Number to echo"
+                constraints:
+                    min: 1
+                    max: 10000
+                description: "Inclusive upper endpoint for the generated sequence"
+        flags:
+            equal_width:
+                value: "-w"
+                default: false
+                description: "Pad values to the same width"
         command:
-            - binary: echo
+            - binary: seq
+            - flag: equal_width
             - arg: count
 
     range_test:
-        description: "Test numeric constraints"
+        description: "Emit a bounded sequence to exercise numeric range validation"
+        summary: "Validate bounded sequence"
         tags: [validation, numeric-range]
         args:
             value:
@@ -341,27 +200,60 @@ actions:
                 constraints:
                     min: 1
                     max: 10
-                description: "Value in range"
+                description: "Inclusive endpoint constrained from one through ten"
         command:
-            - binary: echo
+            - binary: seq
             - arg: value
 
     default_test:
-        description: "Test default value"
+        description: "Emit a sequence using the default or supplied endpoint"
+        summary: "Emit defaulted sequence"
         tags: [defaults, optional-input]
         args:
             value:
                 type: int
                 required: false
                 default: 5
-                description: "Optional value"
+                constraints:
+                    min: 1
+                    max: 10000
+                description: "Inclusive endpoint that defaults to five"
         command:
-            - binary: echo
+            - binary: seq
             - arg: value
 
+    inspect_column:
+        description: "Extract one character position from a managed file"
+        summary: "Extract file character"
+        tags: [inspection, column, cut]
+        args:
+            position:
+                type: int
+                required: false
+                default: 1
+                constraints:
+                    min: 1
+                    max: 10000
+                description: "One-based character position"
+            input_file:
+                type: file_id
+                required: true
+                description: "Managed input file"
+        flags:
+            complement:
+                value: "--complement"
+                default: false
+                description: "Return every character except the selected position"
+        command:
+            - binary: cut
+            - flag: complement
+            - "-c"
+            - arg: position
+            - arg: input_file
+
     write_output:
-        description: "Generate bytes into one command output placeholder"
-        summary: "Write output"
+        description: "Generate sixteen random bytes into a managed command output"
+        summary: "Generate random output"
         tags: [outputs, runtime, openssl]
         outputs:
             cmd_out:
@@ -375,66 +267,74 @@ actions:
             - output: cmd_out
             - "16"
 
-    fail_output:
-        description: "Fail after creating one command output placeholder"
-        summary: "Fail output"
-        tags: [outputs, runtime, failure]
-        outputs:
-            cmd_out:
-                type: file
-                source: command
-                description: "Command output placeholder cleaned on failure"
-        command:
-            - binary: "false"
-            - output: cmd_out
-
-    combined_output:
-        description: "Emit stdout with one command output placeholder"
-        summary: "Combined output"
-        tags: [outputs, runtime, stdout]
-        outputs:
-            cmd_out:
-                type: file
-                source: command
-                description: "Command output placeholder returned with stdout"
-        command:
-            - binary: echo
-            - "MULTI_OUTPUT"
-            - output: cmd_out
-
     no_stdout_file:
-        description: "Disallow stdout file materialization"
-        summary: "No stdout file"
+        description: "Generate a random token without stdout materialization"
+        summary: "Generate token without stdout file"
         tags: [outputs, runtime, restricted]
         allow_stdout_as_file: false
         command:
-            - binary: echo
-            - "NO_STDOUT_FILE"
+            - binary: openssl
+            - "rand"
+            - "-hex"
+            - "16"
 
-    hash_secret:
-        description: "Hash a sensitive string with SHA-256"
-        summary: "Hash secret"
-        tags: [secret, runtime, openssl, hash]
+    encrypt_secret:
+        description: "Encrypt a managed input file with a file-delivered secret"
+        summary: "Encrypt managed file"
+        tags: [secret, runtime, openssl, encryption]
         args:
+            input_file:
+                type: file_id
+                required: true
+                description: "Managed input file"
             password:
                 type: secret
                 required: true
                 delivery:
                     type: file
-                description: "Secret string handled through temporary file delivery"
+                constraints:
+                    min_length: 1
+                    max_length: 4096
+                description: "Secret handled through temporary file delivery"
+        outputs:
+            encrypted_file:
+                type: file
+                source: command
+                description: "Encrypted command output"
         command:
             - binary: openssl
-            - "dgst"
-            - "-sha256"
-            - arg: password
+            - "enc"
+            - "-aes-256-cbc"
+            - "-salt"
+            - "-pbkdf2"
+            - "-in"
+            - arg: input_file
+            - "-out"
+            - output: encrypted_file
+            - "-pass"
+            - "file:{password}"
 """.strip(),
         encoding="utf-8",
     )
 
-    settings = Settings.model_validate(
-        {
-            "star_root_dir": str(tmp_path),
-        }
+    (specs_dir / "random.yml").write_text(
+        """
+version: 1
+module: random
+description: "Reviewed CORE UUID fixture module"
+
+binaries:
+    - cat
+
+actions:
+    gen_uuid:
+        description: "Read one kernel-generated UUID"
+        summary: "Read kernel UUID"
+        command:
+            - binary: cat
+            - "/proc/sys/kernel/random/uuid"
+""".strip(),
+        encoding="utf-8",
     )
 
     monkeypatch.setattr(registry_module, "SPEC_DIRS", (specs_dir,))

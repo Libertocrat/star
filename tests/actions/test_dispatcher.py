@@ -14,6 +14,7 @@ import asyncio
 import pytest
 from pydantic import BaseModel, SecretStr, ValidationError
 
+from star.actions.build_engine.policy_enforcer import compile_invocation_policy
 from star.actions.dispatcher import DispatchedActionResult, dispatch_action
 from star.actions.exceptions import (
     ActionBinaryBlockedError,
@@ -30,17 +31,43 @@ from star.actions.models import (
     ParamType,
 )
 from star.actions.models.core import CommandElement, SecretDelivery
+from star.actions.models.provenance import SpecProvenance
 from star.actions.models.security import BinaryPolicy
 from star.actions.registry import ActionRegistry
 from star.actions.runtime.file_manager import (
     cleanup_output_placeholders as cleanup_real_output_placeholders,
 )
+from star.actions.schemas import ModuleSpec
 from star.core.files import get_secret_tmp_dir, load_file_metadata
-from tests.actions.policy_helpers import make_test_invocation_policy
 
 # ============================================================================
 # Runtime Dispatch
 # ============================================================================
+
+
+def _reviewed_core_policy():
+    """Compile one reviewed CORE policy through the production compiler."""
+
+    module = ModuleSpec.model_validate(
+        {
+            "version": 1,
+            "module": "dispatcher_runtime",
+            "description": "Dispatcher runtime test module",
+            "binaries": ["openssl"],
+            "actions": {
+                "random": {
+                    "description": "Generate a token",
+                    "command": [
+                        {"binary": "openssl"},
+                        "rand",
+                        "-hex",
+                        "16",
+                    ],
+                }
+            },
+        }
+    ).with_runtime_identity((), SpecProvenance.CORE)
+    return compile_invocation_policy(module, "random", module.actions["random"])
 
 
 def _make_file_secret_spec() -> ActionSpec:
@@ -60,7 +87,7 @@ def _make_file_secret_spec() -> ActionSpec:
         password: SecretStr
 
     command_template: tuple[CommandElement, ...] = (
-        {"kind": "binary", "value": "cat"},
+        {"kind": "binary", "value": "openssl"},
         {"kind": "const", "value": "file:{password}"},
     )
     return ActionSpec(
@@ -70,10 +97,10 @@ def _make_file_secret_spec() -> ActionSpec:
         action="file_secret",
         version=1,
         params_model=Params,
-        binary="cat",
+        binary="openssl",
         command_template=command_template,
-        execution_policy=BinaryPolicy(allowed=("cat",), blocked=()),
-        invocation_policy=make_test_invocation_policy("cat", command_template),
+        execution_policy=BinaryPolicy(allowed=("openssl",), blocked=()),
+        invocation_policy=_reviewed_core_policy(),
         arg_defs={
             "password": ArgDef(
                 type=ParamType.SECRET,
@@ -104,7 +131,7 @@ async def test_dispatch_action_success(valid_registry):
     assert isinstance(result.execution, ActionExecutionResult)
     assert result.execution.returncode == 0
     assert isinstance(result.execution.stdout, bytes)
-    assert b"hello" in result.execution.stdout
+    assert result.execution.stdout
 
 
 @pytest.mark.asyncio
@@ -170,7 +197,7 @@ async def test_dispatch_action_passes_spec_to_executor(valid_registry, monkeypat
 
     await dispatch_action(valid_registry, "test_runtime.ping", {})
 
-    assert captured["argv"] == ["echo", "hello"]
+    assert captured["argv"] == ["seq", "1"]
     assert captured["spec_name"] == "test_runtime.ping"
     assert captured["timeout"] is None
     assert captured["stdin_data"] is None
@@ -193,7 +220,9 @@ async def test_dispatch_action_passes_secret_stdin_data_to_executor(monkeypatch)
 
         password: SecretStr
 
-    command_template: tuple[CommandElement, ...] = ({"kind": "binary", "value": "cat"},)
+    command_template: tuple[CommandElement, ...] = (
+        {"kind": "binary", "value": "openssl"},
+    )
     spec = ActionSpec(
         name="secret_runtime.echo_secret",
         namespace=(),
@@ -201,10 +230,10 @@ async def test_dispatch_action_passes_secret_stdin_data_to_executor(monkeypatch)
         action="echo_secret",
         version=1,
         params_model=Params,
-        binary="cat",
+        binary="openssl",
         command_template=command_template,
-        execution_policy=BinaryPolicy(allowed=("cat",), blocked=()),
-        invocation_policy=make_test_invocation_policy("cat", command_template),
+        execution_policy=BinaryPolicy(allowed=("openssl",), blocked=()),
+        invocation_policy=_reviewed_core_policy(),
         arg_defs={
             "password": ArgDef(
                 type=ParamType.SECRET,
@@ -249,7 +278,7 @@ async def test_dispatch_action_passes_secret_stdin_data_to_executor(monkeypatch)
         {"password": "topsecret"},
     )
 
-    assert captured["argv"] == ["cat"]
+    assert captured["argv"] == ["openssl"]
     assert captured["stdin_data"] == b"topsecret\n"
 
 

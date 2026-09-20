@@ -390,6 +390,202 @@ def test_enforcer_ignores_known_core_capabilities_for_authorization(
 # ============================================================================
 
 
+def test_enforcer_accepts_bounded_core_seq_with_optional_width_flag(
+    make_module_payload,
+    make_module_spec,
+    make_action_spec_input,
+):
+    """
+    GIVEN a CORE seq action with a bounded integer and reviewed width flag
+    WHEN build-time policy enforcement runs
+    THEN it compiles the typed invocation without an extension exemption
+    """
+
+    action = make_action_spec_input(
+        args={
+            "last": {
+                "type": "int",
+                "required": True,
+                "constraints": {"min": 1, "max": 10000},
+                "description": "Inclusive sequence endpoint",
+            }
+        },
+        flags={
+            "equal_width": {
+                "value": "-w",
+                "default": False,
+                "description": "Pad sequence values",
+            }
+        },
+        command=[
+            {"binary": "seq"},
+            {"flag": "equal_width"},
+            {"arg": "last"},
+        ],
+    )
+    module = make_module_spec(
+        make_module_payload(binaries=["seq"], actions={"run": action})
+    )
+
+    result = enforce_build_policies([module], _settings())
+    invocation = result.invocation_for_action("test_module.run")
+
+    assert invocation is not None
+    assert invocation.authorization.provenance is SpecProvenance.CORE
+    assert tuple(token.role for token in invocation.template_tokens) == (
+        InvocationTokenRole.BINARY,
+        InvocationTokenRole.OPTION,
+        InvocationTokenRole.POSITIVE_INT,
+    )
+
+
+def test_enforcer_accepts_extension_cut_with_file_inspection(
+    make_module_payload,
+    make_module_spec,
+    make_action_spec_input,
+):
+    """
+    GIVEN an extension that extracts one character from a managed file
+    WHEN it declares file-inspection
+    THEN the reviewed cut form compiles with typed option and file roles
+    """
+
+    module = _extension_module(
+        make_module_payload,
+        make_module_spec,
+        make_action_spec_input,
+        capabilities=["file-inspection"],
+        binary="cut",
+        args={
+            "position": {
+                "type": "int",
+                "required": True,
+                "constraints": {"min": 1, "max": 10000},
+                "description": "One-based character position",
+            },
+            "input_file": _file_arg(),
+        },
+        flags={
+            "complement": {
+                "value": "--complement",
+                "default": False,
+                "description": "Select all other positions",
+            }
+        },
+        command=[
+            {"binary": "cut"},
+            {"flag": "complement"},
+            "-c",
+            {"arg": "position"},
+            {"arg": "input_file"},
+        ],
+    )
+
+    result = enforce_build_policies([module], _settings())
+    invocation = result.invocation_for_action("user.extension_module.run")
+
+    assert invocation is not None
+    assert invocation.authorization.required_capabilities == frozenset(
+        {InvocationCapability.FILE_INSPECTION}
+    )
+    assert tuple(token.role for token in invocation.template_tokens) == (
+        InvocationTokenRole.BINARY,
+        InvocationTokenRole.OPTION,
+        InvocationTokenRole.OPTION,
+        InvocationTokenRole.POSITIVE_INT,
+        InvocationTokenRole.MANAGED_INPUT,
+    )
+
+
+@pytest.mark.parametrize(
+    "binary,capabilities,command",
+    [
+        (
+            "seq",
+            ["file-inspection"],
+            [{"binary": "seq"}, "10"],
+        ),
+        (
+            "cut",
+            ["checksum"],
+            [
+                {"binary": "cut"},
+                "-c",
+                "1",
+                {"arg": "input_file"},
+            ],
+        ),
+    ],
+    ids=["seq_core_only", "cut_requires_file_inspection"],
+)
+def test_enforcer_rejects_new_forms_without_matching_extension_authorization(
+    make_module_payload,
+    make_module_spec,
+    make_action_spec_input,
+    binary,
+    capabilities,
+    command,
+):
+    """
+    GIVEN an extension that selects a reviewed binary without its authorization
+    WHEN build-time policy enforcement runs
+    THEN registry construction fails before any action is published
+    """
+
+    module = _extension_module(
+        make_module_payload,
+        make_module_spec,
+        make_action_spec_input,
+        capabilities=capabilities,
+        binary=binary,
+        args={"input_file": _file_arg()} if binary == "cut" else None,
+        command=command,
+    )
+
+    with pytest.raises(
+        ActionSpecsPolicyError, match="no reviewed extension|not authorized"
+    ):
+        enforce_build_policies([module], _settings())
+
+
+def test_enforcer_rejects_cut_position_domain_above_policy_limit(
+    make_module_payload,
+    make_module_spec,
+    make_action_spec_input,
+):
+    """
+    GIVEN a cut extension whose character position exceeds the reviewed bound
+    WHEN build-time policy enforcement runs
+    THEN the broader integer domain is rejected before compilation
+    """
+
+    module = _extension_module(
+        make_module_payload,
+        make_module_spec,
+        make_action_spec_input,
+        capabilities=["file-inspection"],
+        binary="cut",
+        args={
+            "position": {
+                "type": "int",
+                "required": True,
+                "constraints": {"min": 1, "max": 10001},
+                "description": "Character position",
+            },
+            "input_file": _file_arg(),
+        },
+        command=[
+            {"binary": "cut"},
+            "-c",
+            {"arg": "position"},
+            {"arg": "input_file"},
+        ],
+    )
+
+    with pytest.raises(ActionSpecsPolicyError, match="domain exceeds"):
+        enforce_build_policies([module], _settings())
+
+
 def test_enforcer_accepts_regex_pattern_with_slash_and_managed_input(
     make_module_payload,
     make_module_spec,

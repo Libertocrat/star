@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import cast
 from uuid import UUID, uuid4
 
 import pytest
 from pydantic import BaseModel
 
+from star.actions.build_engine.policy_enforcer import compile_invocation_policy
 from star.actions.exceptions import ActionRuntimeOutputError
 from star.actions.models.core import (
     ActionSpec,
@@ -18,6 +18,7 @@ from star.actions.models.core import (
     OutputSource,
     OutputType,
 )
+from star.actions.models.provenance import SpecProvenance
 from star.actions.models.runtime import (
     ActionExecutionOutput,
     ActionExecutionResult,
@@ -31,6 +32,7 @@ from star.actions.models.security import (
 )
 from star.actions.runtime import file_manager
 from star.actions.runtime.outputs_builder import _cleanup_known_outputs, build_outputs
+from star.actions.schemas import ModuleSpec
 from star.core.config import Settings
 from star.core.files import (
     EMPTY_SHA256,
@@ -41,7 +43,6 @@ from star.core.files import (
     load_file_metadata,
 )
 from star.core.schemas.files import FileMetadata
-from tests.actions.policy_helpers import make_test_invocation_policy
 
 
 def _make_settings(tmp_path: Path) -> Settings:
@@ -77,7 +78,45 @@ def _make_spec(
         Minimal ActionSpec suitable for build_outputs.
     """
 
-    command_template = (cast(CommandElement, {"kind": "binary", "value": "echo"}),)
+    module = ModuleSpec.model_validate(
+        {
+            "version": 1,
+            "module": "output_runtime",
+            "description": "Output runtime test module",
+            "binaries": ["openssl"],
+            "actions": {
+                "write": {
+                    "description": "Write one command output",
+                    "outputs": {
+                        "cmd_out": {
+                            "type": "file",
+                            "source": "command",
+                            "description": "Command output",
+                        }
+                    },
+                    "command": [
+                        {"binary": "openssl"},
+                        "rand",
+                        "-out",
+                        {"output": "cmd_out"},
+                        "16",
+                    ],
+                }
+            },
+        }
+    ).with_runtime_identity((), SpecProvenance.CORE)
+    invocation_policy = compile_invocation_policy(
+        module,
+        "write",
+        module.actions["write"],
+    )
+    command_template: tuple[CommandElement, ...] = (
+        {"kind": "binary", "value": "openssl"},
+        {"kind": "const", "value": "rand"},
+        {"kind": "const", "value": "-out"},
+        {"kind": "output", "name": "cmd_out"},
+        {"kind": "const", "value": "16"},
+    )
     return ActionSpec(
         name=f"test.{action}",
         namespace=(),
@@ -85,10 +124,10 @@ def _make_spec(
         action=action,
         version=1,
         params_model=BaseModel,
-        binary="echo",
+        binary="openssl",
         command_template=command_template,
-        execution_policy=BinaryPolicy(allowed=("echo", "cp"), blocked=()),
-        invocation_policy=make_test_invocation_policy("echo", command_template),
+        execution_policy=BinaryPolicy(allowed=("openssl",), blocked=()),
+        invocation_policy=invocation_policy,
         arg_defs={},
         flag_defs={},
         defaults={},
@@ -134,7 +173,7 @@ def _make_rendered(output_files: dict[str, UUID]) -> RenderedAction:
     return RenderedAction(
         tokens=(
             RenderedArgvToken(
-                value="echo",
+                value="openssl",
                 template_index=0,
                 source=CommandTokenSource.BINARY,
                 role=InvocationTokenRole.BINARY,

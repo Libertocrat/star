@@ -8,7 +8,6 @@ and that responses follow the ResponseEnvelope contract.
 They do NOT test dispatcher internals or action business logic.
 """
 
-import hashlib
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -24,6 +23,8 @@ from star.actions.exceptions import (
     ActionInvocationParamsError,
     ActionRuntimeExecError,
 )
+from star.actions.models import ActionExecutionResult
+from star.actions.runtime.file_manager import create_ready_file_from_bytes
 from star.core.errors import StarError
 from star.core.files import get_secret_tmp_dir
 from star.routes.actions.handlers.execute_action import execute_action_handler
@@ -81,7 +82,7 @@ def test_execute_returns_success_envelope_for_valid_action(
     body = response.json()
     assert isinstance(body, dict)
     assert body["success"] is True
-    assert body["data"]["stdout"].strip() == "5"
+    assert body["data"]["stdout"].splitlines() == ["1", "2", "3", "4", "5"]
     assert body["error"] is None
     assert body["data"]["exit_code"] == 0
     assert "stdout" in body["data"]
@@ -111,7 +112,7 @@ def test_execute_uses_default_param_value(client, auth_headers, valid_registry):
 
     assert response.status_code == 200
     assert body["success"] is True
-    assert "5" in body["data"]["stdout"]
+    assert body["data"]["stdout"].splitlines() == ["1", "2", "3", "4", "5"]
 
 
 @pytest.mark.asyncio
@@ -119,12 +120,21 @@ async def test_execute_handler_secret_file_delivery_omits_secret_and_path(
     valid_registry,
     settings,
 ):
-    """
-    GIVEN the execute handler receives an action that hashes a secret
-    WHEN the handler executes the action
-    THEN sanitized output includes the digest without the secret or raw temp path
+    """Keep file-delivered secrets and temporary paths out of public results.
+
+    GIVEN the execute handler receives a reviewed encryption action
+    WHEN it encrypts a managed input using a file-delivered secret
+    THEN the public result omits the secret and temporary path
+    AND the temporary secret file is cleaned up
     """
 
+    source_file = create_ready_file_from_bytes(
+        original_filename="plaintext.txt",
+        content=b"confidential input\n",
+        extension=".txt",
+        mime_type="text/plain",
+        settings=settings,
+    )
     request = SimpleNamespace(
         app=SimpleNamespace(
             state=SimpleNamespace(
@@ -133,17 +143,19 @@ async def test_execute_handler_secret_file_delivery_omits_secret_and_path(
             )
         )
     )
-    payload = ExecuteActionRequest(params={"password": "topsecret"})
+    payload = ExecuteActionRequest(
+        params={"input_file": str(source_file.id), "password": "topsecret"}
+    )
 
     data = await execute_action_handler(
         request,
-        "test_runtime.hash_secret",
+        "test_runtime.encrypt_secret",
         payload,
     )
-    expected_digest = hashlib.sha256(b"topsecret").hexdigest()
 
     assert data.exit_code == 0
-    assert expected_digest in data.stdout
+    assert data.outputs is not None
+    assert data.outputs["encrypted_file"] is not None
     assert "topsecret" not in repr(data)
     assert str(get_secret_tmp_dir(settings)) not in data.stdout
     assert list(get_secret_tmp_dir(settings).glob("secret_*.tmp")) == []
@@ -849,13 +861,14 @@ def test_execute__stdout_file_contains_stdout(
 
     assert response.status_code == 200
     assert content_response.status_code == 200
-    assert content_response.content == b"hello\n"
+    assert content_response.content == body["data"]["stdout"].encode("utf-8")
 
 
 def test_execute__command_failure_returns_null_output(
     client,
     auth_headers,
     valid_registry,
+    monkeypatch,
 ):
     """
     GIVEN command failure action
@@ -865,8 +878,24 @@ def test_execute__command_failure_returns_null_output(
 
     client.app.state.action_registry = valid_registry
 
+    async def _nonzero_output(*_args, **_kwargs):
+        """Return a completed nonzero command result without spawning."""
+
+        return ActionExecutionResult(
+            returncode=1,
+            stdout=b"",
+            stderr=b"failed",
+            exec_time=0.01,
+            pid=123,
+        )
+
+    monkeypatch.setattr(
+        "star.actions.dispatcher.runtime_executor.execute_command",
+        _nonzero_output,
+    )
+
     response = client.post(
-        "/v1/actions/test_runtime.fail_output",
+        "/v1/actions/test_runtime.write_output",
         headers=auth_headers,
         json={"params": {}},
     )
@@ -883,6 +912,7 @@ def test_execute__command_failure_cleans_up_files(
     auth_headers,
     settings,
     valid_registry,
+    monkeypatch,
 ):
     """
     GIVEN command failure action
@@ -892,11 +922,27 @@ def test_execute__command_failure_cleans_up_files(
 
     client.app.state.action_registry = valid_registry
 
+    async def _nonzero_output(*_args, **_kwargs):
+        """Return a completed nonzero command result without spawning."""
+
+        return ActionExecutionResult(
+            returncode=1,
+            stdout=b"",
+            stderr=b"failed",
+            exec_time=0.01,
+            pid=123,
+        )
+
+    monkeypatch.setattr(
+        "star.actions.dispatcher.runtime_executor.execute_command",
+        _nonzero_output,
+    )
+
     meta_dir = Path(settings.star_root_dir) / "data" / "files" / "meta"
     before_count = len(list(meta_dir.glob("file_*.json"))) if meta_dir.exists() else 0
 
     response = client.post(
-        "/v1/actions/test_runtime.fail_output",
+        "/v1/actions/test_runtime.write_output",
         headers=auth_headers,
         json={"params": {}},
     )
@@ -921,7 +967,7 @@ def test_execute__multiple_outputs_are_returned(
     client.app.state.action_registry = valid_registry
 
     response = client.post(
-        "/v1/actions/test_runtime.combined_output",
+        "/v1/actions/test_runtime.write_output",
         headers=auth_headers,
         json={"params": {}, "stdout_as_file": True},
     )
@@ -949,7 +995,7 @@ def test_execute__output_order_is_preserved(
     client.app.state.action_registry = valid_registry
 
     response = client.post(
-        "/v1/actions/test_runtime.combined_output",
+        "/v1/actions/test_runtime.write_output",
         headers=auth_headers,
         json={"params": {}, "stdout_as_file": True},
     )

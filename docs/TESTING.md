@@ -236,7 +236,7 @@ Shared fixtures in `tests/conftest.py` provide the common test environment.
 
 ### Registry and app fixtures
 
-- `valid_registry` writes temporary DSL specs and builds a deterministic runtime registry for tests
+- `valid_registry` writes temporary DSL specs using representative reviewed `cat`, `cut`, `openssl`, and `seq` CORE forms and builds them through the production loader, validator, policy compiler, and registry path
 - `app` creates a FastAPI application through `create_app(settings)`
 - `client` returns a `TestClient` bound to that app
 - `create_upload_app` returns isolated app instances for file route integration tests

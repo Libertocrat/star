@@ -536,7 +536,7 @@ def test_verifier_accepts_all_current_extension_invocation_shapes(
     tmp_path: Path,
 ):
     """
-    GIVEN valid file, head, tail, wc, and sha256sum extension definitions
+    GIVEN valid file-inspection and checksum extension definitions
     WHEN their typed runtime forms are rendered and verified
     THEN every currently reviewed non-grep invocation shape is accepted
     """
@@ -640,6 +640,55 @@ def test_verifier_accepts_all_current_extension_invocation_shapes(
     ).model_dump(mode="python")
     validate_invocation_params(wc_spec, wc_params)
     verify_rendered_invocation(wc_rendered, wc_spec, settings=settings)
+
+    cut_spec = _build_extension_action(
+        make_module_payload,
+        make_module_spec,
+        make_action_spec_input,
+        settings=settings,
+        binary="cut",
+        capability="file-inspection",
+        args={
+            "position": {
+                "type": "int",
+                "required": True,
+                "constraints": {"min": 1, "max": 10000},
+                "description": "Character position",
+            },
+            **file_arg,
+        },
+        flags={
+            "complement": {
+                "value": "--complement",
+                "default": False,
+                "description": "Select all other positions",
+            }
+        },
+        command=[
+            {"binary": "cut"},
+            {"flag": "complement"},
+            "-c",
+            {"arg": "position"},
+            {"arg": "input_file"},
+        ],
+    )
+    cut_rendered = render_command(
+        cut_spec,
+        {"complement": True, "position": 1, "input_file": first.id},
+        settings=settings,
+    )
+    cut_params = cut_spec.params_model.model_validate(
+        {"complement": True, "position": 1, "input_file": first.id}
+    ).model_dump(mode="python")
+    validate_invocation_params(cut_spec, cut_params)
+    verify_rendered_invocation(cut_rendered, cut_spec, settings=settings)
+    assert tuple(token.role for token in cut_rendered.tokens) == (
+        InvocationTokenRole.BINARY,
+        InvocationTokenRole.OPTION,
+        InvocationTokenRole.OPTION,
+        InvocationTokenRole.POSITIVE_INT,
+        InvocationTokenRole.MANAGED_INPUT,
+    )
 
     checksum_spec = _build_extension_action(
         make_module_payload,

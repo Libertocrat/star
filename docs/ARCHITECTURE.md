@@ -220,11 +220,13 @@ The policy enforcer owns the reviewed invocation catalog; its provenance scopes,
 
 | Capability | Reviewed binaries | Enforced command shape |
 | --- | --- | --- |
-| `file-inspection` | `file`, `head`, `tail`, `wc` | Explicit non-mutating inspection options and managed `file_id` operands; `head` and `tail` require bounded line counts, while `wc` requires a reviewed count selector. |
+| `file-inspection` | `cut`, `file`, `head`, `tail`, `wc` | Explicit non-mutating inspection options and managed `file_id` operands; `cut` extracts one bounded character position, `head` and `tail` require bounded line counts, while `wc` requires a reviewed count selector. |
 | `text-search` | `grep` | Exact non-mutating search options, required `-e` or `--regexp`, a bounded string pattern, and one managed `file_id` operand. |
 | `checksum` | `sha256sum` | No options and one to 32 managed `file_id` operands. |
 
 Extension authorizations may require one or more capabilities. The catalog rejects `--`, inline option values, short-option clusters, unrecognized options, raw path operands, unbounded numeric or string argument domains, and command shapes not explicitly represented by a reviewed form.
+
+CORE additionally authorizes `seq` for one bounded positive integer, with an optional equal-width flag. This form is intentionally not available to extension modules because it does not inspect a managed file and no extension capability grants general text generation.
 
 ### Runtime execution path
 
