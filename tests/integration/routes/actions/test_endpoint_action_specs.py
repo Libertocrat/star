@@ -21,7 +21,7 @@ def test_get_action_specs_success(action_specs_client, auth_headers):
     """
 
     response = action_specs_client.get(
-        "/v1/actions/test_runtime.ping",
+        "/v1/actions/test_runtime.sequence_one",
         headers=auth_headers,
     )
 
@@ -32,8 +32,8 @@ def test_get_action_specs_success(action_specs_client, auth_headers):
     assert body["error"] is None
 
     data = body["data"]
-    assert data["action_id"] == "test_runtime.ping"
-    assert data["action"] == "ping"
+    assert data["action_id"] == "test_runtime.sequence_one"
+    assert data["action"] == "sequence_one"
     assert data["tags"] == ["test", "runtime", "health", "smoke_test"]
     assert "params_contract" in data
     assert "params_example" in data
@@ -79,7 +79,7 @@ def test_get_action_specs_returns_internal_error_when_registry_is_invalid(
     client.app.state.action_registry = registry_value
 
     response = client.get(
-        "/v1/actions/test_runtime.ping",
+        "/v1/actions/test_runtime.sequence_one",
         headers=auth_headers,
     )
 
@@ -100,7 +100,7 @@ def test_get_action_specs_contains_required_fields(action_specs_client, auth_hea
     """
 
     response = action_specs_client.get(
-        "/v1/actions/test_runtime.ping",
+        "/v1/actions/test_runtime.sequence_one",
         headers=auth_headers,
     )
 
@@ -128,7 +128,7 @@ def test_get_action_spec_includes_allow_stdout_as_file(
     """
 
     response = action_specs_client.get(
-        "/v1/actions/test_runtime.ping",
+        "/v1/actions/test_runtime.sequence_one",
         headers=auth_headers,
     )
 
@@ -146,7 +146,7 @@ def test_get_action_specs_envelope(action_specs_client, auth_headers):
     """
 
     response = action_specs_client.get(
-        "/v1/actions/test_runtime.ping",
+        "/v1/actions/test_runtime.sequence_one",
         headers=auth_headers,
     )
 

@@ -16,7 +16,7 @@ import uuid
 
 import pytest
 
-TEST_ACTION_ID = "test_runtime.ping"
+TEST_ACTION_ID = "test_runtime.sequence_one"
 
 # ============================================================================
 # Generation Behavior

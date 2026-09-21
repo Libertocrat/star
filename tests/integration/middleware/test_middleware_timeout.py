@@ -32,7 +32,7 @@ from star.core.schemas.envelope import ResponseEnvelope
 from star.middleware.timeout import TIMEOUTS_TOTAL
 from star.routes.actions.schemas import ExecuteActionData
 
-TEST_ACTION_ID = "test_runtime.ping"
+TEST_ACTION_ID = "test_runtime.sequence_one"
 
 # ============================================================================
 # Helpers

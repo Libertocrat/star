@@ -145,11 +145,14 @@ def test_star_error_json_response_omits_internal_error_reason():
     """
     exc = StarError(
         INTERNAL_ERROR,
-        details={"reason": "raw stack detail", "action_id": "test_runtime.ping"},
+        details={
+            "reason": "raw stack detail",
+            "action_id": "test_runtime.sequence_one",
+        },
     )
 
     response = star_error_json_response(exc)
     body = _json_body(response)
 
-    assert exc.details == {"action_id": "test_runtime.ping"}
-    assert body["error"]["details"] == {"action_id": "test_runtime.ping"}
+    assert exc.details == {"action_id": "test_runtime.sequence_one"}
+    assert body["error"]["details"] == {"action_id": "test_runtime.sequence_one"}

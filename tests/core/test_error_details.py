@@ -32,7 +32,7 @@ def test_sanitize_error_details_keeps_allowlisted_keys_only():
     THEN only allowlisted keys remain in the public details payload
     """
     details = {
-        "action_id": "test_runtime.ping",
+        "action_id": "test_runtime.sequence_one",
         "param": "count",
         "secret": "do-not-expose",
         "path": "/internal/path",
@@ -41,7 +41,7 @@ def test_sanitize_error_details_keeps_allowlisted_keys_only():
     sanitized = sanitize_error_details(details, error_code="INVALID_PARAMS")
 
     assert sanitized == {
-        "action_id": "test_runtime.ping",
+        "action_id": "test_runtime.sequence_one",
         "param": "count",
     }
 
@@ -114,9 +114,9 @@ def test_sanitize_error_details_omits_reason_for_internal_error():
     """
     details = {
         "reason": "database password appeared in an exception",
-        "action_id": "test_runtime.ping",
+        "action_id": "test_runtime.sequence_one",
     }
 
     sanitized = sanitize_error_details(details, error_code="INTERNAL_ERROR")
 
-    assert sanitized == {"action_id": "test_runtime.ping"}
+    assert sanitized == {"action_id": "test_runtime.sequence_one"}

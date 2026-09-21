@@ -186,6 +186,31 @@ def test_openapi_actions_list_docs_describe_query_rules(
     assert any(action_id.endswith(".sha256_file") for action_id in action_ids)
 
 
+def test_openapi_action_spec_example_references_a_built_in_action(
+    minimal_safe_env,
+):
+    """Validate the action-spec example references a published CORE action.
+
+    GIVEN the built-in CORE registry
+    WHEN the OpenAPI schema is generated
+    THEN the GET action-spec example identifies a real no-parameter action.
+
+    Args:
+        minimal_safe_env: Fixture that provides required STAR environment vars.
+    """
+
+    app = create_app()
+    schema = app.openapi()
+    example = schema["paths"]["/v1/actions/{action_id}"]["get"]["responses"]["200"][
+        "content"
+    ]["application/json"]["example"]
+
+    assert example["data"]["action"] == "gen_uuid"
+    assert example["data"]["action_id"] == "base.random.gen_uuid"
+    assert example["data"]["args"] == []
+    assert example["data"]["flags"] == []
+
+
 # ============================================================================
 # Execute Contract Projection
 # ============================================================================
@@ -283,26 +308,26 @@ def test_openapi_execute_examples_include_enriched_markdown_and_params(
     post = schema["paths"]["/v1/actions/{action_id}"]["post"]
     examples = post["requestBody"]["content"]["application/json"]["examples"]
 
-    repeat_example = examples["test_runtime.repeat"]
-    repeat_description = repeat_example["description"]
-    repeat_params = repeat_example["value"]["params"]
-    assert "action" not in repeat_example["value"]
-    assert repeat_example["value"]["stdout_as_file"] is False
+    sequence_to_example = examples["test_runtime.sequence_to"]
+    sequence_to_description = sequence_to_example["description"]
+    sequence_to_params = sequence_to_example["value"]["params"]
+    assert "action" not in sequence_to_example["value"]
+    assert sequence_to_example["value"]["stdout_as_file"] is False
 
-    assert "#### Args" in repeat_description
-    assert "#### Flags" in repeat_description
-    assert "#### Request Options" in repeat_description
-    assert "#### Outputs" not in repeat_description
-    assert "`count` (`int`)" in repeat_description
-    assert "required" in repeat_description
+    assert "#### Args" in sequence_to_description
+    assert "#### Flags" in sequence_to_description
+    assert "#### Request Options" in sequence_to_description
+    assert "#### Outputs" not in sequence_to_description
+    assert "`count` (`int`)" in sequence_to_description
+    assert "required" in sequence_to_description
     assert (
         "- `equal_width`: Pad values to the same width; default: `false`"
-        in repeat_description
+        in sequence_to_description
     )
-    assert repeat_params["count"] == 1
-    assert repeat_params["equal_width"] is False
+    assert sequence_to_params["count"] == 1
+    assert sequence_to_params["equal_width"] is False
 
-    default_example = examples["test_runtime.default_test"]
+    default_example = examples["test_runtime.default_sequence"]
     default_description = default_example["description"]
     default_params = default_example["value"]["params"]
     assert "action" not in default_example["value"]
@@ -312,15 +337,15 @@ def test_openapi_execute_examples_include_enriched_markdown_and_params(
     assert "default: `5`" in default_description
     assert default_params["value"] == 5
 
-    ping_example = examples["test_runtime.ping"]
-    ping_description = ping_example["description"]
-    ping_params = ping_example["value"]["params"]
-    assert "action" not in ping_example["value"]
-    assert ping_example["value"]["stdout_as_file"] is False
+    sequence_one_example = examples["test_runtime.sequence_one"]
+    sequence_one_description = sequence_one_example["description"]
+    sequence_one_params = sequence_one_example["value"]["params"]
+    assert "action" not in sequence_one_example["value"]
+    assert sequence_one_example["value"]["stdout_as_file"] is False
 
-    assert "- _No args_" in ping_description
-    assert "- _No flags_" in ping_description
-    assert ping_params == {}
+    assert "- _No args_" in sequence_one_description
+    assert "- _No flags_" in sequence_one_description
+    assert sequence_one_params == {}
 
 
 def test_openapi_execute_examples_omit_stdout_as_file_when_disallowed(
@@ -347,7 +372,7 @@ def test_openapi_execute_examples_omit_stdout_as_file_when_disallowed(
     post = schema["paths"]["/v1/actions/{action_id}"]["post"]
     examples = post["requestBody"]["content"]["application/json"]["examples"]
 
-    blocked_example = examples["test_runtime.no_stdout_file"]
+    blocked_example = examples["test_runtime.random_token_no_stdout_file"]
     blocked_description = blocked_example["description"]
     blocked_value = blocked_example["value"]
 
@@ -386,14 +411,14 @@ def test_openapi_execute_response_examples_include_outputs_when_declared(
     post = schema["paths"]["/v1/actions/{action_id}"]["post"]
     examples = post["responses"]["200"]["content"]["application/json"]["examples"]
 
-    outputs_description = examples["test_runtime.write_output"]["description"]
+    outputs_description = examples["test_runtime.generate_random_output"]["description"]
     assert "#### Outputs" in outputs_description
     assert (
         "Command output placeholder containing generated bytes" in outputs_description
     )
     assert "`cmd_out` (`FileMetadata`)" in outputs_description
 
-    outputs_example = examples["test_runtime.write_output"]["value"]["data"]
+    outputs_example = examples["test_runtime.generate_random_output"]["value"]["data"]
     assert "outputs" in outputs_example
 
     copied_file = outputs_example["outputs"]["cmd_out"]
@@ -401,10 +426,10 @@ def test_openapi_execute_response_examples_include_outputs_when_declared(
     assert copied_file["mime_type"] == "application/octet-stream"
     assert copied_file["status"] == "ready"
 
-    stdout_description = examples["test_runtime.ping"]["description"]
+    stdout_description = examples["test_runtime.sequence_one"]["description"]
     assert "`stdout_file` (`FileMetadata`)" in stdout_description
 
-    stdout_example = examples["test_runtime.ping"]["value"]["data"]
+    stdout_example = examples["test_runtime.sequence_one"]["value"]["data"]
     assert stdout_example["outputs"] == {}
 
 
@@ -540,10 +565,10 @@ def test_openapi_registers_action_models_and_prunes_internal_schemas(
     for model_name in (
         "ExecuteActionRequest",
         "ExecuteActionData",
-        "TestRuntimePingParams",
-        "TestRuntimeRepeatParams",
-        "TestRuntimeRangeTestParams",
-        "TestRuntimeDefaultTestParams",
+        "TestRuntimeSequenceOneParams",
+        "TestRuntimeSequenceToParams",
+        "TestRuntimeBoundedSequenceParams",
+        "TestRuntimeDefaultSequenceParams",
     ):
         assert model_name in components
 

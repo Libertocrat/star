@@ -582,11 +582,21 @@ def _patch_actions_get_contract(schema: dict[str, Any]) -> None:
         "success": True,
         "error": None,
         "data": {
-            "action": "ping",
-            "action_id": "test_runtime.ping",
-            "summary": "Ping",
-            "description": "Return deterministic hello output",
-            "tags": ["test", "runtime", "health", "smoke_test"],
+            "action": "gen_uuid",
+            "action_id": "base.random.gen_uuid",
+            "summary": "Generate a kernel-backed UUIDv4",
+            "description": (
+                "Generate a UUIDv4 from the Linux kernel random UUID interface"
+            ),
+            "tags": [
+                "random",
+                "entropy",
+                "security",
+                "uuid",
+                "uuid4",
+                "identifier",
+                "kernel",
+            ],
             "allow_stdout_as_file": True,
             "args": [],
             "flags": [],
@@ -750,8 +760,7 @@ def _build_action_request_markdown(public_spec: ActionPublicSpec) -> str:
                 details.append("**\\*required**")
             else:
                 details.append(
-                    "default: "
-                    f"`{_format_openapi_markdown_value(arg.get('default'))}`"
+                    f"default: `{_format_openapi_markdown_value(arg.get('default'))}`"
                 )
 
             arg_line += "; ".join(details) if details else "No details."
@@ -778,7 +787,7 @@ def _build_action_request_markdown(public_spec: ActionPublicSpec) -> str:
             "- `stdout_as_file` (`bool`): Store sanitized stdout as "
             "`outputs.stdout_file` when enabled and allowed by the action; "
             "default: "
-            f'`{str(stdout_as_file_spec.get("default", False)).lower()}`;'
+            f"`{str(stdout_as_file_spec.get('default', False)).lower()}`;"
         )
 
     return "\n".join(lines)

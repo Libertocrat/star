@@ -159,7 +159,7 @@ binaries:
 
 actions:
 
-    ping:
+    sequence_one:
         description: "Emit the deterministic first value of an integer sequence"
         summary: "Emit sequence value"
         tags: [health, smoke_test]
@@ -167,7 +167,7 @@ actions:
             - binary: seq
             - "1"
 
-    repeat:
+    sequence_to:
         description: "Emit integers from one through the requested endpoint"
         summary: "Emit integer sequence"
         tags: [sequence, repeatable]
@@ -189,7 +189,7 @@ actions:
             - flag: equal_width
             - arg: count
 
-    range_test:
+    bounded_sequence:
         description: "Emit a bounded sequence to exercise numeric range validation"
         summary: "Validate bounded sequence"
         tags: [validation, numeric-range]
@@ -205,7 +205,7 @@ actions:
             - binary: seq
             - arg: value
 
-    default_test:
+    default_sequence:
         description: "Emit a sequence using the default or supplied endpoint"
         summary: "Emit defaulted sequence"
         tags: [defaults, optional-input]
@@ -222,7 +222,7 @@ actions:
             - binary: seq
             - arg: value
 
-    inspect_column:
+    extract_character:
         description: "Extract one character position from a managed file"
         summary: "Extract file character"
         tags: [inspection, column, cut]
@@ -251,7 +251,7 @@ actions:
             - arg: position
             - arg: input_file
 
-    write_output:
+    generate_random_output:
         description: "Generate sixteen random bytes into a managed command output"
         summary: "Generate random output"
         tags: [outputs, runtime, openssl]
@@ -267,7 +267,7 @@ actions:
             - output: cmd_out
             - "16"
 
-    no_stdout_file:
+    random_token_no_stdout_file:
         description: "Generate a random token without stdout materialization"
         summary: "Generate token without stdout file"
         tags: [outputs, runtime, restricted]
@@ -278,7 +278,7 @@ actions:
             - "-hex"
             - "16"
 
-    encrypt_secret:
+    encrypt_managed_file:
         description: "Encrypt a managed input file with a file-delivered secret"
         summary: "Encrypt managed file"
         tags: [secret, runtime, openssl, encryption]

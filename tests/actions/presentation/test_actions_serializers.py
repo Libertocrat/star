@@ -55,7 +55,7 @@ def sample_action_spec(valid_registry) -> ActionSpec:
         value: int
 
     return replace(
-        valid_registry.get("test_runtime.repeat"),
+        valid_registry.get("test_runtime.sequence_to"),
         **{
             "name": "crypto.hash.encrypt",
             "namespace": ("crypto", "hash"),
@@ -217,7 +217,7 @@ def test_to_action_public_spec_defaults_from_valid_registry(valid_registry) -> N
     THEN default values from the builder must be preserved
     """
 
-    spec = valid_registry.get("test_runtime.default_test")
+    spec = valid_registry.get("test_runtime.default_sequence")
 
     result = to_action_public_spec(spec)
 
@@ -232,7 +232,7 @@ def test_to_action_public_spec_constraints_from_valid_registry(valid_registry) -
     THEN constraints from the builder must be preserved
     """
 
-    spec = valid_registry.get("test_runtime.range_test")
+    spec = valid_registry.get("test_runtime.bounded_sequence")
 
     result = to_action_public_spec(spec)
 
