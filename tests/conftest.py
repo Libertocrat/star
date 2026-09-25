@@ -106,25 +106,6 @@ def clean_star_environment(monkeypatch):
 
 
 @pytest.fixture
-def clean_action_registry():
-    """Isolate the global action registry for each test.
-
-    Yields:
-        None. Runs each test with an empty registry and restores baseline.
-    """
-    from star.actions import registry
-
-    # Use the public registry API: take a snapshot, replace with an empty
-    # registry for the duration of the test, and restore the snapshot after.
-    snapshot = registry.get_registry_snapshot()
-    registry.replace_registry({})
-    try:
-        yield
-    finally:
-        registry.restore_registry(snapshot)
-
-
-@pytest.fixture
 def valid_registry(tmp_path, monkeypatch, settings):
     """Build a deterministic DSL runtime registry for tests.
 

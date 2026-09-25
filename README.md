@@ -238,9 +238,14 @@ For the full analysis, see [docs/AI_SECURITY.md](docs/AI_SECURITY.md).
 
 ### Near term
 
+- expand the built-in CORE module and action catalog, with reviewed support for additional binaries and command forms
+- add typed postprocessing and controlled command piping and redirection
+- publish a static catalog generated from the DSL and registry for available CORE modules and actions, with descriptions, parameters, outputs, and examples alongside the HTTP contract in OpenAPI
+
+### Later iterations
+
 - implement an MCP server for safe action discovery, tag/intention-based action lookup, action execution, and managed file operations
 - publish AI-agent and n8n integration examples
-- expand the built-in safe action catalog
 
 ### MCP and agent integration
 
@@ -253,7 +258,7 @@ For the full analysis, see [docs/AI_SECURITY.md](docs/AI_SECURITY.md).
 ### Action DSL evolution
 
 - add postprocessing operations such as trim, split, regex capture, and structured outputs
-- support controlled multi-command pipelines for advanced actions
+- support controlled multi-command pipelines and reviewed redirection for advanced actions
 - improve action packaging, reuse, and provenance validation
 
 ### Security and policy
