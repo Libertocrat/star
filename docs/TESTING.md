@@ -262,6 +262,7 @@ Typical commands are:
 
 ```bash
 make test
+make coverage
 make test-deploy
 pytest -q tests
 pytest -q tests/core/files
@@ -276,11 +277,23 @@ Project-level pytest configuration in `pyproject.toml` sets:
 
 Testing dependencies are declared in `requirements/testing.txt`, and `requirements/dev.txt` includes the testing, linting, runtime, and security requirement sets.
 
+`make test` runs pytest without coverage reports. `make coverage` runs the same suite once with branch coverage limited to STAR's Python package. It prints missing lines in the terminal and writes `htmlcov/index.html` for local inspection and `coverage.json` with per-file line and branch data. These generated files and coverage's data file are ignored by Git. Coverage settings and the minimum are defined in `pyproject.toml`.
+
+The pre-0.2.0 full-suite baseline measured on 2026-09-25 covers 95 STAR Python files; all 1,157 tests passed on Python 3.12.12:
+
+| Measure | Covered | Missing | Total | Coverage |
+| --- | ---: | ---: | ---: | ---: |
+| Statements | 5,923 | 660 | 6,583 | 89.97% |
+| Branches | 1,810 | 456 | 2,266 | 79.88% |
+| Combined | 7,733 | 1,116 | 8,849 | 87.39% |
+
+The branch baseline includes 344 partially covered branches. The quality gate requires at least 85% combined coverage, leaving 2.39 percentage points of margin below the observed baseline. Review missing security and error branches by file in `coverage.json` when choosing future tests; the aggregate minimum is a regression guard, not a target for percentage-driven test additions.
+
 ## 9. CI Test Execution
 
 The same test suite is executed automatically in GitHub Actions.
 
-The CI workflow in `.github/workflows/ci.yml` creates a Python 3.12 virtual environment, installs `requirements/dev.txt`, and runs `make ci`. The `make ci` target includes the full pytest suite as part of the quality gate.
+The CI workflow in `.github/workflows/ci.yml` creates a Python 3.12 virtual environment, installs `requirements/dev.txt`, and runs `make ci`. The `make ci` target runs the full pytest suite once through `make coverage` as part of the quality gate.
 
 The same workflow also runs `make test-deploy` in a dedicated Docker-enabled Bats job. This job is separate from pytest and does not publish images or release artifacts.
 
