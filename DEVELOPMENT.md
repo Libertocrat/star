@@ -471,7 +471,9 @@ Important targets are:
 | `make lint-shell` | validate shell formatting and run ShellCheck for shell scripts |
 | `make lint-shell-format` | validate shell formatting with `shfmt` |
 | `make lint-actions` | validate GitHub Actions workflows with actionlint |
-| `make quality` | run linting, type checking, and tests |
+| `make test` | run pytest without coverage reports |
+| `make coverage` | run pytest with branch coverage reports |
+| `make quality` | run linting, type checking, and coverage |
 | `make test-deploy` | run isolated deploy lifecycle integration tests with Bats |
 | `make ci` | run the local CI quality gate |
 | `make build` | build the Docker image locally |
@@ -490,7 +492,8 @@ Current target behavior:
 - `make lint-shell-format` runs `shfmt -d -i 4 -ci -sr` on detected shell scripts
 - `make lint-shell` runs `lint-shell-format` followed by `shellcheck -x`
 - `make lint` runs `lint-shell`, `lint-actions`, `black --check`, and `ruff check`
-- `make quality` runs `lint`, `typecheck`, and `test`
+- `make coverage` runs pytest once and writes terminal, HTML, and JSON branch coverage reports for `src/star/`
+- `make quality` runs `lint`, `typecheck`, and `coverage`
 - `make ci` runs `quality` and `ci-security`
 - `make build` runs `docker build -t star:local .`
 - `make build-pull` runs `docker build --pull -t star:local .`
@@ -579,7 +582,8 @@ mypy --config-file mypy.ini src tests scripts
 Testing:
 
 ```bash
-pytest -q tests
+make test
+make coverage
 ```
 
 Integration tests:

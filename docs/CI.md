@@ -110,7 +110,7 @@ The `Makefile` defines the executable CI tasks and their composition.
 
 Important aggregate targets are:
 
-- `quality` - runs `lint`, `typecheck`, and `test`
+- `quality` - runs `lint`, `typecheck`, and `coverage`
 - `ci-security` - runs `bandit`, `pip-audit`, and `hadolint`
 - `ci` - combines `quality` and `ci-security`
 - `build` - builds the Docker image locally with `docker build`
@@ -129,6 +129,7 @@ Supporting targets provide the actual commands:
 - `lint-actions` runs `actionlint` for `.github/workflows/`
 - `typecheck` runs `mypy --config-file mypy.ini`
 - `test` runs `pytest -q tests`
+- `coverage` runs pytest once with branch coverage for `src/star/`, a terminal missing-lines summary, and ignored local HTML and JSON reports
 - `test-deploy` runs the Bats Core suite for an isolated extracted deploy bundle
 - `bandit` scans `src/`
 - `pip-audit` audits `requirements/runtime.txt`
@@ -154,7 +155,7 @@ Python dependencies are split across the `requirements/` directory.
 | File | Purpose |
 | --- | --- |
 | `runtime.txt` | Runtime packages required to run the STAR API service |
-| `testing.txt` | Test and quality execution packages such as `pytest`, `pytest-asyncio`, and `openapi-spec-validator` |
+| `testing.txt` | Test and quality execution packages such as `pytest`, `pytest-cov`, `coverage`, and `openapi-spec-validator` |
 | `linting.txt` | Formatting, linting, typing, and pre-commit tools such as Black, Ruff, MyPy, and pre-commit |
 | `security.txt` | Security scanning tools such as Bandit and pip-audit |
 | `dev.txt` | Aggregates `runtime.txt`, `testing.txt`, `linting.txt`, and `security.txt` |
@@ -207,7 +208,7 @@ That includes:
 - Black formatting checks through `black --check`
 - Ruff linting through `ruff check`
 - MyPy type checking through `mypy`
-- pytest execution through `pytest -q tests`
+- pytest execution through `make coverage`, which generates branch coverage reports without a second pytest run
 - Bandit SAST through `bandit`
 - pip-audit dependency scanning against `requirements/runtime.txt`
 - Hadolint checks for `Dockerfile`
