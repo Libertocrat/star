@@ -115,7 +115,11 @@ def _normalize_extension(filename: str | None) -> str:
 
 
 def _detect_mime(path: Path) -> str:
-    """Detect MIME type from file contents.
+    """Detect MIME type through an owned read-only file descriptor.
+
+    Descriptor inspection lets libmagic inspect file offsets needed by formats
+    such as ZIP, avoiding buffer-only classification regressions. The stream
+    stays open throughout detection and is closed on success or failure.
 
     Args:
         path: Path of the staged file.
@@ -128,8 +132,7 @@ def _detect_mime(path: Path) -> str:
     """
 
     with path.open("rb") as file_obj:
-        sample = file_obj.read(8192)
-    return _MAGIC.from_buffer(sample).strip().lower()
+        return _MAGIC.from_descriptor(file_obj.fileno()).strip().lower()
 
 
 def _is_disallowed_executable(extension: str, mime_type: str) -> bool:

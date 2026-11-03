@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fixed ZIP MIME detection for uploads and generated action files by inspecting the open file descriptor instead of a prefix buffer, avoiding libmagic 5.46 buffer classification regressions.
 - Fixed Trivy CLI installation in the security and release workflows by using a dedicated APT keyring and the repository's `generic` distribution.
 - Made the built-in Action DSL inspection helper exit unsuccessfully when loading, validating, or compiling an invalid catalog.
 - Pinned AnyIO to `4.14.2` so Starlette `TestClient` imports remain compatible with STAR's strict deprecation-warning policy in fresh CI environments.
