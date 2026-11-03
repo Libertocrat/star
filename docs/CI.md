@@ -275,7 +275,7 @@ STAR treats mutable GitHub Actions major tags as hardening work rather than a re
 
 ### Trivy filesystem scan
 
-The workflow installs Trivy and `jq`, then runs:
+The workflow installs Trivy from Aqua Security's APT repository using a dedicated GPG keyring and the repository's `generic` distribution, then installs `jq` and runs:
 
 - `make trivy-fs`
 

@@ -45,20 +45,29 @@
   </a>
 </p>
 
----
+<p align="center">
+  <a href="#quick-start">Quick Start</a>
+  &nbsp; · &nbsp;
+  <a href="#why-star">Why STAR?</a>
+  &nbsp; · &nbsp;
+  <a href="#table-of-contents">Table of Contents</a>
+</p>
 
-## Table of Contents
+## Harden Your Workflows with STAR
 
-- [Quick Start](#quick-start)
-- [See STAR in Action](#see-star-in-action)
-- [Why STAR?](#why-star)
-- [What STAR Gives You](#what-star-gives-you)
-- [How STAR Works](#how-star-works)
-- [Documentation](#documentation)
-- [Security Applicability](#security-applicability)
-- [Roadmap](#roadmap)
-- [Security Reporting](#security-reporting)
-- [License](#license)
+### Without STAR - Unrestricted Command Execution
+
+Direct command execution gives workflows and AI agents broad system access, increasing the impact of unsafe inputs, execution mistakes, and compromised workflows.
+
+![Unsafe workflow pattern](docs/assets/star_unsafe_workflow_diagram.png)
+
+### With STAR - Controlled Action Execution
+
+STAR replaces unrestricted command execution with an authenticated API that exposes only predefined, validated actions through a controlled runtime.
+
+![STAR-protected workflow pattern](docs/assets/star_protected_workflow_diagram.png)
+
+**Same goal: real system capabilities. Different boundary: predefined actions instead of arbitrary command execution.**
 
 ## Quick Start
 
@@ -101,6 +110,19 @@ This gives you the local runtime control surface:
 - `./star help` to access command help
 
 Requirements for the deploy flow are Docker and Docker Compose v2. Built-in demos also use `curl` and `jq`; if they are missing, the demo flow can prompt to install them automatically when possible. Most users should manage STAR from the directory that contains `./star`, without entering `star-runtime/` except to adjust `.env`, inspect the API token, or add custom YAML specs.
+
+## Table of Contents
+
+- [Quick Start](#quick-start)
+- [See STAR in Action](#see-star-in-action)
+- [Why STAR?](#why-star)
+- [What STAR Gives You](#what-star-gives-you)
+- [How STAR Works](#how-star-works)
+- [Documentation](#documentation)
+- [Security Applicability](#security-applicability)
+- [Roadmap](#roadmap)
+- [Security Reporting](#security-reporting)
+- [License](#license)
 
 ## See STAR in Action
 
