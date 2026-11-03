@@ -12,6 +12,7 @@ This directory contains helper scripts used for local development, release artif
 | `scripts/star-forward.sh` | Forward a localhost port to a running STAR container when Compose port publishing is disabled or not desired |
 | `scripts/export_openapi.py` | Build the FastAPI app and write the OpenAPI schema to disk |
 | `scripts/build_docs_site.py` | Build a versioned Swagger UI site for GitHub Pages from the exported schema |
+| `scripts/build_action_specs.py` | Inspect and validate the built-in Action DSL catalog without starting the API |
 | `scripts/assert_container_security.py` | Validate Dockerfile and Compose hardening contracts |
 | `scripts/assert_release_supply_chain.py` | Validate production and smoke release publication contracts |
 
@@ -34,6 +35,10 @@ source .venv/bin/activate && python scripts/assert_release_supply_chain.py
 ```
 
 `make lint-actions` runs this checker after `actionlint`.
+
+## build_action_specs.py
+
+Run `source .venv/bin/activate && PYTHONPATH=src python scripts/build_action_specs.py` from the repository root to inspect the built-in DSL modules and compiled actions. The script exits nonzero if loading, validation, policy enforcement, or compilation fails.
 
 ## star-forward.sh
 
@@ -115,7 +120,7 @@ Builds the STAR application and writes the generated OpenAPI schema to `docs/api
 
 - `RELEASE_VERSION`: optional environment variable
   - Accepted formats: `vX.Y.Z` or `X.Y.Z`
-  - Default: `0.1.4`
+  - Default: `0.2.0`
 - `STAR_DOCS_ROOT_DIR`: optional environment variable for STAR storage initialization during export
   - Must be an absolute path
   - Default: `<repo>/.star-docs` (resolved from current working directory)

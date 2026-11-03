@@ -1,4 +1,4 @@
-.PHONY: help deps deps-local semgrep-install fmt fmt-shell lint lint-shell lint-shell-format lint-actions typecheck test test-deploy \
+.PHONY: help deps deps-local semgrep-install fmt fmt-shell lint lint-shell lint-shell-format lint-actions typecheck test coverage test-deploy \
 	bandit pip-audit hadolint semgrep trivy trivy-fs trivy-image trivy-image-pull \
 	quality ci-security deep-security ci full \
 	deep-security-pull full-pull build build-pull
@@ -68,7 +68,9 @@ help:
 	@echo ""
 	@echo "== Quality =="
 	@echo "make lint-shell     - Validate shell formatting and run ShellCheck"
-	@echo "make quality        - Lint + typecheck + tests"
+	@echo "make test           - Run pytest without coverage reports"
+	@echo "make coverage       - Run pytest with branch coverage reports"
+	@echo "make quality        - Lint + typecheck + coverage"
 	@echo "make test-deploy    - Run isolated deploy lifecycle tests with Bats"
 	@echo ""
 	@echo "== Build =="
@@ -154,10 +156,13 @@ typecheck:
 test:
 	pytest -q tests
 
+coverage:
+	pytest -q tests --cov=star --cov-report=term-missing --cov-report=html:htmlcov --cov-report=json:coverage.json
+
 test-deploy:
 	$(BATS) --formatter tap deploy-tests
 
-quality: lint typecheck test
+quality: lint typecheck coverage
 	@echo "Quality checks passed."
 
 # -----------------------------

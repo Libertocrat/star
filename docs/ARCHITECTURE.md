@@ -311,6 +311,8 @@ Local storage maintenance is deliberately owned by `src/star/core/maintenance`, 
 
 Action outputs can also be materialized into STAR-managed storage. Declared `file + command` outputs use runtime placeholders created before subprocess execution and finalized into managed file records after successful output handling. Sanitized stdout can also be materialized into the reserved `outputs.stdout_file` entry when the client requests `stdout_as_file=true` and the selected action allows it.
 
+For uploads and generated action files, `core/files/mime.py` passes an open read-only file descriptor to libmagic for content classification. The helper owns and closes the stream on success or failure; libmagic consumes the descriptor without reopening the pathname. This permits inspection of file offsets beyond the previous 8192-byte prefix and avoids ZIP classification failures in libmagic's buffer API. Upload size limits and extension-to-MIME validation remain enforced by the storage layer; classification still depends on the installed libmagic version and signature database.
+
 ### Storage layout
 
 STAR keeps service-owned runtime data under `STAR_ROOT_DIR/data/` and separates persistent managed files from invocation-local runtime artifacts:

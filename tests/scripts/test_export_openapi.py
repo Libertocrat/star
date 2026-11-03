@@ -42,7 +42,7 @@ def test_get_release_version_defaults_to_current_release(
     """
     monkeypatch.delenv("RELEASE_VERSION", raising=False)
 
-    assert export_openapi.get_release_version() == "0.1.4"
+    assert export_openapi.get_release_version() == "0.2.0"
 
 
 @pytest.mark.parametrize(

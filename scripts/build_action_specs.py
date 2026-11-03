@@ -10,12 +10,17 @@ from star.actions.build_engine.validator import validate_modules
 from star.core.config import Settings
 
 
-def main() -> None:
-    """Load core STAR DSL specs and print a readable summary."""
+def main() -> int:
+    """Load core STAR DSL specs and print a readable summary.
+
+    Returns:
+        Zero when the catalog compiles, or one when a stage fails.
+    """
 
     specs_dir = Path("src/star/actions/specs")
     settings = Settings.model_validate(
         {
+            "star_api_token": "InspectionOnlyToken123!",
             "star_root_dir": "/tmp/star",  # noqa: S108 -- fixed path for testing purposes
             "star_max_yml_bytes": 100 * 1024,
         }
@@ -25,7 +30,7 @@ def main() -> None:
         modules = load_module_specs([specs_dir], settings)
     except Exception as e:
         print(f"Failed to load module specs: {e}")
-        return
+        return 1
 
     print("\n=== MODULES LOADED ===\n")
 
@@ -49,6 +54,7 @@ def main() -> None:
         print("All modules are valid.")
     except Exception:
         print("Module validation failed")
+        return 1
 
     try:
         compiled_actions = build_actions(
@@ -62,7 +68,10 @@ def main() -> None:
             print()
     except Exception:
         print("Action compilation failed")
+        return 1
+
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

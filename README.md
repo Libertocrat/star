@@ -45,20 +45,29 @@
   </a>
 </p>
 
----
+<p align="center">
+  <a href="#quick-start">Quick Start</a>
+  &nbsp; · &nbsp;
+  <a href="#why-star">Why STAR?</a>
+  &nbsp; · &nbsp;
+  <a href="#table-of-contents">Table of Contents</a>
+</p>
 
-## Table of Contents
+## Harden Your Workflows with STAR
 
-- [Quick Start](#quick-start)
-- [See STAR in Action](#see-star-in-action)
-- [Why STAR?](#why-star)
-- [What STAR Gives You](#what-star-gives-you)
-- [How STAR Works](#how-star-works)
-- [Documentation](#documentation)
-- [Security Applicability](#security-applicability)
-- [Roadmap](#roadmap)
-- [Security Reporting](#security-reporting)
-- [License](#license)
+### Without STAR - Unrestricted Command Execution
+
+Direct command execution gives workflows and AI agents broad system access, increasing the impact of unsafe inputs, execution mistakes, and compromised workflows.
+
+![Unsafe workflow pattern](docs/assets/star_unsafe_workflow_diagram.png)
+
+### With STAR - Controlled Action Execution
+
+STAR replaces unrestricted command execution with an authenticated API that exposes only predefined, validated actions through a controlled runtime.
+
+![STAR-protected workflow pattern](docs/assets/star_protected_workflow_diagram.png)
+
+**Same goal: real system capabilities. Different boundary: predefined actions instead of arbitrary command execution.**
 
 ## Quick Start
 
@@ -101,6 +110,19 @@ This gives you the local runtime control surface:
 - `./star help` to access command help
 
 Requirements for the deploy flow are Docker and Docker Compose v2. Built-in demos also use `curl` and `jq`; if they are missing, the demo flow can prompt to install them automatically when possible. Most users should manage STAR from the directory that contains `./star`, without entering `star-runtime/` except to adjust `.env`, inspect the API token, or add custom YAML specs.
+
+## Table of Contents
+
+- [Quick Start](#quick-start)
+- [See STAR in Action](#see-star-in-action)
+- [Why STAR?](#why-star)
+- [What STAR Gives You](#what-star-gives-you)
+- [How STAR Works](#how-star-works)
+- [Documentation](#documentation)
+- [Security Applicability](#security-applicability)
+- [Roadmap](#roadmap)
+- [Security Reporting](#security-reporting)
+- [License](#license)
 
 ## See STAR in Action
 
@@ -238,9 +260,14 @@ For the full analysis, see [docs/AI_SECURITY.md](docs/AI_SECURITY.md).
 
 ### Near term
 
+- expand the built-in CORE module and action catalog, with reviewed support for additional binaries and command forms
+- add typed postprocessing and controlled command piping and redirection
+- publish a static catalog generated from the DSL and registry for available CORE modules and actions, with descriptions, parameters, outputs, and examples alongside the HTTP contract in OpenAPI
+
+### Later iterations
+
 - implement an MCP server for safe action discovery, tag/intention-based action lookup, action execution, and managed file operations
 - publish AI-agent and n8n integration examples
-- expand the built-in safe action catalog
 
 ### MCP and agent integration
 
@@ -253,7 +280,7 @@ For the full analysis, see [docs/AI_SECURITY.md](docs/AI_SECURITY.md).
 ### Action DSL evolution
 
 - add postprocessing operations such as trim, split, regex capture, and structured outputs
-- support controlled multi-command pipelines for advanced actions
+- support controlled multi-command pipelines and reviewed redirection for advanced actions
 - improve action packaging, reuse, and provenance validation
 
 ### Security and policy

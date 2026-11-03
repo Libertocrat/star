@@ -7,8 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-02
+
 ### Added
 
+- Added README diagrams that compare unrestricted command execution with STAR's protected action workflow.
+- Added branch coverage reporting for STAR's Python package in the quality and CI gates, with an 85% minimum and local HTML and per-file JSON reports.
 - Added conditional `PUT /v1/files/{id}` metadata replacement with strict editable-field validation, full tag-set replacement, and safe `file_name` updates that preserve the stored extension.
 - Added strict `GET /v1/files` filtering by editable `file_name` and canonical all-of CSV tags, with query-context-bound cursor continuation.
 - Added reviewed build-time capabilities and per-binary invocation policy for mounted action extensions, controlled through `STAR_ENABLED_EXTENSION_CAPABILITIES`.
@@ -16,10 +20,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Updated Black to `26.10.1` in the development linting dependencies.
+- Aligned application, container, deployment CLI, and OpenAPI export defaults with version `0.2.0`.
 - Replaced legacy file-list cursors with bounded versioned opaque tokens interpreted by the active storage adapter and bound to the effective filter and ordering context. Existing cursors are intentionally incompatible; page size may still change between requests.
 
 ### Fixed
 
+- Fixed ZIP MIME detection for uploads and generated action files by inspecting the open file descriptor instead of a prefix buffer, avoiding libmagic 5.46 buffer classification regressions.
+- Fixed Trivy CLI installation in the security and release workflows by using a dedicated APT keyring and the repository's `generic` distribution.
+- Made the built-in Action DSL inspection helper exit unsuccessfully when loading, validating, or compiling an invalid catalog.
 - Pinned AnyIO to `4.14.2` so Starlette `TestClient` imports remain compatible with STAR's strict deprecation-warning policy in fresh CI environments.
 
 ### Security
@@ -176,7 +185,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://github.com/Libertocrat/star/compare/v0.1.4...HEAD
+[Unreleased]: https://github.com/Libertocrat/star/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/Libertocrat/star/compare/v0.1.4...v0.2.0
 [0.1.4]: https://github.com/Libertocrat/star/releases/tag/v0.1.4
 [0.1.3]: https://github.com/Libertocrat/star/releases/tag/v0.1.3
 [0.1.2]: https://github.com/Libertocrat/star/releases/tag/v0.1.2

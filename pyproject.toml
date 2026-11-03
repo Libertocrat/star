@@ -90,3 +90,18 @@ markers = [
     "slow: slow tests",
     "integration: integration tests",
 ]
+
+
+######################################
+# Coverage
+######################################
+
+[tool.coverage.run]
+branch = true
+source = ["star"]
+relative_files = true
+
+[tool.coverage.report]
+show_missing = true
+precision = 2
+fail_under = 85
